@@ -301,6 +301,12 @@ export type ToolStatus =
   | "error";    // ×
 
 export interface ToolRecord {
+  /**
+   * Identificador estable y opaco. Los consumidores no deben parsearlo.
+   * Formato actual:
+   *   global:<provider>:<nombre>   (provider "unknown" si no se conoce)
+   *   project:<raíz absoluta>:<nombre>
+   */
   id: string;
   name: string;
 

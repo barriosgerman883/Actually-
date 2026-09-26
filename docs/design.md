@@ -259,6 +259,8 @@ Cada afirmación muestra su propia confianza y su evidencia. Cada línea de evid
 
 Lo que no se pudo determinar aparece al final con su motivo. Nunca se omite.
 
+Si el nombre coincide con varias herramientas, por ejemplo la misma dependencia en dos proyectos, `explain` y `status <tool>` listan las coincidencias con su `id` y no eligen ninguna. En ese caso se puede pasar el `id` completo.
+
 ---
 
 ## 10. Diseño de errores
@@ -403,7 +405,7 @@ Ejemplo de `actually status --json`:
   "schemaVersion": 1,
   "tools": [
     {
-      "id": "pnpm:gstack",
+      "id": "global:pnpm:gstack",
       "name": "gstack",
       "scope": "global",
       "status": "outdated",
@@ -446,7 +448,7 @@ Reglas:
 - `updateType` aparece solo cuando `status` es `outdated`. No es un claim: se deriva de las versiones.
 - `status --json` no incluye `evidence`. `explain --json` sí.
 
-> **Decisión pendiente (open-questions #9):** el formato de `id`. `pnpm:gstack` no distingue la misma dependencia en varios proyectos ni una herramienta sin provider conocido.
+`id` es estable y opaco: los consumidores lo usan para comparar y referenciar, no para extraer datos. Su formato está en architecture.md §5 y distingue la misma dependencia en varios proyectos y las herramientas sin provider conocido.
 
 ---
 
