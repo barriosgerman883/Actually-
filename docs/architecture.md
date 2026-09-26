@@ -179,10 +179,12 @@ Determina latest stable version.
 Una misma herramienta puede tener:
 
 ```text
-sourceProvider: GitHub
-installProvider: pnpm
-updateProvider: pnpm
+source:       GitHub
+installation: pnpm
+update:       pnpm
 ```
+
+`update` es un dato informativo derivado de `installation`, no un cuarto tipo de provider (ver §5).
 
 ---
 
@@ -235,7 +237,26 @@ build inventory
 
 ## 5. Modelo de dominio
 
+Este es el único modelo de dominio del proyecto. mvp.md y design.md lo referencian en vez de duplicarlo.
+
+El JSON público (design.md §14) es una proyección de este modelo. Puede renombrar o aplanar campos, pero no puede exponer datos que el modelo no tenga.
+
 ```ts
+export type ToolScope = "global" | "project";
+
+export type ConfidenceLevel = "low" | "medium" | "high";
+
+/**
+ * Estado que muestra `status`. Se deriva de las versiones;
+ * ningún provider lo asigna directamente.
+ */
+export type ToolStatus =
+  | "current"   // ✓
+  | "outdated"  // ↑
+  | "unknown"   // ?
+  | "warning"   // !
+  | "error";    // ×
+
 export interface ToolRecord {
   id: string;
   name: string;
@@ -249,10 +270,13 @@ export interface ToolRecord {
   installation?: Installation;
   update?: UpdateStrategy;
 
+  status: ToolStatus;
   evidence: Evidence[];
   confidence: ConfidenceLevel;
 }
 ```
+
+> **Decisión pendiente (open-questions #2):** si `outdated` se divide por tipo de cambio (major, minor, patch) y cómo se representa una versión instalada mayor que la última estable.
 
 ### Evidence
 
@@ -283,6 +307,20 @@ export interface ToolSource {
   url?: string;
 }
 ```
+
+### UpdateStrategy
+
+```ts
+/**
+ * Cómo se actualizaría la herramienta. Es informativo:
+ * actually nunca ejecuta actualizaciones.
+ */
+export interface UpdateStrategy {
+  provider: string;
+}
+```
+
+`UpdateStrategy` no es un cuarto tipo de provider. En el MVP siempre coincide con el installation provider y se deriva de él.
 
 ---
 

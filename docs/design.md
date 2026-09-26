@@ -365,6 +365,8 @@ Los defaults deben ser conservadores.
 
 JSON es una interfaz pública.
 
+Es una proyección del modelo de dominio de architecture.md §5: puede renombrar o aplanar campos, pero no puede exponer datos que ese modelo no tenga.
+
 Debe:
 
 - ser versionable;

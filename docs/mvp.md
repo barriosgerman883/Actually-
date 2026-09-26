@@ -131,24 +131,7 @@ Todo comando relevante debe poder ofrecer salida JSON.
 actually status --json
 ```
 
-Ejemplo:
-
-```json
-{
-  "tools": [
-    {
-      "name": "gstack",
-      "installedVersion": "1.0.0",
-      "latestVersion": "2.0.0",
-      "scope": "global",
-      "installProvider": "pnpm",
-      "sourceProvider": "github",
-      "status": "outdated",
-      "confidence": "high"
-    }
-  ]
-}
-```
+El contrato JSON está definido en design.md §14. Es una proyección del modelo de dominio de architecture.md §5.
 
 ---
 
@@ -228,39 +211,12 @@ No todos estos formatos necesitan soporte funcional completo en el MVP; algunos 
 
 ## 7. Modelo mínimo de datos
 
-```ts
-export interface ToolRecord {
-  id: string;
-  name: string;
+El modelo de dominio se define una sola vez, en architecture.md §5. Para el MVP importan estos conceptos:
 
-  installedVersion?: string;
-  latestVersion?: string;
-
-  scope: "global" | "project";
-
-  sourceProvider?: string;
-  installProvider?: string;
-  updateProvider?: string;
-
-  evidence: Evidence[];
-  confidence: ConfidenceLevel;
-}
-```
-
-```ts
-export interface Evidence {
-  source: string;
-  description: string;
-  confidence: number;
-}
-```
-
-```ts
-export type ConfidenceLevel =
-  | "low"
-  | "medium"
-  | "high";
-```
+- `ToolRecord`: una herramienta o dependencia detectada, con su scope, versiones, origen, instalación, estado y evidencia.
+- `Evidence`: cada observación que respalda una conclusión.
+- `ConfidenceLevel`: `low`, `medium` o `high`.
+- `ToolStatus`: el estado derivado que muestra `status`.
 
 ---
 
