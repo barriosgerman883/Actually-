@@ -355,7 +355,7 @@ Estas integraciones deben consumir el core o salida estructurada, no duplicar l�
 
 El MVP puede considerarse completo cuando:
 
-1. se instala con pnpm;
+1. se instala con pnpm como `@actually/cli` y expone el comando `actually`;
 2. funciona sin backend;
 3. puede inspeccionar entorno global y proyecto;
 4. identifica pnpm y Git correctamente en escenarios soportados;
@@ -365,5 +365,3 @@ El MVP puede considerarse completo cuando:
 8. no ejecuta operaciones destructivas;
 9. pasa tests de arquitectura y seguridad;
 10. toda funcionalidad central tiene documentación.
-
-> **Decisión pendiente (open-questions #16):** el criterio 1 depende del nombre del paquete, que en npm ya está tomado.

@@ -82,7 +82,17 @@ Nombre CLI:
 actually
 ```
 
+Paquete npm:
+
+```text
+@actually/cli
+```
+
 El signo `?` pertenece al branding, no al binario.
+
+El nombre `actually` sin scope ya pertenece a otro paquete en npm. El campo `bin` del `package.json` mapea el comando `actually`, así que el comando no depende del nombre del paquete.
+
+El scope `@actually` agrupa los paquetes del proyecto. Queda reservado, por ejemplo, `@actually/core` para que las integraciones de la Fase 3 consuman el core sin duplicarlo.
 
 ---
 
@@ -651,7 +661,8 @@ docs/
    ├─ 0004-no-backend.md
    ├─ 0005-command-runner-boundary.md
    ├─ 0006-evidence-driven-detection.md
-   └─ 0007-json-as-public-interface.md
+   ├─ 0007-json-as-public-interface.md
+   └─ 0008-scoped-package-name.md
 ```
 
 ---

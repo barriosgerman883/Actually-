@@ -701,6 +701,7 @@ Estas reglas deben ejecutarse en CI.
 0005-command-runner-boundary.md
 0006-evidence-driven-detection.md
 0007-json-as-public-interface.md
+0008-scoped-package-name.md
 ```
 
 ---
