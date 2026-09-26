@@ -393,6 +393,8 @@ Ejemplo:
 }
 ```
 
+> **Decisión pendiente (open-questions #9):** el formato de `id`. `pnpm:gstack` no distingue la misma dependencia en varios proyectos ni una herramienta sin provider conocido.
+
 ---
 
 ## 15. Diseño para IDEs
@@ -589,6 +591,7 @@ docs/
 │
 ├─ providers/
 │  ├─ pnpm.md
+│  ├─ npm-registry.md
 │  ├─ git.md
 │  └─ github.md
 │
@@ -605,10 +608,13 @@ docs/
 │  └─ explain.md
 │
 └─ decisions/
-   ├─ 0001-typescript.md
-   ├─ 0002-pnpm.md
-   ├─ 0003-read-only.md
-   └─ 0004-no-backend.md
+   ├─ 0001-use-typescript.md
+   ├─ 0002-use-pnpm.md
+   ├─ 0003-read-only-mvp.md
+   ├─ 0004-no-backend.md
+   ├─ 0005-command-runner-boundary.md
+   ├─ 0006-evidence-driven-detection.md
+   └─ 0007-json-as-public-interface.md
 ```
 
 ---

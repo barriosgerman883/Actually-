@@ -232,56 +232,21 @@ Debe ser posible determinar qué comandos, archivos y endpoints utiliza cada pro
 
 ## 10. Experiencia CLI
 
-### Status
+Comandos principales del MVP:
 
 ```bash
 actually status
-```
-
-Ejemplo:
-
-```text
-GLOBAL
-
-↑ gstack
-  installed    1.0.0
-  latest       2.0.0
-  installed by pnpm
-  confidence   high
-
-✓ pnpm
-  installed    12.0.0
-  latest       12.0.0
-```
-
-### Explain
-
-```bash
-actually explain gstack
-```
-
-```text
-gstack 1.0.0
-
-Evidence
-
-✓ Executable found in PATH
-✓ pnpm global registry contains gstack
-✓ Executable resolves inside pnpm global bin directory
-✓ npm metadata maps package to GitHub repository
-
-Conclusion
-Installed via pnpm
-
-Confidence
-High
-```
-
-### JSON
-
-```bash
+actually info <tool>
+actually explain <tool>
 actually status --json
 ```
+
+El formato exacto de cada salida se define en un solo lugar para que no diverja entre documentos:
+
+- salida de `status`: design.md §5;
+- salida de `info`: design.md §8;
+- salida de `explain`: design.md §9;
+- contrato JSON: design.md §14.
 
 ---
 
@@ -350,6 +315,7 @@ contratos de providers, ADRs y requisitos de contribución.
 - pnpm provider;
 - Git provider;
 - GitHub version resolver;
+- npm registry version resolver;
 - project scanner;
 - global scanner;
 - status;
@@ -361,7 +327,7 @@ contratos de providers, ADRs y requisitos de contribución.
 
 Posibles providers:
 
-- npm;
+- npm CLI (paquetes globales);
 - mise;
 - pipx;
 - uv;
@@ -398,3 +364,5 @@ El MVP puede considerarse completo cuando:
 8. no ejecuta operaciones destructivas;
 9. pasa tests de arquitectura y seguridad;
 10. toda funcionalidad central tiene documentación.
+
+> **Decisión pendiente (open-questions #16):** el criterio 1 depende del nombre del paquete, que en npm ya está tomado.

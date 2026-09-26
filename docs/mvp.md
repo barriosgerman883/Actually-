@@ -49,7 +49,7 @@ Ejemplo:
 gstack 1.0.0
 
 Detected executable:
-~/.local/bin/gstack
+~/.local/share/pnpm/gstack
 
 Owned by:
 pnpm
@@ -100,6 +100,8 @@ actually info <tool>
 actually explain <tool>
 actually doctor
 ```
+
+> **Decisión pendiente (open-questions #4, #18):** `doctor` no aparece en ningún otro documento, `init` solo existe en design.md §12 y `scan` se solapa con `status`. Tampoco está decidido si `info` se mantiene separado de `explain`.
 
 ### 4.2 Salida para humanos
 
@@ -161,11 +163,13 @@ Debe poder:
 - relacionar paquetes con metadata de npm cuando exista.
 
 ### 5.2 npm
-Soporte inicial limitado a:
 
-- dependencias declaradas en proyectos;
-- resolución de metadata desde npm registry;
-- detección de paquetes globales si resulta estable y segura.
+Hay dos cosas distintas con el mismo nombre:
+
+- **npm registry** (fuente de versiones): entra en el MVP. Es imprescindible porque los paquetes administrados por pnpm se publican ahí. Resuelve la última versión estable y el campo `repository` de cada paquete.
+- **npm CLI** (install provider): la detección de paquetes instalados con `npm install -g` queda para la Fase 2.
+
+Las dependencias declaradas en el `package.json` de un proyecto se leen en el MVP, sin importar qué package manager las instaló.
 
 ### 5.3 Git
 Debe poder:
@@ -413,6 +417,8 @@ Un escenario mínimo válido:
 pnpm add -g actually
 actually status
 ```
+
+> **Decisión pendiente (open-questions #16):** el nombre `actually` en npm pertenece a otro paquete, así que el comando de instalación de arriba no funciona tal cual. El comando `actually` no cambia en ninguna de las alternativas.
 
 Resultado esperado:
 

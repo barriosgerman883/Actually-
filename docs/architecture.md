@@ -42,14 +42,14 @@ El sistema debe poder inspeccionar entornos heterogéneos sin convertirse en un 
 
                   PROVIDERS
 
-        ┌────────────┼────────────┐
-        │            │            │
-        ▼            ▼            ▼
+     ┌─────────────┬─┴───────────┬─────────────┐
+     │             │             │             │
+     ▼             ▼             ▼             ▼
 
-       pnpm          Git        GitHub
+   pnpm      npm registry       Git         GitHub
 
-        │            │            │
-        └────────────┼────────────┘
+     │             │             │             │
+     └─────────────┴─┬───────────┴─────────────┘
                      │
                      ▼
 
@@ -75,6 +75,8 @@ Responsabilidades:
 - seleccionar formatter;
 - mostrar errores;
 - definir exit codes.
+
+> **Decisión pendiente (open-questions #15):** los exit codes no están definidos.
 
 No debe:
 
@@ -146,6 +148,8 @@ found:
 ```
 
 La interpretación pertenece a un provider o detector especializado.
+
+> **Decisión pendiente (open-questions #14):** qué directorios de PATH recorre `PathScanner`. Recorrer todo PATH listaría miles de binarios del sistema como desconocidos.
 
 ---
 
@@ -339,6 +343,8 @@ sudo
 arbitrary executable
 ```
 
+> **Decisión pendiente (open-questions #12, #13):** `AllowedBinary` limita el binario pero no el subcomando, así que `git pull` pasaría el control. Además, lanzar `git` o `pnpm` dentro de un repositorio no confiable puede ejecutar código que ese repositorio define (`core.fsmonitor`, `.npmrc`). `intent: "read"` es una etiqueta de tipo y no impone nada por sí sola.
+
 Ejemplo válido:
 
 ```ts
@@ -431,7 +437,7 @@ src/
 │
 ├─ providers/
 │  ├─ pnpm/
-│  ├─ npm/
+│  ├─ npm-registry/
 │  ├─ git/
 │  └─ github/
 │
