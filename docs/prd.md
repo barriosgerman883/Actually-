@@ -173,7 +173,7 @@ installed
 latest
 ```
 
-cuando esos conceptos apliquen.
+cuando esos conceptos apliquen. Cuando no aplican, se informa como `not-applicable` (architecture.md §5).
 
 ### RF-004 — Providers
 Debe soportar arquitectura extensible para:

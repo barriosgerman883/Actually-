@@ -246,10 +246,45 @@ export type ToolScope = "global" | "project";
 
 export type ConfidenceLevel = "low" | "medium" | "high";
 
+export interface Evidence {
+  /** `fact`: una fuente autoritativa lo afirma. `inference`: se deduce. */
+  kind: "fact" | "inference";
+  /** Qué se consultó: un comando, un archivo o un endpoint. */
+  source: string;
+  description: string;
+}
+
 /**
- * Estado que muestra `status`. Se deriva de las versiones;
- * ningún provider lo asigna directamente.
+ * Una afirmación sobre un dato, con su estado explícito.
+ * Un campo opcional no distingue "no lo sé" de "no aplica";
+ * un Claim sí.
  */
+export type Claim<T> =
+  | {
+      state: "known";
+      value: T;
+      confidence: ConfidenceLevel;
+      evidence: Evidence[];
+    }
+  | {
+      state: "unknown";
+      reason: string;
+      evidence: Evidence[];
+    }
+  | { state: "not-applicable" };
+
+export interface VersionClaims {
+  /** Rango declarado, por ejemplo "^5.9.0" en package.json. */
+  requested: Claim<string>;
+  /** Versión fijada en el lockfile. */
+  resolved: Claim<string>;
+  /** Versión presente en disco. */
+  installed: Claim<string>;
+  /** Última versión estable conocida. */
+  latest: Claim<string>;
+}
+
+/** Estado que muestra `status`. Se deriva; ningún provider lo asigna. */
 export type ToolStatus =
   | "current"   // ✓
   | "outdated"  // ↑
@@ -262,32 +297,31 @@ export interface ToolRecord {
   name: string;
 
   scope: ToolScope;
+  /** Raíz del proyecto. Presente solo cuando scope es "project". */
+  projectRoot?: string;
 
-  installedVersion?: string;
-  latestVersion?: string;
-
-  source?: ToolSource;
-  installation?: Installation;
-  update?: UpdateStrategy;
+  versions: VersionClaims;
+  installation: Claim<Installation>;
+  source: Claim<ToolSource>;
+  update: Claim<UpdateStrategy>;
 
   status: ToolStatus;
-  evidence: Evidence[];
+  /** Resumen de los claims que determinan `status` (ver §6). */
   confidence: ConfidenceLevel;
 }
 ```
 
-> **Decisión pendiente (open-questions #2):** si `outdated` se divide por tipo de cambio (major, minor, patch) y cómo se representa una versión instalada mayor que la última estable.
+`status` se calcula comparando `versions.latest` con la versión local más concreta que se conozca: `installed` si está disponible, si no `resolved`.
 
-### Evidence
+| Estado | Condición |
+|---|---|
+| `current` | ambas versiones conocidas e iguales |
+| `outdated` | la versión local es menor que `latest` |
+| `unknown` | alguna de las dos es `unknown` |
+| `warning` | la versión local es mayor que `latest`, o no son comparables como semver |
+| `error` | el provider falló al inspeccionar la herramienta |
 
-```ts
-export interface Evidence {
-  kind: string;
-  source: string;
-  description: string;
-  weight: number;
-}
-```
+> **Decisión pendiente (open-questions #2):** si `outdated` se divide por tipo de cambio (major, minor, patch).
 
 ### Installation
 
@@ -326,34 +360,26 @@ export interface UpdateStrategy {
 
 ## 6. Confidence model
 
-El sistema no debe esconder inferencias.
+La confianza se asigna por afirmación (`Claim`), no por herramienta. Una misma herramienta puede tener la versión instalada con confianza alta y el origen con confianza baja, y la salida debe mostrarlo.
 
-Ejemplo conceptual:
+Cada `Evidence` es de uno de dos tipos:
 
-```text
-Evidence A: package listed by pnpm
-weight 0.45
+- `fact`: una fuente autoritativa lo afirma directamente. Ejemplo: `pnpm list --global --json` incluye `gstack@1.0.0`.
+- `inference`: se deduce de otras señales. Ejemplo: el campo `repository` del paquete en npm apunta a GitHub, así que ese repositorio es probablemente el origen.
 
-Evidence B: binary path belongs to pnpm global bin
-weight 0.35
+Reglas del MVP:
 
-Evidence C: package metadata matches executable
-weight 0.20
-```
+| Nivel | Condición |
+|---|---|
+| `high` | al menos un `fact` afirma el valor y ninguna evidencia lo contradice |
+| `medium` | solo inferencias, al menos dos independientes y concordantes |
+| `low` | una sola inferencia, o evidencia contradictoria |
 
-El algoritmo concreto puede evolucionar.
+Si no hay evidencia suficiente ni para `low`, el claim queda `unknown` con un `reason`.
 
-Para el MVP se recomienda un modelo simple y documentado.
+La confianza resumida de un `ToolRecord` es la mínima entre `versions.installed` (o `resolved`), `versions.latest` e `installation`, contando solo los que están en estado `known`.
 
-Salida:
-
-```text
-low
-medium
-high
-```
-
-No deben usarse porcentajes visibles al usuario si implican una precisión inexistente.
+No se usan porcentajes ni pesos numéricos, porque implicarían una precisión que el modelo no tiene. Las reglas pueden evolucionar, pero cada cambio debe reflejarse aquí y en docs/concepts/confidence.md.
 
 ---
 

@@ -147,6 +147,8 @@ PROJECT · ~/projects/tokke
   latest       2.3.1
 ```
 
+`confidence` en `status` es un resumen. El detalle por afirmación está en `explain` (§9).
+
 ---
 
 ## 6. Símbolos
@@ -221,34 +223,29 @@ actually explain gstack
 ```
 
 ```text
-gstack 1.0.0
+gstack
 
-How this was detected
+Installed version    1.0.0                        high
+  fact        pnpm list --global --json reports gstack@1.0.0
 
-✓ Executable found in PATH
-  ~/.local/share/pnpm/gstack
+Installed by         pnpm                         high
+  fact        pnpm list --global --json includes gstack
+  fact        ~/.local/share/pnpm/gstack is inside pnpm's global bin directory
 
-✓ pnpm reports package installed globally
-  gstack@1.0.0
+Source               github.com/example/gstack    medium
+  inference   npm registry: "repository" points to github.com/example/gstack
+  inference   repository name matches the package name
 
-✓ Executable path belongs to pnpm global directory
+Latest stable        2.0.0                        high
+  fact        npm registry: latest version is 2.0.0
 
-How latest version was resolved
-
-✓ npm registry
-  latest: 2.0.0
-
-Confidence
-high
+Not determined
+  requested, resolved    not applicable to global tools
 ```
 
-Debe diferenciar claramente:
+Cada afirmación muestra su propia confianza y su evidencia. Cada línea de evidencia dice si es un hecho (`fact`) o una inferencia (`inference`).
 
-```text
-facts
-inferences
-unknowns
-```
+Lo que no se pudo determinar aparece al final con su motivo. Nunca se omite.
 
 ---
 
@@ -372,9 +369,9 @@ Debe:
 - ser versionable;
 - evitar cambios incompatibles silenciosos;
 - usar campos estables;
-- separar `null`, `unknown` y ausencia cuando corresponda.
+- representar cada dato inferido como un claim con `state` explícito.
 
-Ejemplo:
+Ejemplo de `actually status --json`:
 
 ```json
 {
@@ -384,16 +381,43 @@ Ejemplo:
       "id": "pnpm:gstack",
       "name": "gstack",
       "scope": "global",
-      "installedVersion": "1.0.0",
-      "latestVersion": "2.0.0",
       "status": "outdated",
-      "installProvider": "pnpm",
-      "sourceProvider": "github",
-      "confidence": "high"
+      "confidence": "high",
+      "versions": {
+        "requested": { "state": "not-applicable" },
+        "resolved": { "state": "not-applicable" },
+        "installed": { "state": "known", "value": "1.0.0", "confidence": "high" },
+        "latest": { "state": "known", "value": "2.0.0", "confidence": "high" }
+      },
+      "installation": {
+        "state": "known",
+        "value": { "provider": "pnpm", "path": "/home/me/.local/share/pnpm/gstack" },
+        "confidence": "high"
+      },
+      "source": {
+        "state": "known",
+        "value": {
+          "provider": "github",
+          "identifier": "example/gstack",
+          "url": "https://github.com/example/gstack"
+        },
+        "confidence": "medium"
+      },
+      "update": {
+        "state": "known",
+        "value": { "provider": "pnpm" },
+        "confidence": "high"
+      }
     }
   ]
 }
 ```
+
+Reglas:
+
+- Ningún claim se omite. Si no aplica, es `not-applicable`. Si no se sabe, es `unknown` con `reason`.
+- `null` no se usa para representar ausencia de información.
+- `status --json` no incluye `evidence`. `explain --json` sí.
 
 > **Decisión pendiente (open-questions #9):** el formato de `id`. `pnpm:gstack` no distingue la misma dependencia en varios proyectos ni una herramienta sin provider conocido.
 

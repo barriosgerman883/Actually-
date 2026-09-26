@@ -214,8 +214,9 @@ No todos estos formatos necesitan soporte funcional completo en el MVP; algunos 
 El modelo de dominio se define una sola vez, en architecture.md §5. Para el MVP importan estos conceptos:
 
 - `ToolRecord`: una herramienta o dependencia detectada, con su scope, versiones, origen, instalación, estado y evidencia.
-- `Evidence`: cada observación que respalda una conclusión.
-- `ConfidenceLevel`: `low`, `medium` o `high`.
+- `Claim`: una afirmación con estado explícito (`known`, `unknown` o `not-applicable`), su propia confianza y su evidencia.
+- `Evidence`: cada observación que respalda un claim, marcada como hecho o como inferencia.
+- `ConfidenceLevel`: `low`, `medium` o `high`, por claim.
 - `ToolStatus`: el estado derivado que muestra `status`.
 
 ---
