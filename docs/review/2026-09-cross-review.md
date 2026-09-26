@@ -4,6 +4,8 @@ Fecha: 2026-09-26
 Documentos revisados: `mvp.md`, `PRD.md`, `architecture.md`, `design.md`
 Estado del repo al momento de la revisión: vacío (README y LICENSE). No hay código contra el cual contrastar.
 
+> Esta revisión describe los documentos en su versión original (commit `cf70c24`). Las secciones citadas se refieren a esa versión. Las correcciones se aplicaron después en commits separados, y el estado de cada decisión está en `open-questions.md`.
+
 ## Resumen
 
 Los cuatro documentos comparten filosofía y son coherentes en lo que prohíben: read-only, sin backend, sin telemetría, evidencia + confianza + `unknown`, CommandRunner como frontera, JSON como interfaz pública, capas vigiladas por tests. Divergen en lo que definen. Hay siete decisiones de fondo sin tomar y una lista de inconsistencias mecánicas que conviene resolver antes de escribir el primer provider.
