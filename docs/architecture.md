@@ -149,6 +149,8 @@ found:
 
 La interpretación pertenece a un provider o detector especializado.
 
+Un repositorio encontrado por `GitRepositoryScanner` es un proyecto salvo evidencia positiva de que es una herramienta. La regla está en mvp.md §5.3.
+
 > **Decisión pendiente (open-questions #14):** qué directorios de PATH recorre `PathScanner`. Recorrer todo PATH listaría miles de binarios del sistema como desconocidos.
 
 ---

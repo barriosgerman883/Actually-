@@ -347,6 +347,10 @@ paths = [
   "~/tools"
 ]
 
+# Repositorios que son herramientas, no proyectos (mvp.md §5.3).
+[[tools.git]]
+path = "~/tools/gstack"
+
 [network]
 enabled = true
 

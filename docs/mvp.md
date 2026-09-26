@@ -165,6 +165,22 @@ Debe poder:
 
 No debe afirmar que un repositorio fue “instalado mediante git clone” solamente por contener `.git`.
 
+#### Proyecto o herramienta
+
+Un repositorio propio y uno clonado para usar una herramienta se ven iguales en disco. La regla del MVP:
+
+- Todo repositorio encontrado bajo `scan.paths` es un **proyecto**. Aparece como sección `PROJECT`, nunca como una fila de herramienta desconocida.
+- Un repositorio es una **herramienta** solo con evidencia positiva:
+  - el usuario lo declara en la configuración (`[[tools.git]]`, design.md §13), lo que cuenta como `fact`; o
+  - un ejecutable de los directorios de PATH escaneados resuelve, siguiendo symlinks, a un archivo dentro del repositorio, lo que cuenta como `inference`.
+
+Para un repositorio que es herramienta:
+
+- `versions.installed` es el tag semver más alto que apunta a `HEAD`.
+- Si `HEAD` no tiene un tag semver, `versions.installed` es `unknown`. La evidencia registra el commit actual, el último tag alcanzable y la distancia a él.
+- `versions.latest` se resuelve con GitHub según §5.4.
+- `installation` es `git`, con la ruta del repositorio.
+
 ### 5.4 GitHub
 Debe poder resolver:
 
