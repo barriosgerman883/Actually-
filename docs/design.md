@@ -364,6 +364,9 @@ paths = [
   "~/dev",
   "~/tools"
 ]
+# Directorios de ejecutables a revisar, además del de pnpm
+# y ~/.local/bin (architecture.md §3.3).
+bin_paths = []
 
 # Repositorios que son herramientas, no proyectos (mvp.md §5.3).
 [[tools.git]]

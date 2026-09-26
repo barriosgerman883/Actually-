@@ -187,7 +187,7 @@ Un repositorio propio y uno clonado para usar una herramienta se ven iguales en 
 - Todo repositorio encontrado bajo `scan.paths` es un **proyecto**. Aparece como sección `PROJECT`, nunca como una fila de herramienta desconocida.
 - Un repositorio es una **herramienta** solo con evidencia positiva:
   - el usuario lo declara en la configuración (`[[tools.git]]`, design.md §13), lo que cuenta como `fact`; o
-  - un ejecutable de los directorios de PATH escaneados resuelve, siguiendo symlinks, a un archivo dentro del repositorio, lo que cuenta como `inference`.
+  - un ejecutable de los directorios de PATH escaneados (architecture.md §3.3) resuelve, siguiendo symlinks, a un archivo dentro del repositorio, lo que cuenta como `inference`.
 
 Para un repositorio que es herramienta:
 

@@ -160,7 +160,13 @@ La interpretación pertenece a un provider o detector especializado.
 
 Un repositorio encontrado por `GitRepositoryScanner` es un proyecto salvo evidencia positiva de que es una herramienta. La regla está en mvp.md §5.3.
 
-> **Decisión pendiente (open-questions #14):** qué directorios de PATH recorre `PathScanner`. Recorrer todo PATH listaría miles de binarios del sistema como desconocidos.
+`PathScanner` no recorre todo PATH, porque listaría miles de binarios del sistema como herramientas desconocidas. En el MVP revisa solo:
+
+- el directorio global de binarios de pnpm (`PNPM_HOME`, o el que informa `pnpm bin --global`);
+- `~/.local/bin`;
+- los directorios declarados en `[scan] bin_paths` (design.md §13).
+
+Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando llegue su provider en la Fase 2.
 
 ---
 
