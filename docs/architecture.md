@@ -418,18 +418,88 @@ No se usan porcentajes ni pesos numéricos, porque implicarían una precisión q
 
 ## 7. CommandRunner
 
-El `CommandRunner` es una frontera de seguridad.
+El `CommandRunner` es una frontera de seguridad. Es el único componente que lanza procesos, y solo lanza comandos de una lista cerrada.
 
-API conceptual:
+### API
+
+Quien lo usa elige un comando de la lista por su identificador. No pasa binario, argumentos ni entorno.
 
 ```ts
+type AllowedCommand =
+  | "pnpm.version"
+  | "pnpm.root.global"
+  | "pnpm.bin.global"
+  | "pnpm.list.global"
+  | "git.tags.head"
+  | "git.describe.head"
+  | "node.version";
+
 interface CommandRequest {
-  binary: AllowedBinary;
-  args: readonly string[];
-  cwd?: string;
-  intent: "read";
+  command: AllowedCommand;
+  /** Solo para comandos git.*: raíz del repositorio a inspeccionar. */
+  repository?: string;
 }
 ```
+
+Ejemplo:
+
+```ts
+commandRunner.run({
+  command: "git.describe.head",
+  repository: repositoryPath
+});
+```
+
+### Allowlist
+
+Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argumentos adicionales, y ningún argumento sale de datos del usuario o de un repositorio.
+
+| Identificador | Comando | Directorio de trabajo |
+|---|---|---|
+| `pnpm.version` | `pnpm --version` | neutral |
+| `pnpm.root.global` | `pnpm root --global` | neutral |
+| `pnpm.bin.global` | `pnpm bin --global` | neutral |
+| `pnpm.list.global` | `pnpm list --global --json --depth=0` | neutral |
+| `git.tags.head` | `git tag --points-at HEAD` | repositorio |
+| `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
+| `node.version` | `node --version` | neutral |
+
+El directorio neutral es el directorio de caché de `actually?` (§14), que nunca contiene `package.json` ni `.npmrc`.
+
+Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún módulo lanza procesos por fuera de esta tabla.
+
+### pnpm
+
+- `pnpm` nunca se lanza dentro de un proyecto detectado. Un proyecto puede definir un `.npmrc` o el campo `packageManager`, que activa corepack y puede descargar y ejecutar otra versión de pnpm.
+- Las dependencias de un proyecto se leen de `package.json` y del lockfile a través de Filesystem, sin ejecutar nada.
+- pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
+
+### Git
+
+Un repositorio encontrado en disco no es confiable: su `.git/config` puede definir comandos que Git ejecuta.
+
+- El commit actual, la rama y los remotes se leen de archivos (`.git/HEAD`, `.git/config`, `refs/` y `packed-refs`) a través de Filesystem.
+- Git se lanza solo para los tags de `HEAD` y la distancia al último tag. Obtener eso de los archivos exigiría interpretar los packfiles de Git, y reimplementar ese formato sería una fuente de errores.
+- Cada ejecución de git usa un entorno endurecido:
+
+| Variable u opción | Efecto |
+|---|---|
+| `GIT_CONFIG_NOSYSTEM=1` | ignora la configuración del sistema |
+| `GIT_CONFIG_GLOBAL` apuntando a un archivo vacío | ignora la configuración global |
+| `-c core.fsmonitor=false` | impide que el repositorio lance un monitor propio |
+| `GIT_PAGER=cat` | no abre paginadores |
+| `GIT_TERMINAL_PROMPT=0` | nunca pide credenciales |
+| `GIT_OPTIONAL_LOCKS=0` | no escribe locks opcionales dentro del repositorio |
+
+- Requiere Git 2.32 o posterior, la primera versión con `GIT_CONFIG_GLOBAL`.
+- `safe.directory` no se sobrescribe. Si Git rechaza un repositorio, los datos quedan `unknown` con ese motivo.
+
+### Reglas para todos los comandos
+
+- Sin shell: se lanza el binario con un arreglo de argumentos.
+- `LC_ALL=C`, para que la salida sea estable al interpretarla.
+- Timeout de 10 segundos por comando.
+- La salida se valida antes de usarla. Una salida inesperada produce un diagnóstico (§13), no una excepción.
 
 No debe aceptar:
 
@@ -438,19 +508,6 @@ raw shell string
 shell: true
 sudo
 arbitrary executable
-```
-
-> **Decisión pendiente (open-questions #12, #13):** `AllowedBinary` limita el binario pero no el subcomando, así que `git pull` pasaría el control. Además, lanzar `git` o `pnpm` dentro de un repositorio no confiable puede ejecutar código que ese repositorio define (`core.fsmonitor`, `.npmrc`). `intent: "read"` es una etiqueta de tipo y no impone nada por sí sola.
-
-Ejemplo válido:
-
-```ts
-commandRunner.run({
-  binary: "git",
-  args: ["remote", "get-url", "origin"],
-  cwd: repositoryPath,
-  intent: "read"
-});
 ```
 
 ---

@@ -563,6 +563,8 @@ Ejemplo:
 ```text
 - Never add destructive commands.
 - Never bypass CommandRunner.
+- Never add a command to the CommandRunner allowlist without an ADR.
+- Never run pnpm inside a detected project.
 - Never access the network outside HttpClient.
 - Never import node:fs outside infrastructure/filesystem.
 - Never introduce telemetry.

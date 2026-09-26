@@ -265,27 +265,18 @@ exec(`pnpm ${input}`);
 Permitido únicamente mediante un runner controlado:
 
 ```ts
-commandRunner.run({
-  binary: "pnpm",
-  args: ["list", "--global", "--json"],
-  intent: "read"
-});
+commandRunner.run({ command: "pnpm.list.global" });
 ```
+
+Quien usa el runner elige un comando de una lista cerrada. No pasa binario, argumentos ni entorno (architecture.md §7).
 
 ### 8.2 Allowlist de comandos
 
 El `CommandRunner` solo permite comandos explícitamente aprobados.
 
-Ejemplos válidos:
+La lista completa, con el comando exacto y el directorio de trabajo de cada uno, está en architecture.md §7. Agregar un comando requiere un ADR.
 
-```text
-pnpm list
-pnpm root
-git remote
-git rev-parse
-git describe
-node --version
-```
+`pnpm` nunca se lanza dentro de un proyecto detectado, y `git` se lanza con un entorno endurecido, porque un repositorio ajeno puede definir comandos que esas herramientas ejecutan.
 
 Ejemplos prohibidos:
 
