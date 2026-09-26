@@ -407,6 +407,7 @@ Ejemplo de `actually status --json`:
       "name": "gstack",
       "scope": "global",
       "status": "outdated",
+      "updateType": "major",
       "confidence": "high",
       "versions": {
         "requested": { "state": "not-applicable" },
@@ -442,6 +443,7 @@ Reglas:
 
 - Ningún claim se omite. Si no aplica, es `not-applicable`. Si no se sabe, es `unknown` con `reason`.
 - `null` no se usa para representar ausencia de información.
+- `updateType` aparece solo cuando `status` es `outdated`. No es un claim: se deriva de las versiones.
 - `status --json` no incluye `evidence`. `explain --json` sí.
 
 > **Decisión pendiente (open-questions #9):** el formato de `id`. `pnpm:gstack` no distingue la misma dependencia en varios proyectos ni una herramienta sin provider conocido.

@@ -289,6 +289,9 @@ export interface VersionClaims {
   latest: Claim<string>;
 }
 
+/** Tipo de cambio entre la versión local y la última estable. */
+export type UpdateType = "major" | "minor" | "patch";
+
 /** Estado que muestra `status`. Se deriva; ningún provider lo asigna. */
 export type ToolStatus =
   | "current"   // ✓
@@ -311,6 +314,8 @@ export interface ToolRecord {
   update: Claim<UpdateStrategy>;
 
   status: ToolStatus;
+  /** Presente solo cuando status es "outdated". */
+  updateType?: UpdateType;
   /** Resumen de los claims que determinan `status` (ver §6). */
   confidence: ConfidenceLevel;
 }
@@ -326,7 +331,15 @@ export interface ToolRecord {
 | `warning` | la versión local es mayor que `latest`, o no son comparables como semver |
 | `error` | el provider falló al inspeccionar la herramienta |
 
-> **Decisión pendiente (open-questions #2):** si `outdated` se divide por tipo de cambio (major, minor, patch).
+`outdated` es un solo estado. El tipo de cambio va en `updateType`, que se calcula comparando las versiones según semver:
+
+- `major` si cambia el primer número;
+- `minor` si cambia el segundo;
+- `patch` si cambia el tercero.
+
+En versiones `0.x`, semver no garantiza compatibilidad entre versiones minor, así que un cambio de minor cuenta como `major`.
+
+Esto permite resúmenes como "2 updates available, 1 major version change" (design.md §4) sin agregar estados.
 
 ### Installation
 
