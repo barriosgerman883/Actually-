@@ -27,6 +27,8 @@ No existe un backend de `actually?`.
 
 La red solo se utiliza para consultar metadata pública necesaria para resolver versiones.
 
+Esa metadata se guarda en una caché local con vencimiento (architecture.md §14).
+
 ### 2.2 Read-only
 La versión inicial es estrictamente de observación.
 
@@ -39,6 +41,8 @@ La versión inicial es estrictamente de observación.
 - cambia permisos;
 - escribe dentro de proyectos detectados;
 - escala privilegios.
+
+La única escritura que hace `actually?` es en su propio directorio de caché, fuera de los proyectos detectados.
 
 ### 2.3 Explicable
 Toda conclusión importante debe poder ser explicada mediante evidencia.
@@ -374,7 +378,7 @@ No se implementará inicialmente:
 - backend;
 - cuentas;
 - telemetry;
-- acceso a repositorios privados autenticados;
+- acceso a repositorios privados. Un token de GitHub presente en el entorno solo se usa para ampliar el límite de requests (architecture.md §14);
 - ejecución automática de migraciones;
 - corrección automática del entorno.
 

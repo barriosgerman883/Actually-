@@ -205,7 +205,7 @@ La ausencia de red o permisos no debe causar fallos destructivos ni resultados f
 ## 9. Requisitos no funcionales
 
 ### RNF-001 — Seguridad
-Read-only en MVP.
+Read-only en MVP. La única escritura es la caché propia de `actually?`, fuera de los proyectos del usuario.
 
 ### RNF-002 — Privacidad
 Sin telemetría obligatoria.
@@ -288,7 +288,7 @@ directorios explícitos y profundidad controlada.
 
 ### Riesgo 5 — Dependencia de APIs externas
 Mitigación:
-timeouts, caché local opcional y degradación elegante.
+timeouts, caché local con vencimiento y requests condicionales (architecture.md §14), y degradación elegante.
 
 ### Riesgo 6 — Crecimiento desordenado
 Mitigación:
@@ -316,6 +316,7 @@ contratos de providers, ADRs y requisitos de contribución.
 - Git provider;
 - GitHub version resolver;
 - npm registry version resolver;
+- caché local de metadata;
 - project scanner;
 - global scanner;
 - status;

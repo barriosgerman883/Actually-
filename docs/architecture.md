@@ -204,7 +204,10 @@ Abstrae lectura de archivos, directorios y resolución de paths.
 Único componente autorizado a realizar requests.
 
 ### Clock
-Abstracción opcional para expiración y caching.
+Abstracción del tiempo. Necesaria para el TTL de la caché.
+
+### Cache
+Único componente autorizado a escribir en disco, y solo dentro del directorio de caché de `actually?` (§14).
 
 ---
 
@@ -436,6 +439,9 @@ Responsabilidades:
 - retries limitados;
 - rate-limit handling;
 - JSON validation;
+- requests condicionales para revalidar la caché;
+- concurrencia limitada;
+- enviar el token de GitHub solo a `api.github.com` (§14);
 - cancellation.
 
 Ejemplos de hosts permitidos inicialmente:
@@ -511,6 +517,7 @@ src/
 │  ├─ filesystem/
 │  ├─ command-runner/
 │  ├─ http/
+│  ├─ cache/
 │  └─ config/
 │
 └─ security/
@@ -572,6 +579,9 @@ Toda inferencia relevante produce evidencia.
 ### RA-009
 Los fallos de un provider no deben derribar todo el scan salvo error crítico.
 
+### RA-010
+Solo `infrastructure/cache` escribe en disco, y solo dentro del directorio de caché.
+
 ---
 
 ## 13. Error handling
@@ -599,16 +609,44 @@ Modo debug puede exponer información técnica.
 
 ## 14. Cache
 
-No es requisito del MVP inicial.
+La caché es parte del MVP. Sin ella, el resolver de GitHub se queda sin cuota en la primera ejecución de cualquier usuario con más de unos pocos repositorios: `api.github.com` sin autenticación permite 60 requests por hora. Un proyecto con decenas de dependencias genera la misma cantidad de requests al npm registry.
 
-Si se introduce:
+### Qué guarda
 
-- debe ser local;
-- descartable;
-- no contener secretos;
-- tener TTL;
-- nunca ser fuente exclusiva de verdad;
-- poder deshabilitarse.
+- Solo metadata pública: última versión estable, tags, releases y el campo `repository` de npm.
+- La clave es el host más el recurso consultado, por ejemplo `registry.npmjs.org/gstack/latest`.
+- Cada entrada guarda la fecha de obtención y los validadores que haya devuelto el servidor (`ETag` o `Last-Modified`).
+- Nunca guarda tokens, rutas locales, nombres de proyectos ni resultados del inventario local.
+
+### Dónde
+
+| Sistema | Ruta |
+|---|---|
+| Linux | `$XDG_CACHE_HOME/actually`, o `~/.cache/actually` si no está definida |
+| macOS | `~/Library/Caches/actually` |
+| Windows | `%LOCALAPPDATA%\actually\cache` |
+
+Borrar ese directorio es siempre seguro.
+
+### Reglas
+
+- El TTL por defecto es de 6 horas y se configura con `[cache] ttl` (design.md §13).
+- Una entrada vencida se revalida con un request condicional (`If-None-Match` o `If-Modified-Since`). En GitHub, una respuesta 304 a un request condicional no consume cuota.
+- `--no-cache` no lee ni escribe la caché en esa ejecución. `[cache] enabled = false` la desactiva siempre.
+- Si la red falla y existe una entrada vencida, puede usarse solo como evidencia explícita (`valor en caché del <fecha>; red no disponible`) y con confianza máxima `medium`. Nunca se presenta como dato fresco.
+- La caché nunca guarda el inventario local. La máquina se inspecciona de nuevo en cada ejecución.
+
+### GitHub
+
+- Si `GITHUB_TOKEN` o `GH_TOKEN` están definidos en el entorno, se envían solo a `api.github.com` y solo para ampliar el límite de requests. No se guardan en la caché, la configuración ni los logs.
+- `[network] github_token = false` desactiva ese uso.
+- Tener un token no convierte el acceso a repositorios privados en una funcionalidad soportada del MVP.
+- Si GitHub responde que el límite se agotó, no se hacen más requests a GitHub en esa ejecución. Los datos pendientes quedan `unknown` con ese motivo.
+
+### npm registry
+
+- Se consulta `/<paquete>/latest`, que devuelve solo el manifiesto de la versión estable, con su campo `repository`. El documento completo del paquete puede pesar decenas de megabytes; el manifiesto, unos pocos kilobytes.
+- Concurrencia máxima por defecto: 8 requests simultáneos. Timeout por request: 10 segundos.
 
 ---
 

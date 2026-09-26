@@ -353,6 +353,13 @@ path = "~/tools/gstack"
 
 [network]
 enabled = true
+# Usar GITHUB_TOKEN o GH_TOKEN del entorno, solo para ampliar
+# el límite de requests (architecture.md §14).
+github_token = true
+
+[cache]
+enabled = true
+ttl = "6h"
 
 [output]
 color = "auto"
