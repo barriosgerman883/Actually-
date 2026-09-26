@@ -490,8 +490,6 @@ src/
 │
 ├─ application/
 │  ├─ status/
-│  ├─ scan/
-│  ├─ info/
 │  └─ explain/
 │
 ├─ core/

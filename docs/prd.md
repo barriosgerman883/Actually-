@@ -236,7 +236,7 @@ Comandos principales del MVP:
 
 ```bash
 actually status
-actually info <tool>
+actually status <tool>
 actually explain <tool>
 actually status --json
 ```
@@ -244,7 +244,7 @@ actually status --json
 El formato exacto de cada salida se define en un solo lugar para que no diverja entre documentos:
 
 - salida de `status`: design.md §5;
-- salida de `info`: design.md §8;
+- salida de `status <tool>`: design.md §8;
 - salida de `explain`: design.md §9;
 - contrato JSON: design.md §14.
 
@@ -320,7 +320,6 @@ contratos de providers, ADRs y requisitos de contribución.
 - project scanner;
 - global scanner;
 - status;
-- info;
 - explain;
 - JSON.
 

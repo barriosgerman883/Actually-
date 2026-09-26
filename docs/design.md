@@ -60,8 +60,8 @@ La salida normal debe ser corta.
 Detalles adicionales mediante:
 
 ```bash
-actually info
-actually explain
+actually status <tool>
+actually explain <tool>
 --verbose
 --json
 ```
@@ -192,10 +192,10 @@ Sin embargo:
 
 ---
 
-## 8. Comando `info`
+## 8. Detalle de una herramienta: `status <tool>`
 
 ```bash
-actually info gstack
+actually status gstack
 ```
 
 Salida:
@@ -221,6 +221,8 @@ github.com/example/gstack
 Status
 update available
 ```
+
+`status` sin argumentos muestra la lista resumida (§5). Con el nombre de una herramienta, muestra este detalle. La evidencia de cada dato está en `explain` (§9).
 
 ---
 
@@ -321,7 +323,9 @@ Luego el detalle.
 
 ## 12. Configuración inicial
 
-Podría existir:
+`actually init` no entra en el MVP. Sin configuración, `status` revisa las herramientas globales y el proyecto de la carpeta actual, así que configurar no es obligatorio. Se reconsidera si la configuración pasa a ser necesaria.
+
+Un flujo posible:
 
 ```bash
 actually init
@@ -452,7 +456,7 @@ Integraciones futuras deben consumir:
 
 ```bash
 actually status --json
-actually info <tool> --json
+actually status <tool> --json
 actually explain <tool> --json
 ```
 

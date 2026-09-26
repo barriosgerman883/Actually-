@@ -95,17 +95,27 @@ No está diseñado inicialmente como gestor de software para usuarios no técnic
 
 ### 4.1 Comandos iniciales
 
+El MVP tiene dos comandos:
+
 ```bash
-actually scan
 actually status
 actually status --global
 actually status --project
-actually info <tool>
+actually status <tool>
 actually explain <tool>
-actually doctor
 ```
 
-> **Decisión pendiente (open-questions #4, #18):** `doctor` no aparece en ningún otro documento, `init` solo existe en design.md §12 y `scan` se solapa con `status`. Tampoco está decidido si `info` se mantiene separado de `explain`.
+- `status` muestra el estado resumido. Sin configuración, revisa las herramientas globales y el proyecto de la carpeta actual, así que no hace falta configurar nada para empezar. Si `scan.paths` está configurado, también revisa los proyectos bajo esas rutas.
+- `status <tool>` muestra el detalle de una herramienta (design.md §8).
+- `explain <tool>` muestra la evidencia de cada afirmación (design.md §9).
+- Ambos comandos aceptan `--json`.
+
+Quedan fuera del MVP:
+
+- `scan`: la caché solo guarda metadata pública y el inventario local se recalcula siempre, así que no tendría una función distinta de `status`.
+- `info`: su contenido pasa a `status <tool>`.
+- `doctor`: no tiene una función definida.
+- `init`: la configuración no es obligatoria (design.md §12).
 
 ### 4.2 Salida para humanos
 
