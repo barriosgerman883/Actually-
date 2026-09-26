@@ -355,7 +355,7 @@ Estas integraciones deben consumir el core o salida estructurada, no duplicar l√
 
 El MVP puede considerarse completo cuando:
 
-1. se instala con pnpm como `@actually/cli` y expone el comando `actually`;
+1. se instala con pnpm como `@getactually/cli` y expone el comando `actually`;
 2. funciona sin backend;
 3. puede inspeccionar entorno global y proyecto;
 4. identifica pnpm y Git correctamente en escenarios soportados;

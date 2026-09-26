@@ -19,13 +19,13 @@ Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. La
 | 13 | Allowlist por binario y subcomando | Pendiente | Sí | D6 |
 | 14 | Directorios de PATH escaneados | Pendiente | Solo directorios de usuario más los de la config | D7 |
 | 15 | Exit codes | Pendiente | `0` ok, `1` updates disponibles, `2` errores de scan, `3` uso inválido | §3 |
-| 16 | Nombre del paquete npm | Resuelta | `@actually/cli`, con el comando `actually`. Ver abajo | §4 |
+| 16 | Nombre del paquete npm | Resuelta | `@getactually/cli`, con el comando `actually`. Ver abajo | §4 |
 | 17 | Idioma de los docs | Pendiente | Inglés si el proyecto busca contribuidores externos | §5 |
 | 18 | `info` como comando separado | Pendiente | Fusionar en `status <tool>` | §5 |
 
 ## #16: nombre del paquete
 
-Se eligió la alternativa B, `@actually/cli`. Las tres alternativas quedan como registro de la decisión.
+Se eligió la alternativa B con el scope `@getactually`, porque `@actually` pertenece a otra cuenta. Las alternativas quedan como registro de la decisión.
 
 ### Contexto
 
@@ -68,10 +68,10 @@ El nombre estaba libre en el registry el 2026-09-26. Es la opción más simple, 
 
 ### Decisión
 
-Se eligió B: el paquete se publica como `@actually/cli` y expone el comando `actually`. El scope reserva `@actually/core` para la Fase 3.
+El scope `@actually` resultó pertenecer a otra cuenta de npm, sin paquetes públicos. Se usó el scope `@getactually`, que estaba libre.
 
-Pedir la transferencia del nombre, la alternativa A, sigue siendo posible más adelante. Si prospera, `actually` pasaría a ser el nombre principal y `@actually/cli` se deprecaría con un mensaje que apunte al nuevo nombre.
+- El paquete se publica como `@getactually/cli` y expone el comando `actually`.
+- El scope reserva `@getactually/core` para las integraciones de la Fase 3.
+- La organización `getactually` se creó en npmjs.com el 2026-09-26, con verificación en dos pasos activa en la cuenta que publica.
 
-### Acción pendiente antes del primer publish
-
-Crear la organización `@actually` en npmjs.com. Su disponibilidad no se pudo verificar desde el entorno de esta revisión. Si está tomada, esta decisión se reabre.
+Pedir la transferencia del nombre `actually`, la alternativa A, sigue siendo posible más adelante. Si prospera, `actually` pasaría a ser el nombre principal y `@getactually/cli` se deprecaría con un mensaje que apunte al nuevo nombre.
