@@ -682,6 +682,11 @@ docs/
    └─ 0008-scoped-package-name.md
 ```
 
+### Idioma
+
+- **En inglés:** el código, los comentarios, la salida de la CLI, las claves del JSON, `README`, `CONTRIBUTING`, `AGENTS.md` y todo el árbol de `docs/` de arriba. Es lo que leen los contribuidores y los integradores.
+- **En español por ahora:** los documentos de planificación (`docs/mvp.md`, `docs/prd.md`, `docs/architecture.md`, `docs/design.md`) y `docs/review/`. Se traducen antes de hacer público el proyecto.
+
 ---
 
 ## 22. Principio final
