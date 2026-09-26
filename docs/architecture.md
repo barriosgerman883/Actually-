@@ -76,7 +76,16 @@ Responsabilidades:
 - mostrar errores;
 - definir exit codes.
 
-> **Decisión pendiente (open-questions #15):** los exit codes no están definidos.
+Exit codes:
+
+| Código | Significado |
+|---|---|
+| `0` | Terminó, aunque haya datos `unknown` o diagnósticos recuperables |
+| `1` | Hay actualizaciones disponibles. Solo con `--exit-code` |
+| `2` | Uso inválido, incluido un nombre de herramienta inexistente o ambiguo |
+| `3` | Error fatal (§13) |
+
+Sin `--exit-code`, encontrar actualizaciones no es un error. Así `actually status` no rompe scripts que usan `set -e`, igual que `git diff` sin `--exit-code`.
 
 No debe:
 
@@ -621,6 +630,26 @@ Fatal
 El usuario debe recibir mensajes útiles sin stack traces por defecto.
 
 Modo debug puede exponer información técnica.
+
+### Diagnósticos
+
+Los errores recuperables no cortan la ejecución (RA-009). Se registran como diagnósticos y viajan junto al resultado:
+
+```ts
+export interface Diagnostic {
+  severity: "warning" | "error";
+  /** Provider o componente que lo emitió, por ejemplo "github". */
+  source: string;
+  message: string;
+  /** Herramienta afectada, si corresponde. */
+  toolId?: string;
+}
+```
+
+- `warning`: el resultado es válido pero incompleto. Ejemplo: GitHub agotó el límite y algunas versiones quedaron `unknown`.
+- `error`: un provider falló. Las herramientas afectadas quedan con `status: "error"`.
+
+Un error fatal termina con exit code `3`. Con `--json`, igual se emite un documento JSON válido con el diagnóstico, para que los integradores no tengan que parsear texto.
 
 ---
 

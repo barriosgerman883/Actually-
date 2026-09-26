@@ -282,6 +282,8 @@ repository is not accessible
 actually continued scanning other sources.
 ```
 
+Con `--json`, el mismo problema aparece en `diagnostics` (§14).
+
 Con debug:
 
 ```bash
@@ -437,7 +439,8 @@ Ejemplo de `actually status --json`:
         "confidence": "high"
       }
     }
-  ]
+  ],
+  "diagnostics": []
 }
 ```
 
@@ -447,6 +450,7 @@ Reglas:
 - `null` no se usa para representar ausencia de información.
 - `updateType` aparece solo cuando `status` es `outdated`. No es un claim: se deriva de las versiones.
 - `status --json` no incluye `evidence`. `explain --json` sí.
+- `diagnostics` siempre está presente, aunque esté vacío. Su forma está en architecture.md §13.
 
 `id` es estable y opaco: los consumidores lo usan para comparar y referenciar, no para extraer datos. Su formato está en architecture.md §5 y distingue la misma dependencia en varios proyectos y las herramientas sin provider conocido.
 

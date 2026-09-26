@@ -109,6 +109,7 @@ actually explain <tool>
 - `status <tool>` muestra el detalle de una herramienta (design.md §8).
 - `explain <tool>` muestra la evidencia de cada afirmación (design.md §9).
 - Ambos comandos aceptan `--json`.
+- `status` acepta `--exit-code` para usarlo en scripts (architecture.md §3.1).
 
 Quedan fuera del MVP:
 
