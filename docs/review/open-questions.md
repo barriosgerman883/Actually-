@@ -1,27 +1,29 @@
-# Decisiones abiertas
+# Decisiones de la revisión
 
-Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. Las marcas **Decisión pendiente** dentro de los documentos usan esta numeración.
+Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. Todas las decisiones están resueltas; la columna Estado indica el commit que la aplicó.
 
-| # | Decisión | Estado | Resolución o recomendación | Ref |
+| # | Decisión | Estado | Resolución | Ref |
 |---|---|---|---|---|
 | 1 | Un solo modelo de dominio | Resuelta en `3b5e83b` | architecture.md §5 es la única definición; el JSON es una proyección | §1.1 |
-| 2 | Enum de `status` | Parcial en `dbbe185` | Estados y reglas de derivación definidos. Falta decidir si `outdated` se divide en major, minor y patch | §1.2 |
+| 2 | Enum de `status` | Resuelta en `dbbe185` y `fc7c32d` | Estados y reglas de derivación definidos. `outdated` es un solo estado, con el tipo de cambio en `updateType` | §1.2 |
 | 3 | `requested / resolved / installed / latest` en el modelo | Resuelta en `dbbe185` | `VersionClaims`, con `not-applicable` cuando no corresponde | §1.3 |
-| 4 | `doctor`, `init`, `scan`: cuáles entran al MVP | Pendiente | `status`, `explain` y `--json`. `init` si la config es obligatoria. `doctor` y `scan` fuera hasta que se definan | §1.4 |
+| 4 | Comandos del MVP | Resuelta en `a5fbd53` | Solo `status` y `explain`. `scan`, `doctor` e `init` quedan fuera | §1.4 |
 | 5 | npm registry en Fase 1, npm CLI en Fase 2 | Resuelta en `9878348` | Nombres distintos en todos los documentos | §1.5 |
 | 6 | Confianza por claim o por tool | Resuelta en `dbbe185` | Por claim, con reglas documentadas en architecture.md §6 | D1 |
 | 7 | Representación de `unknown` | Resuelta en `dbbe185` | `Claim<T>` con `state` explícito | D2 |
 | 8 | Repo Git: proyecto o herramienta | Resuelta en `ce0740d` | Proyecto por defecto; herramienta por config o por un ejecutable en PATH | D3 |
-| 9 | Formato de `id` | Pendiente | `scope:ubicación:nombre` | D4 |
+| 9 | Formato de `id` | Resuelta en `fc1540f` | `global:<provider>:<nombre>` o `project:<raíz>:<nombre>`, documentado como opaco | D4 |
 | 10 | Caché en el MVP | Resuelta en `d1011b7` | Sí, con TTL, requests condicionales y `--no-cache` | D5 |
 | 11 | `GITHUB_TOKEN` para rate limit | Resuelta en `d1011b7` | Sí, solo para límite de requests y con opción para desactivarlo | D5 |
-| 12 | Leer `.git/*` directo en vez de lanzar git | Pendiente | Sí | D6 |
-| 13 | Allowlist por binario y subcomando | Pendiente | Sí | D6 |
-| 14 | Directorios de PATH escaneados | Pendiente | Solo directorios de usuario más los de la config | D7 |
-| 15 | Exit codes | Pendiente | `0` ok, `1` updates disponibles, `2` errores de scan, `3` uso inválido | §3 |
-| 16 | Nombre del paquete npm | Resuelta | `@getactually/cli`, con el comando `actually`. Ver abajo | §4 |
-| 17 | Idioma de los docs | Pendiente | Inglés si el proyecto busca contribuidores externos | §5 |
-| 18 | `info` como comando separado | Pendiente | Fusionar en `status <tool>` | §5 |
+| 12 | Cómo leer metadata de Git y pnpm | Resuelta en `6ba6673` | Git: archivos para `HEAD` y remotes; git endurecido solo para tags y distancia. pnpm nunca dentro de un proyecto | D6 |
+| 13 | Allowlist | Resuelta en `6ba6673` | Comandos completos y exactos, elegidos por identificador | D6 |
+| 14 | Directorios de PATH escaneados | Resuelta en `9a6cb3e` | Directorio global de pnpm, `~/.local/bin` y `scan.bin_paths` | D7 |
+| 15 | Exit codes | Resuelta en `b8eb98e` | `0` ok, `1` updates solo con `--exit-code`, `2` uso inválido, `3` fatal. Se suma `diagnostics` al JSON | §3 |
+| 16 | Nombre del paquete npm | Resuelta en `58559e5` | `@getactually/cli`, con el comando `actually`. Ver abajo | §4 |
+| 17 | Idioma de los docs | Resuelta en `ecd4ca8` | Inglés para código y docs de contribuidores; planificación en español hasta el lanzamiento | §5 |
+| 18 | `info` como comando separado | Resuelta en `a5fbd53` | Reemplazado por `status <tool>` | §5 |
+
+**Cambio respecto de la revisión en #12.** La revisión recomendaba leer `.git` directamente en vez de lanzar git. Eso alcanza para `HEAD` y los remotes, pero no para los tags anotados ni para la distancia al último tag, que exigen interpretar los packfiles de Git. Por eso se adoptó un enfoque mixto.
 
 ## #16: nombre del paquete
 
