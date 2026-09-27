@@ -207,7 +207,7 @@ La ausencia de red o permisos no debe causar fallos destructivos ni resultados f
 ## 9. Requisitos no funcionales
 
 ### RNF-001 — Seguridad
-Read-only en MVP. La única escritura es la caché propia de `actually?`, fuera de los proyectos del usuario.
+Read-only en MVP. Las únicas escrituras son la caché de respuestas y el estado local de `actually?`, fuera de los proyectos del usuario.
 
 ### RNF-002 — Privacidad
 Sin telemetría obligatoria.

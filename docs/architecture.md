@@ -222,7 +222,18 @@ Abstrae lectura de archivos, directorios y resolución de paths.
 Abstracción del tiempo. Necesaria para el TTL de la caché.
 
 ### Cache
-Único componente autorizado a escribir en disco, y solo dentro del directorio de caché de `actually?` (§14).
+Guarda respuestas de red, y solo dentro del directorio de caché (§14). Es descartable y no existe en la v0.1.
+
+### LocalState
+Guarda el estado propio de `actually?` que no es una respuesta de red, como el marcador del aviso de red de la primera ejecución (design.md §12). Vive en un directorio distinto de la caché:
+
+| Sistema | Directorio de estado |
+|---|---|
+| Linux | `$XDG_STATE_HOME/actually`, o `~/.local/state/actually` si no está definida |
+| macOS | `~/Library/Application Support/actually` |
+| Windows | `%LOCALAPPDATA%\actually\state` |
+
+Cache y LocalState son los únicos componentes autorizados a escribir en disco, cada uno solo dentro de su directorio (RA-010).
 
 ---
 
@@ -486,7 +497,7 @@ Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argument
 | `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
 | `node.version` | `node --version` | neutral |
 
-El directorio neutral es el directorio de caché de `actually?` (§14), que nunca contiene `package.json` ni `.npmrc`.
+El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe también en la v0.1, que no tiene caché.
 
 Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún módulo lanza procesos por fuera de esta tabla.
 
@@ -663,6 +674,7 @@ src/
 │  ├─ command-runner/
 │  ├─ http/
 │  ├─ cache/
+│  ├─ local-state/
 │  └─ config/
 │
 └─ security/
@@ -725,7 +737,7 @@ Toda inferencia relevante produce evidencia.
 Los fallos de un provider no deben derribar todo el scan salvo error crítico.
 
 ### RA-010
-Solo `infrastructure/cache` escribe en disco, y solo dentro del directorio de caché.
+Solo `infrastructure/cache` y `infrastructure/local-state` escriben en disco, cada uno solo dentro de su propio directorio.
 
 ---
 
@@ -774,7 +786,7 @@ Un error fatal termina con exit code `3`. Con `--json`, igual se emite un docume
 
 ## 14. Cache
 
-La caché es parte del MVP. Sin ella, el resolver de GitHub se queda sin cuota en la primera ejecución de cualquier usuario con más de unos pocos repositorios: `api.github.com` sin autenticación permite 60 requests por hora. Un proyecto con decenas de dependencias genera la misma cantidad de requests al npm registry.
+La caché es parte del MVP, pero no de la v0.1. Guarda solo respuestas de red y es descartable. El estado local, como el marcador del aviso de red, vive en otro directorio (§3.5). Sin ella, el resolver de GitHub se queda sin cuota en la primera ejecución de cualquier usuario con más de unos pocos repositorios: `api.github.com` sin autenticación permite 60 requests por hora. Un proyecto con decenas de dependencias genera la misma cantidad de requests al npm registry.
 
 ### Qué guarda
 

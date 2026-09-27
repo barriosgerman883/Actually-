@@ -372,9 +372,10 @@ This notice is shown once.
 
 Reglas:
 
-- Se escribe en stderr. Nunca aparece en la salida de `--json`.
+- Se escribe siempre en stderr, antes de la primera consulta a la red, también con `--json`. stdout lleva solo el resultado, así que el documento JSON nunca incluye el aviso.
 - No pide confirmación, así que no interrumpe scripts ni el primer uso.
-- Se muestra una sola vez. El marcador es un archivo vacío en el directorio de caché, y se escribe aunque la caché esté desactivada.
+- Se muestra una sola vez. El marcador es un archivo vacío en el directorio de estado local (architecture.md §3.5), no en la caché. Existe aunque no haya caché, como en la v0.1.
+- Borrar el marcador vuelve a mostrar el aviso. Si el marcador no se puede escribir, el aviso se muestra en cada ejecución: es preferible repetirlo a omitirlo.
 - No se muestra con `--offline` ni con la red desactivada.
 - Nombra solo los hosts que la versión instalada realmente consulta.
 

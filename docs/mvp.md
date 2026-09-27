@@ -42,7 +42,7 @@ La versión inicial es estrictamente de observación.
 - escribe dentro de proyectos detectados;
 - escala privilegios.
 
-La única escritura que hace `actually?` es en su propio directorio de caché, fuera de los proyectos detectados.
+Las únicas escrituras que hace `actually?` son en sus propios directorios de caché y de estado local, fuera de los proyectos detectados (architecture.md §3.5).
 
 ### 2.3 Explicable
 Toda conclusión importante debe poder ser explicada mediante evidencia.
