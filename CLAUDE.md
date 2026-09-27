@@ -4,11 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-`actually?` is a planned local-first, read-only CLI that inventories developer tools, repositories and dependencies. It compares installed and latest versions and explains every conclusion with evidence. The npm package is `@getactually/cli` and the command is `actually`.
+`actually?` is a local-first, read-only CLI that inventories developer tools, repositories and dependencies. It compares installed and latest versions and explains every conclusion with evidence. The npm package is `@getactually/cli` and the command is `actually`.
 
-The repository currently holds planning documents only. There is no source code, no `package.json`, and no build, lint or test command yet. Do not invent commands. The planned local gate is `pnpm check` (lint, typecheck, tests, security tests, architecture tests); see `docs/design.md` §19–20.
+The MVP scope in `docs/prd.md` §13–14 is implemented: pnpm global packages, executables in allowed directories, Git repositories used as tools, projects (package.json, pnpm and npm lockfiles, node_modules), npm registry and GitHub resolvers, response cache, `status`, `status <tool>`, `explain`, `--json`.
 
-The next milestone is v0.1, "Primera versión refutable", in `docs/prd.md` §13. Its scope is `status --global` for pnpm global packages against the npm registry, plus `explain`, `--json`, the first-run network notice and `--offline`. v0.1 has no Git, GitHub, projects, cache or config file.
+## Commands
+
+```bash
+pnpm install                 # also installs git hooks (pre-commit, pre-push)
+pnpm build                   # tsc → dist/, entry dist/cli/index.js
+pnpm check                   # lint + format:check + typecheck + all tests (pre-push)
+pnpm test:unit | test:integration | test:security | test:architecture
+pnpm vitest run tests/unit/core.test.ts -t "mayBreak"   # a single test
+node dist/cli/index.js status --global                  # run locally
+```
+
+To try it against real global packages without touching the system, point `PNPM_HOME` and `XDG_{STATE,CACHE,CONFIG}_HOME` at temporary directories.
+
+## Code layout
+
+`src/core` holds the domain model, confidence rules, status derivation and ports (interfaces). `src/infrastructure` holds the only code with I/O. `src/composition.ts` is the only module that wires infrastructure into the application, and `src/cli` imports that, never infrastructure directly. `src/application/inventory.ts` orchestrates providers (`src/providers/*`) and scanners into an `Inventory`. `tests/helpers/fakes.ts` provides in-memory implementations of every port.
 
 ## Where decisions live
 
@@ -40,8 +55,8 @@ These rules span several documents. Code must follow them from the first commit.
 
 - **Layers.** Dependencies point `cli → application → core ← providers ← infrastructure`. `core` performs no I/O. Providers never print output, and the CLI never detects anything.
 - **Infrastructure is the only way out.** `filesystem` only reads. `command-runner` is the only code that spawns processes. `http` is the only code that uses the network. `cache` and `local-state` are the only code that writes to disk, each only inside its own directory. Architecture tests in CI enforce this.
-- **CommandRunner.** Callers pick a command by id from a closed list of exact commands. There are 8 today. Callers never pass a binary, arguments or environment. Adding a command requires an ADR.
-- **pnpm.** pnpm never runs inside a detected project, because a project's `.npmrc` or corepack could run code. It runs from an empty directory inside local state. Project dependencies are read from files.
+- **CommandRunner.** Callers pick a command by id from a closed list of exact commands. There are 7 today. Callers never pass a binary, arguments or environment. Adding a command requires an ADR.
+- **pnpm.** pnpm never runs inside a detected project, because a project's `.npmrc` or corepack could run code. It runs from an empty directory inside local state (`src/infrastructure/local-state`). Project dependencies are read from files.
 - **Tokens in pnpm config.** The output of `pnpm config list --json` can contain auth tokens. Keep only `registry` and `@scope:registry`. Never log or store the rest.
 - **git.** git runs only for tags and distance to the last tag, with a hardened environment. `HEAD`, refs and remotes are read from files.
 - **Claims.** Every inferred value is a `Claim<T>` in one of three states: `known`, `unknown` with a reason, or `not-applicable`. Each claim has its own confidence and its own evidence, typed as `fact` or `inference`. If a value cannot be supported, it is `unknown`. Never fill it in.

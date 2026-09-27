@@ -385,7 +385,16 @@ El detalle completo está en architecture.md §8.
 
 ## 13. Configuración
 
-Formato sugerido:
+La configuración es opcional. El archivo vive en:
+
+| Sistema | Ruta |
+|---|---|
+| Linux y macOS | `$XDG_CONFIG_HOME/actually/config.toml`, o `~/.config/actually/config.toml` |
+| Windows | `%APPDATA%\actually\config.toml` |
+
+`ACTUALLY_CONFIG` reemplaza la ruta. Un archivo que no se puede interpretar, o con valores de tipo incorrecto, es un error fatal (exit code `3`): adivinar la intención podría escanear o enviar más de lo pedido. Las claves desconocidas son un diagnóstico, no un error.
+
+Formato:
 
 ```toml
 [scan]
@@ -394,6 +403,8 @@ paths = [
   "~/dev",
   "~/tools"
 ]
+# Profundidad máxima bajo cada ruta (1 a 10).
+depth = 3
 # Directorios de ejecutables a revisar, además del de pnpm
 # y ~/.local/bin (architecture.md §3.3).
 bin_paths = []

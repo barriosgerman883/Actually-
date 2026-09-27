@@ -2,6 +2,25 @@
   "name": "@getactually/cli",
   "version": "0.1.0",
   "description": "Local-first, read-only inventory of your developer tools, with evidence for every conclusion.",
+  "keywords": [
+    "cli",
+    "inventory",
+    "versions",
+    "pnpm",
+    "npm",
+    "git",
+    "outdated",
+    "read-only",
+    "local-first"
+  ],
+  "homepage": "https://github.com/barriosgerman883/Actually-#readme",
+  "bugs": {
+    "url": "https://github.com/barriosgerman883/Actually-/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/barriosgerman883/Actually-.git"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -28,7 +47,8 @@
     "test:security": "vitest run tests/security",
     "test:architecture": "vitest run tests/architecture",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint && pnpm format:check && pnpm test:architecture",

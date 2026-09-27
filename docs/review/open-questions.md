@@ -46,6 +46,21 @@ La revisión del PR #3 corrigió cuatro puntos más:
 | El id se describe como determinístico, con los casos en que cambia | `d926668` | Cambia si el proyecto se mueve o cambia el provider detectado |
 | `latest` es lo que declara la fuente, no una garantía de estabilidad | `41bcc05` | El dist-tag `latest` de npm lo elige quien publica; usarlo para la última estable es una convención |
 
+## Ajustes durante la implementación del MVP
+
+La implementación (`2e02740`) tomó estas decisiones, ya reflejadas en los documentos:
+
+| Ajuste | Motivo |
+|---|---|
+| Se quitó `node --version` del allowlist, que queda en 7 comandos | Ningún provider del MVP lo usa; sería superficie de ataque sin propósito |
+| RA-002 permite `node:fs` también a `cache` y `local-state` | Son los únicos componentes que escriben; `filesystem` sigue siendo de solo lectura |
+| Un tarball informado por pnpm fuera de `registry.npmjs.org` impide la consulta | Es evidencia directa de otro origen; ante la duda no se consulta |
+| Ubicación del archivo de config, `ACTUALLY_CONFIG` y `scan.depth` | No estaban definidos |
+| Un tag de GitHub sin release queda con confianza máxima `medium` | Un tag no es una release declarada por quien publica |
+| El provider de actualización nunca supera la confianza de la instalación | Se deriva de ella |
+| Windows queda fuera del MVP | pnpm es un shim `.cmd` que no se puede ejecutar sin shell |
+| El test del repo hostil incluye un control | Con `git tag` y `git describe` el ataque no se dispara ni sin endurecer; el control prueba que el endurecimiento sí lo detiene |
+
 ## #16: nombre del paquete
 
 Se eligió la alternativa B con el scope `@getactually`, porque `@actually` pertenece a otra cuenta. Las alternativas quedan como registro de la decisión.

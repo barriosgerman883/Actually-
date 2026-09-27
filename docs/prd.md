@@ -218,7 +218,7 @@ Transparencia de red: antes de la primera consulta, el usuario sabe qué se env�
 No recorrer todo el filesystem por defecto.
 
 ### RNF-004 — Portabilidad
-La arquitectura debe permitir soporte progresivo para Windows, macOS y Linux.
+La arquitectura debe permitir soporte progresivo para Windows, macOS y Linux. El MVP soporta Linux y macOS. En Windows, pnpm es un shim `.cmd` que no se puede ejecutar sin shell, así que su soporte queda para después del MVP.
 
 ### RNF-005 — Testabilidad
 Filesystem, procesos y red deben estar abstraídos.

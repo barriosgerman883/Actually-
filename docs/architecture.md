@@ -451,6 +451,13 @@ Reglas del MVP:
 
 Si no hay evidencia suficiente ni para `low`, el claim queda `unknown` con un `reason`.
 
+Ajustes a esas reglas:
+
+- una prerelease bajo el dist-tag `latest` contradice "estable": `low`;
+- una respuesta vencida de la caché, usada porque no hay red: como máximo `medium`;
+- un tag de GitHub usado porque no hay releases: como máximo `medium`, porque un tag no es una release declarada;
+- el provider de actualización nunca tiene más confianza que la instalación de la que se deriva.
+
 La confianza resumida de un `ToolRecord` es la mínima entre `versions.installed` (o `resolved`), `versions.latest` e `installation`, contando solo los que están en estado `known`.
 
 No se usan porcentajes ni pesos numéricos, porque implicarían una precisión que el modelo no tiene. Las reglas pueden evolucionar, pero cada cambio debe reflejarse aquí y en docs/concepts/confidence.md.
@@ -473,8 +480,7 @@ type AllowedCommand =
   | "pnpm.list.global"
   | "pnpm.config.list"
   | "git.tags.head"
-  | "git.describe.head"
-  | "node.version";
+  | "git.describe.head";
 
 interface CommandRequest {
   command: AllowedCommand;
@@ -505,11 +511,12 @@ Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argument
 | `pnpm.config.list` | `pnpm config list --json` | neutral |
 | `git.tags.head` | `git tag --points-at HEAD` | repositorio |
 | `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
-| `node.version` | `node --version` | neutral |
 
 El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe también en la v0.1, que no tiene caché.
 
 Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún módulo lanza procesos por fuera de esta tabla.
+
+La lista original incluía `node --version`. Ningún provider del MVP lo usa, así que se quitó para no sumar superficie de ataque sin propósito (docs/decisions/0005-command-runner-boundary.md).
 
 ### pnpm
 
@@ -600,6 +607,8 @@ La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta e
 1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git ni URLs.
 2. El registry predeterminado efectivo es `https://registry.npmjs.org/`. Si la persona configuró otro registry predeterminado, por ejemplo un mirror o un registry de su empresa, no se consulta ningún paquete en el registry público.
 3. Su scope no está asignado a otro registry.
+
+Además, si pnpm informa el tarball desde el que instaló el paquete, ese tarball tiene que venir de `registry.npmjs.org`.
 
 Si alguna de las tres no se puede determinar, el paquete no se consulta. `latest` queda en `unknown` con el motivo: "registry privado" o "no se pudo determinar el origen".
 
@@ -723,7 +732,7 @@ Providers pueden depender de interfaces del core y puertos de infraestructura, p
 Solo `infrastructure/command-runner` puede importar `node:child_process`.
 
 ### RA-002
-Solo `infrastructure/filesystem` puede importar `node:fs`.
+Solo `infrastructure/filesystem`, `infrastructure/cache` e `infrastructure/local-state` pueden importar `node:fs`. `filesystem` solo lee; los otros dos son los únicos que escriben (RA-010).
 
 ### RA-003
 Solo `infrastructure/http` puede usar APIs de red.
