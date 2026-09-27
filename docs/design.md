@@ -117,7 +117,7 @@ Preferir:
 
 ```text
 2 updates available
-1 major version change
+1 may include breaking changes
 ```
 
 ---
@@ -448,6 +448,7 @@ Ejemplo de `actually status --json`:
       "scope": "global",
       "status": "outdated",
       "updateType": "major",
+      "mayBreak": true,
       "confidence": "high",
       "versions": {
         "requested": { "state": "not-applicable" },
@@ -484,7 +485,8 @@ Reglas:
 
 - Ningún claim se omite. Si no aplica, es `not-applicable`. Si no se sabe, es `unknown` con `reason`.
 - `null` no se usa para representar ausencia de información.
-- `updateType` aparece solo cuando `status` es `outdated`. No es un claim: se deriva de las versiones.
+- `updateType` y `mayBreak` aparecen solo cuando `status` es `outdated`. No son claims: se derivan de las versiones.
+- `updateType` dice qué número cambió. `mayBreak` estima, según semver, si el cambio puede ser incompatible. De `0.2.0` a `0.3.0` es `minor` con `mayBreak: true` (architecture.md §5).
 - `status --json` no incluye `evidence`. `explain --json` sí.
 - `diagnostics` siempre está presente, aunque esté vacío. Su forma está en architecture.md §13.
 

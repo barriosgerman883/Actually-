@@ -337,6 +337,8 @@ export interface ToolRecord {
   status: ToolStatus;
   /** Presente solo cuando status es "outdated". */
   updateType?: UpdateType;
+  /** Presente solo cuando status es "outdated". */
+  mayBreak?: boolean;
   /** Resumen de los claims que determinan `status` (ver §6). */
   confidence: ConfidenceLevel;
 }
@@ -352,15 +354,27 @@ export interface ToolRecord {
 | `warning` | la versión local es mayor que `latest`, o no son comparables como semver |
 | `error` | el provider falló al inspeccionar la herramienta |
 
-`outdated` es un solo estado. El tipo de cambio va en `updateType`, que se calcula comparando las versiones según semver:
+`outdated` es un solo estado. Dos campos derivados describen la actualización, y cada uno responde una pregunta distinta.
+
+`updateType` dice qué número cambió. Es puramente numérico:
 
 - `major` si cambia el primer número;
 - `minor` si cambia el segundo;
 - `patch` si cambia el tercero.
 
-En versiones `0.x`, semver no garantiza compatibilidad entre versiones minor, así que un cambio de minor cuenta como `major`.
+Un cambio de `0.2.0` a `0.3.0` es `minor`.
 
-Esto permite resúmenes como "2 updates available, 1 major version change" (design.md §4) sin agregar estados.
+`mayBreak` dice si semver permite que la actualización incluya cambios incompatibles. Es verdadero si:
+
+- cambia el primer número; o
+- el primer número es `0` y cambia el segundo; o
+- los dos primeros son `0` y cambia el tercero.
+
+Es la misma regla que usa el rango `^` de npm. Un cambio de `0.2.0` a `0.3.0` tiene `updateType: "minor"` y `mayBreak: true`.
+
+`mayBreak` es una estimación basada en la convención de versionado. No inspecciona el cambio real, y un proyecto que no sigue semver puede romper sin que `mayBreak` lo anticipe.
+
+Esto permite resúmenes como "2 updates available, 1 may include breaking changes" (design.md §4) sin agregar estados.
 
 ### Installation
 
