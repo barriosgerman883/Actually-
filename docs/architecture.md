@@ -162,7 +162,7 @@ Un repositorio encontrado por `GitRepositoryScanner` es un proyecto salvo eviden
 
 `PathScanner` no recorre todo PATH, porque listaría miles de binarios del sistema como herramientas desconocidas. En el MVP revisa solo:
 
-- el directorio global de binarios de pnpm (`PNPM_HOME`, o el que informa `pnpm bin --global`);
+- el directorio global de binarios de pnpm, el que informa `pnpm bin --global` (refleja `PNPM_HOME`);
 - `~/.local/bin`;
 - los directorios declarados en `[scan] bin_paths` (design.md §13).
 
@@ -222,7 +222,7 @@ Abstrae lectura de archivos, directorios y resolución de paths.
 Abstracción del tiempo. Necesaria para el TTL de la caché.
 
 ### Cache
-Guarda respuestas de red, y solo dentro del directorio de caché (§14). Es descartable y no existe en la v0.1.
+Guarda respuestas de red, y solo dentro del directorio de caché (§14). Es descartable.
 
 ### LocalState
 Guarda el estado propio de `actually?` que no es una respuesta de red, como el marcador del aviso de red de la primera ejecución (design.md §12). Vive en un directorio distinto de la caché:
@@ -451,6 +451,13 @@ Reglas del MVP:
 
 Si no hay evidencia suficiente ni para `low`, el claim queda `unknown` con un `reason`.
 
+Ajustes a esas reglas:
+
+- una prerelease bajo el dist-tag `latest` contradice "estable": `low`;
+- una respuesta vencida de la caché, usada porque no hay red: como máximo `medium`;
+- un tag de GitHub usado porque no hay releases: como máximo `medium`, porque un tag no es una release declarada;
+- el provider de actualización nunca tiene más confianza que la instalación de la que se deriva.
+
 La confianza resumida de un `ToolRecord` es la mínima entre `versions.installed` (o `resolved`), `versions.latest` e `installation`, contando solo los que están en estado `known`.
 
 No se usan porcentajes ni pesos numéricos, porque implicarían una precisión que el modelo no tiene. Las reglas pueden evolucionar, pero cada cambio debe reflejarse aquí y en docs/concepts/confidence.md.
@@ -473,8 +480,7 @@ type AllowedCommand =
   | "pnpm.list.global"
   | "pnpm.config.list"
   | "git.tags.head"
-  | "git.describe.head"
-  | "node.version";
+  | "git.describe.head";
 
 interface CommandRequest {
   command: AllowedCommand;
@@ -505,17 +511,19 @@ Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argument
 | `pnpm.config.list` | `pnpm config list --json` | neutral |
 | `git.tags.head` | `git tag --points-at HEAD` | repositorio |
 | `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
-| `node.version` | `node --version` | neutral |
 
-El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe también en la v0.1, que no tiene caché.
+El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe aunque la caché esté desactivada.
 
 Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún módulo lanza procesos por fuera de esta tabla.
+
+La lista original incluía `node --version`. Ningún provider del MVP lo usa, así que se quitó para no sumar superficie de ataque sin propósito (docs/decisions/0005-command-runner-boundary.md).
 
 ### pnpm
 
 - `pnpm` nunca se lanza dentro de un proyecto detectado. Un proyecto puede definir un `.npmrc` o el campo `packageManager`, que activa corepack y puede descargar y ejecutar otra versión de pnpm.
 - Las dependencias de un proyecto se leen de `package.json` y del lockfile a través de Filesystem, sin ejecutar nada.
 - pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
+- A ese entorno se le agregan `npm_config_update_notifier=false`, para que pnpm no consulte la red por su cuenta buscando actualizaciones, y `COREPACK_ENABLE_AUTO_PIN=0` y `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, para que corepack no escriba `packageManager` ni espere una respuesta.
 - La salida de `pnpm.config.list` puede contener tokens. Solo se extraen las claves de registry (§8) y el resto nunca se guarda ni se registra.
 
 ### Git
@@ -562,7 +570,7 @@ Todos los requests pasan por `HttpClient`.
 
 Responsabilidades:
 
-- allowlist opcional de hosts;
+- allowlist obligatoria de hosts, solo con https;
 - timeout;
 - user-agent;
 - retries limitados;
@@ -600,6 +608,8 @@ La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta e
 1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git ni URLs.
 2. El registry predeterminado efectivo es `https://registry.npmjs.org/`. Si la persona configuró otro registry predeterminado, por ejemplo un mirror o un registry de su empresa, no se consulta ningún paquete en el registry público.
 3. Su scope no está asignado a otro registry.
+
+Además, si pnpm informa el tarball desde el que instaló el paquete, ese tarball tiene que venir de `registry.npmjs.org`.
 
 Si alguna de las tres no se puede determinar, el paquete no se consulta. `latest` queda en `unknown` con el motivo: "registry privado" o "no se pudo determinar el origen".
 
@@ -647,51 +657,38 @@ Esto permite:
 
 ---
 
-## 10. Estructura propuesta
+## 10. Estructura
+
+Estructura real de `src/`:
 
 ```text
 src/
-├─ cli/
-│  ├─ commands/
-│  ├─ formatters/
-│  └─ index.ts
-│
-├─ application/
-│  ├─ status/
-│  └─ explain/
-│
-├─ core/
-│  ├─ inventory/
-│  ├─ evidence/
-│  ├─ confidence/
-│  ├─ versions/
-│  └─ errors/
-│
-├─ scanners/
-│  ├─ project/
-│  ├─ filesystem/
-│  ├─ path/
-│  └─ git/
-│
+├─ cli/                  argumentos, exit codes y salida
+│  ├─ index.ts
+│  ├─ run.ts
+│  └─ output/            human, json, style
+├─ composition.ts        único lugar que conecta infraestructura y aplicación
+├─ application/          inventory, lookup, claims
+├─ core/                 modelo, confianza, versiones, puertos, errores, config
+├─ scanners/             project-finder, bin-scanner
 ├─ providers/
 │  ├─ pnpm/
-│  ├─ npm-registry/
+│  ├─ project/           package.json, lockfiles, node_modules
+│  ├─ npm-registry/      regla de origen, config de registry, resolver
 │  ├─ git/
-│  └─ github/
-│
-├─ infrastructure/
-│  ├─ filesystem/
-│  ├─ command-runner/
-│  ├─ http/
-│  ├─ cache/
-│  ├─ local-state/
-│  └─ config/
-│
-└─ security/
-   ├─ policies/
-   ├─ validation/
-   └─ architecture/
+│  ├─ github/
+│  └─ shared/            GET con caché
+└─ infrastructure/
+   ├─ filesystem/
+   ├─ command-runner/
+   ├─ http/
+   ├─ cache/
+   ├─ local-state/
+   ├─ config/
+   └─ environment/
 ```
+
+Las reglas de seguridad y arquitectura se verifican en `tests/security` y `tests/architecture` (§16), no en un directorio de `src/`.
 
 ---
 
@@ -723,7 +720,7 @@ Providers pueden depender de interfaces del core y puertos de infraestructura, p
 Solo `infrastructure/command-runner` puede importar `node:child_process`.
 
 ### RA-002
-Solo `infrastructure/filesystem` puede importar `node:fs`.
+Solo `infrastructure/filesystem`, `infrastructure/cache` e `infrastructure/local-state` pueden importar `node:fs`. `filesystem` solo lee; los otros dos son los únicos que escriben (RA-010).
 
 ### RA-003
 Solo `infrastructure/http` puede usar APIs de red.
@@ -796,7 +793,7 @@ Un error fatal termina con exit code `3`. Con `--json`, igual se emite un docume
 
 ## 14. Cache
 
-La caché es parte del MVP, pero no de la v0.1. Guarda solo respuestas de red y es descartable. El estado local, como el marcador del aviso de red, vive en otro directorio (§3.5). Sin ella, el resolver de GitHub se queda sin cuota en la primera ejecución de cualquier usuario con más de unos pocos repositorios: `api.github.com` sin autenticación permite 60 requests por hora. Un proyecto con decenas de dependencias genera la misma cantidad de requests al npm registry.
+La caché es parte del MVP. Guarda solo respuestas de red y es descartable. El estado local, como el marcador del aviso de red, vive en otro directorio (§3.5). Sin ella, el resolver de GitHub se queda sin cuota en la primera ejecución de cualquier usuario con más de unos pocos repositorios: `api.github.com` sin autenticación permite 60 requests por hora. Un proyecto con decenas de dependencias genera la misma cantidad de requests al npm registry.
 
 ### Qué guarda
 

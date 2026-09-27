@@ -238,7 +238,7 @@ El scanner buscará indicadores como:
 - `go.mod`;
 - `mise.toml`.
 
-No todos estos formatos necesitan soporte funcional completo en el MVP; algunos pueden utilizarse únicamente como señales de contexto.
+En el MVP, una raíz de proyecto es un directorio con `package.json` o `.git`, y la búsqueda no desciende dentro de ella. Los lockfiles se leen dentro de cada proyecto. Los demás indicadores quedan para los providers de la Fase 2.
 
 ---
 
@@ -348,6 +348,29 @@ Debe bloquear merge ante:
 - violaciones arquitectónicas;
 - uso directo de APIs prohibidas;
 - fallos de seguridad.
+
+### Agentes
+
+Los agentes de código que trabajan en el repositorio tienen dos frenos adicionales.
+
+**Hallazgos: se informan, no se corrigen.** Los docs son la fuente de verdad. Si un agente encuentra un error, un check que falla por fuera de su tarea, o una diferencia entre el código y los docs:
+
+1. No modifica código, tests ni docs para corregirlo, y no lo esquiva.
+2. Lo anota en `docs/review/findings.md`, con la plantilla de ese archivo.
+3. Se lo informa a la persona responsable, con el id, la ubicación, el impacto y una propuesta.
+
+Un hallazgo se corrige solo cuando la persona lo pide por su id. Si decide que el código es el correcto, se actualiza la sección canónica del doc y el hallazgo se cierra así. Un fallo que introduce el propio cambio en curso no es un hallazgo: es parte de ese cambio.
+
+**Comandos peligrosos: se bloquean antes de ejecutarse.** `.claude/settings.json` registra dos hooks `PreToolUse`:
+
+- `.claude/hooks/guard-bash.mjs` revisa cada comando de shell. Bloquea lo destructivo o irreversible: borrados recursivos amplios, `git push --force` o a `main`, saltear hooks con `--no-verify`, reescribir o borrar historia, publicar en npm, privilegios elevados, escribir discos, ejecutar scripts descargados y leer secretos, como la salida de `pnpm config list`. Pide confirmación para lo que descarta trabajo local, cambia la configuración de git, modifica el entorno global que `actually` inspecciona o agrega dependencias. El código pasado por línea de comandos (`node -e`, `python -c` y similares) pide confirmación siempre, y se bloquea si menciona `.claude`.
+- `.claude/hooks/guard-edit.mjs` revisa cada edición de archivos. Bloquea editar los propios frenos (`.claude/settings*.json`, `.claude/hooks/`), `pnpm-lock.yaml`, `.git/` y la foto `docs/review/2026-09-cross-review.md`, e impide introducir `.skip(`, `.only(`, `.todo(`, `@ts-ignore`, `@ts-nocheck` o `eslint-disable`. Pide confirmación para editar `.github/workflows/`.
+
+Solo la persona responsable cambia estos frenos. `tests/security/agent-guard.test.ts` verifica cada regla.
+
+**Lo protegido no se modifica, ni con autorización.** Un agente nunca modifica lo que los frenos o los controles de permisos de la sesión le impiden modificar, y nunca pide permiso para hacerlo. Una autorización no habilita el cambio. Si hace falta un cambio ahí, el agente notifica el problema o el error, con la ubicación, el impacto y la propuesta, y lo anota como hallazgo cuando puede hacerlo. El cambio lo aplica la persona responsable.
+
+Los hooks son una red de seguridad, no un límite infalible: un comando ofuscado puede evadir un patrón. No reemplazan los controles de CI ni la revisión humana.
 
 ---
 

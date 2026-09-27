@@ -1,0 +1,37 @@
+name: actually was wrong
+description: actually reported something that is not true on your machine.
+labels: [wrong-result]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying to prove actually wrong. That is exactly what it needs.
+        Please remove anything private (paths, package names) before posting.
+  - type: input
+    id: tool
+    attributes:
+      label: Tool
+      description: The tool or dependency, as shown by `actually status`.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What is actually true
+      description: For example "installed with Homebrew, not pnpm" or "latest is 3.1.0".
+    validations:
+      required: true
+  - type: textarea
+    id: explain
+    attributes:
+      label: Output of `actually explain <tool>`
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: actually version, OS, Node.js version, pnpm version.
+    validations:
+      required: true

@@ -1,0 +1,74 @@
+{
+  "name": "@getactually/cli",
+  "version": "0.1.0",
+  "description": "Local-first, read-only inventory of your developer tools, with evidence for every conclusion.",
+  "keywords": [
+    "cli",
+    "inventory",
+    "versions",
+    "pnpm",
+    "npm",
+    "git",
+    "outdated",
+    "read-only",
+    "local-first"
+  ],
+  "homepage": "https://github.com/barriosgerman883/Actually-#readme",
+  "bugs": {
+    "url": "https://github.com/barriosgerman883/Actually-/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/barriosgerman883/Actually-.git"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "actually": "dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.19"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:security": "vitest run tests/security",
+    "test:architecture": "vitest run tests/architecture",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
+    "prepack": "pnpm build",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint && pnpm format:check && pnpm test:architecture",
+    "pre-push": "pnpm check"
+  },
+  "dependencies": {
+    "semver": "^7.8.5",
+    "smol-toml": "^1.9.0",
+    "undici": "^8.11.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.4",
+    "@types/semver": "^7.8.0",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
+    "simple-git-hooks": "^2.14.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.2"
+  }
+}
