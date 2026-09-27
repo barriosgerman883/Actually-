@@ -191,7 +191,7 @@ Determina quién administra una instalación.
 Determina el origen lógico o repositorio.
 
 ### Version Provider
-Determina latest stable version.
+Determina la versión que la fuente declara como la última estable (§5).
 
 Una misma herramienta puede tener:
 
@@ -222,7 +222,18 @@ Abstrae lectura de archivos, directorios y resolución de paths.
 Abstracción del tiempo. Necesaria para el TTL de la caché.
 
 ### Cache
-Único componente autorizado a escribir en disco, y solo dentro del directorio de caché de `actually?` (§14).
+Guarda respuestas de red, y solo dentro del directorio de caché (§14). Es descartable y no existe en la v0.1.
+
+### LocalState
+Guarda el estado propio de `actually?` que no es una respuesta de red, como el marcador del aviso de red de la primera ejecución (design.md §12). Vive en un directorio distinto de la caché:
+
+| Sistema | Directorio de estado |
+|---|---|
+| Linux | `$XDG_STATE_HOME/actually`, o `~/.local/state/actually` si no está definida |
+| macOS | `~/Library/Application Support/actually` |
+| Windows | `%LOCALAPPDATA%\actually\state` |
+
+Cache y LocalState son los únicos componentes autorizados a escribir en disco, cada uno solo dentro de su directorio (RA-010).
 
 ---
 
@@ -300,7 +311,7 @@ export interface VersionClaims {
   resolved: Claim<string>;
   /** Versión presente en disco. */
   installed: Claim<string>;
-  /** Última versión estable conocida. */
+  /** Versión que la fuente declara como la última estable (ver abajo). */
   latest: Claim<string>;
 }
 
@@ -317,7 +328,9 @@ export type ToolStatus =
 
 export interface ToolRecord {
   /**
-   * Identificador estable y opaco. Los consumidores no deben parsearlo.
+   * Identificador opaco y determinístico. Los consumidores no deben parsearlo.
+   * Cambia si cambia el scope, la ubicación o el provider detectado
+   * (design.md §14).
    * Formato actual:
    *   global:<provider>:<nombre>   (provider "unknown" si no se conoce)
    *   project:<raíz absoluta>:<nombre>
@@ -375,6 +388,14 @@ Es la misma regla que usa el rango `^` de npm. Un cambio de `0.2.0` a `0.3.0` ti
 `mayBreak` es una estimación basada en la convención de versionado. No inspecciona el cambio real, y un proyecto que no sigue semver puede romper sin que `mayBreak` lo anticipe.
 
 Esto permite resúmenes como "2 updates available, 1 may include breaking changes" (design.md §4) sin agregar estados.
+
+### Qué significa `latest`
+
+`versions.latest` es la versión que la fuente declara como la última estable. No es una verificación independiente de estabilidad.
+
+- **npm:** es el dist-tag `latest`, que elige quien publica. Usarlo para la última versión estable es una convención habitual, no una obligación. La evidencia lo dice tal cual: `fact: npm registry: dist-tag "latest" is 2.0.0`.
+- **GitHub:** es la release más reciente no marcada como prerelease. Esa marca también la pone quien publica.
+- Si la versión declarada tiene sufijo de prerelease, por ejemplo `3.0.0-beta.1`, la evidencia contradice la idea de "estable". El claim queda con confianza `low`, según las reglas de §6.
 
 ### Installation
 
@@ -450,6 +471,7 @@ type AllowedCommand =
   | "pnpm.root.global"
   | "pnpm.bin.global"
   | "pnpm.list.global"
+  | "pnpm.config.list"
   | "git.tags.head"
   | "git.describe.head"
   | "node.version";
@@ -480,11 +502,12 @@ Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argument
 | `pnpm.root.global` | `pnpm root --global` | neutral |
 | `pnpm.bin.global` | `pnpm bin --global` | neutral |
 | `pnpm.list.global` | `pnpm list --global --json --depth=0` | neutral |
+| `pnpm.config.list` | `pnpm config list --json` | neutral |
 | `git.tags.head` | `git tag --points-at HEAD` | repositorio |
 | `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
 | `node.version` | `node --version` | neutral |
 
-El directorio neutral es el directorio de caché de `actually?` (§14), que nunca contiene `package.json` ni `.npmrc`.
+El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe también en la v0.1, que no tiene caché.
 
 Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún módulo lanza procesos por fuera de esta tabla.
 
@@ -493,6 +516,7 @@ Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún
 - `pnpm` nunca se lanza dentro de un proyecto detectado. Un proyecto puede definir un `.npmrc` o el campo `packageManager`, que activa corepack y puede descargar y ejecutar otra versión de pnpm.
 - Las dependencias de un proyecto se leen de `package.json` y del lockfile a través de Filesystem, sin ejecutar nada.
 - pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
+- La salida de `pnpm.config.list` puede contener tokens. Solo se extraen las claves de registry (§8) y el resto nunca se guarda ni se registra.
 
 ### Git
 
@@ -569,11 +593,26 @@ Nunca se envían rutas, contenido de archivos, nombres ni raíces de proyectos, 
 
 La consecuencia, dicha tal cual: esos servicios pueden inferir qué herramientas y dependencias usa la persona, y desde qué IP. Si se consulta el nombre de un paquete o repositorio privado, ese nombre queda expuesto al servicio consultado.
 
-Protecciones contra filtrar nombres privados:
+### Qué paquetes se consultan
 
-- No se consultan dependencias que no vienen de un registry: `workspace:`, `link:`, `file:`, repositorios git ni URLs.
-- Los scopes que `~/.npmrc` o el `.npmrc` del proyecto asignan a otro registry no se consultan en `registry.npmjs.org`. Leer esos archivos no ejecuta nada. Esas dependencias quedan con `latest` en `unknown` y el motivo "registry privado".
-- `[network] exclude` lista nombres que nunca se consultan, por ejemplo `"@mi-empresa/*"` (design.md §13).
+La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta en `registry.npmjs.org` solo si se cumplen las tres condiciones:
+
+1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git ni URLs.
+2. El registry predeterminado efectivo es `https://registry.npmjs.org/`. Si la persona configuró otro registry predeterminado, por ejemplo un mirror o un registry de su empresa, no se consulta ningún paquete en el registry público.
+3. Su scope no está asignado a otro registry.
+
+Si alguna de las tres no se puede determinar, el paquete no se consulta. `latest` queda en `unknown` con el motivo: "registry privado" o "no se pudo determinar el origen".
+
+Cómo se determina el registry efectivo:
+
+- Se le pregunta a pnpm con `pnpm config list --json`, desde el directorio neutral (§7). La respuesta refleja todas las fuentes que pnpm lee: variables de entorno, `~/.npmrc`, el rc global de pnpm y el npmrc global. Leer esos archivos a mano arriesgaba omitir una fuente y filtrar nombres.
+- **La salida puede incluir tokens de autenticación.** Solo se extraen `registry` y las claves `@scope:registry`. El resto se descarta sin registrarse en logs, evidencia ni diagnósticos.
+- Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
+- En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada.
+
+El spec de cada paquete global de pnpm se lee del `package.json` del directorio global, que está junto a la ruta que devuelve `pnpm root --global`.
+
+Además, en el MVP, `[network] exclude` lista nombres que nunca se consultan, por ejemplo `"@mi-empresa/*"` (design.md §13).
 
 Cómo trabajar sin red:
 
@@ -645,6 +684,7 @@ src/
 │  ├─ command-runner/
 │  ├─ http/
 │  ├─ cache/
+│  ├─ local-state/
 │  └─ config/
 │
 └─ security/
@@ -707,7 +747,7 @@ Toda inferencia relevante produce evidencia.
 Los fallos de un provider no deben derribar todo el scan salvo error crítico.
 
 ### RA-010
-Solo `infrastructure/cache` escribe en disco, y solo dentro del directorio de caché.
+Solo `infrastructure/cache` y `infrastructure/local-state` escriben en disco, cada uno solo dentro de su propio directorio.
 
 ---
 
@@ -756,11 +796,11 @@ Un error fatal termina con exit code `3`. Con `--json`, igual se emite un docume
 
 ## 14. Cache
 
-La caché es parte del MVP. Sin ella, el resolver de GitHub se queda sin cuota en la primera ejecución de cualquier usuario con más de unos pocos repositorios: `api.github.com` sin autenticación permite 60 requests por hora. Un proyecto con decenas de dependencias genera la misma cantidad de requests al npm registry.
+La caché es parte del MVP, pero no de la v0.1. Guarda solo respuestas de red y es descartable. El estado local, como el marcador del aviso de red, vive en otro directorio (§3.5). Sin ella, el resolver de GitHub se queda sin cuota en la primera ejecución de cualquier usuario con más de unos pocos repositorios: `api.github.com` sin autenticación permite 60 requests por hora. Un proyecto con decenas de dependencias genera la misma cantidad de requests al npm registry.
 
 ### Qué guarda
 
-- Solo metadata pública: última versión estable, tags, releases y el campo `repository` de npm.
+- Solo metadata pública: la versión con el dist-tag `latest`, tags, releases y el campo `repository` de npm.
 - La clave es el host más el recurso consultado, por ejemplo `registry.npmjs.org/gstack/latest`.
 - Cada entrada guarda la fecha de obtención y los validadores que haya devuelto el servidor (`ETag` o `Last-Modified`).
 - Nunca guarda tokens, rutas locales, nombres de proyectos ni resultados del inventario local.
@@ -793,7 +833,7 @@ Borrar ese directorio es siempre seguro.
 
 ### npm registry
 
-- Se consulta `/<paquete>/latest`, que devuelve solo el manifiesto de la versión estable, con su campo `repository`. El documento completo del paquete puede pesar decenas de megabytes; el manifiesto, unos pocos kilobytes.
+- Se consulta `/<paquete>/latest`, que devuelve solo el manifiesto de la versión con el dist-tag `latest`, con su campo `repository`. El documento completo del paquete puede pesar decenas de megabytes; el manifiesto, unos pocos kilobytes.
 - Concurrencia máxima por defecto: 8 requests simultáneos. Timeout por request: 10 segundos.
 
 ---

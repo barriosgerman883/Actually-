@@ -42,7 +42,7 @@ La versión inicial es estrictamente de observación.
 - escribe dentro de proyectos detectados;
 - escala privilegios.
 
-La única escritura que hace `actually?` es en su propio directorio de caché, fuera de los proyectos detectados.
+Las únicas escrituras que hace `actually?` son en sus propios directorios de caché y de estado local, fuera de los proyectos detectados (architecture.md §3.5).
 
 ### 2.3 Explicable
 Toda conclusión importante debe poder ser explicada mediante evidencia.
@@ -58,7 +58,7 @@ Detected executable:
 Owned by:
 pnpm
 
-Latest stable version:
+Latest version (npm dist-tag "latest"):
 2.0.0
 
 Confidence:
@@ -166,7 +166,7 @@ Debe poder:
 
 Hay dos cosas distintas con el mismo nombre:
 
-- **npm registry** (fuente de versiones): entra en el MVP. Es imprescindible porque los paquetes administrados por pnpm se publican ahí. Resuelve la última versión estable y el campo `repository` de cada paquete.
+- **npm registry** (fuente de versiones): entra en el MVP. Es imprescindible porque los paquetes administrados por pnpm se publican ahí. Resuelve la versión con el dist-tag `latest`, que por convención es la última estable, y el campo `repository` de cada paquete.
 - **npm CLI** (install provider): la detección de paquetes instalados con `npm install -g` queda para la Fase 2.
 
 Las dependencias declaradas en el `package.json` de un proyecto se leen en el MVP, sin importar qué package manager las instaló.

@@ -207,7 +207,7 @@ La ausencia de red o permisos no debe causar fallos destructivos ni resultados f
 ## 9. Requisitos no funcionales
 
 ### RNF-001 — Seguridad
-Read-only en MVP. La única escritura es la caché propia de `actually?`, fuera de los proyectos del usuario.
+Read-only en MVP. Las únicas escrituras son la caché de respuestas y el estado local de `actually?`, fuera de los proyectos del usuario.
 
 ### RNF-002 — Privacidad
 Sin telemetría obligatoria.
@@ -327,6 +327,15 @@ Incluye:
 - una plantilla de issue "actually was wrong" que pide la salida de `explain`.
 
 No incluye Git, GitHub, proyectos, caché ni archivo de configuración. Sin GitHub, la caché todavía no es necesaria.
+
+Protecciones de red en v0.1 (architecture.md §8):
+
+- **Incluidas:**
+  - un paquete se consulta solo si su spec es de registry, el registry predeterminado efectivo es el público y su scope no está asignado a otro registry;
+  - el registry efectivo se obtiene de `pnpm config list --json`;
+  - si el origen no se puede determinar, `latest` queda `unknown` y el paquete no se consulta;
+  - `--offline` evita toda consulta.
+- **No incluidas:** `[network] exclude`, porque requiere archivo de configuración. Para no revelar un nombre concreto, la alternativa en v0.1 es `--offline`.
 
 Criterio de éxito: `@getactually/cli@0.1.0` se instala con pnpm, alguien lo ejecuta sobre su máquina real, y cada resultado incorrecto se puede reportar con la salida de `explain`.
 

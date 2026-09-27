@@ -37,6 +37,15 @@ La revisión del PR #2 corrigió tres puntos:
 
 También se definió la v0.1 como próximo hito (`c2970ff`). El riesgo principal pasó a ser seguir perfeccionando el diseño sin contrastarlo con una implementación.
 
+La revisión del PR #3 corrigió cuatro puntos más:
+
+| Ajuste | Commit | Motivo |
+|---|---|---|
+| Un paquete se consulta en el registry público solo si su origen es conocido. Se contempla un registry predeterminado privado, y la v0.1 lista sus protecciones | `cebff0e` | La v0.1 no tiene archivo de configuración, así que no tiene `exclude`. Antes solo se contemplaban scopes privados |
+| El aviso sale siempre por stderr y el marcador vive en el estado local, no en la caché | `ac8bf3a` | "Nunca aparece con `--json`" era ambiguo, y la v0.1 no tiene caché |
+| El id se describe como determinístico, con los casos en que cambia | `d926668` | Cambia si el proyecto se mueve o cambia el provider detectado |
+| `latest` es lo que declara la fuente, no una garantía de estabilidad | `41bcc05` | El dist-tag `latest` de npm lo elige quien publica; usarlo para la última estable es una convención |
+
 ## #16: nombre del paquete
 
 Se eligió la alternativa B con el scope `@getactually`, porque `@actually` pertenece a otra cuenta. Las alternativas quedan como registro de la decisión.

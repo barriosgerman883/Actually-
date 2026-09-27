@@ -206,7 +206,7 @@ gstack
 Installed
 1.0.0
 
-Latest stable
+Latest (npm dist-tag)
 2.0.0
 
 Scope
@@ -248,8 +248,8 @@ Source               github.com/example/gstack    medium
   inference   npm registry: "repository" points to github.com/example/gstack
   inference   repository name matches the package name
 
-Latest stable        2.0.0                        high
-  fact        npm registry: latest version is 2.0.0
+Latest (npm tag)     2.0.0                        high
+  fact        npm registry: dist-tag "latest" is 2.0.0
 
 Not determined
   requested, resolved    not applicable to global tools
@@ -372,9 +372,10 @@ This notice is shown once.
 
 Reglas:
 
-- Se escribe en stderr. Nunca aparece en la salida de `--json`.
+- Se escribe siempre en stderr, antes de la primera consulta a la red, también con `--json`. stdout lleva solo el resultado, así que el documento JSON nunca incluye el aviso.
 - No pide confirmación, así que no interrumpe scripts ni el primer uso.
-- Se muestra una sola vez. El marcador es un archivo vacío en el directorio de caché, y se escribe aunque la caché esté desactivada.
+- Se muestra una sola vez. El marcador es un archivo vacío en el directorio de estado local (architecture.md §3.5), no en la caché. Existe aunque no haya caché, como en la v0.1.
+- Borrar el marcador vuelve a mostrar el aviso. Si el marcador no se puede escribir, el aviso se muestra en cada ejecución: es preferible repetirlo a omitirlo.
 - No se muestra con `--offline` ni con la red desactivada.
 - Nombra solo los hosts que la versión instalada realmente consulta.
 
@@ -490,7 +491,14 @@ Reglas:
 - `status --json` no incluye `evidence`. `explain --json` sí.
 - `diagnostics` siempre está presente, aunque esté vacío. Su forma está en architecture.md §13.
 
-`id` es estable y opaco: los consumidores lo usan para comparar y referenciar, no para extraer datos. Su formato está en architecture.md §5 y distingue la misma dependencia en varios proyectos y las herramientas sin provider conocido.
+`id` es opaco y determinístico: los consumidores lo usan para comparar y referenciar, no para extraer datos. Su formato está en architecture.md §5 y distingue la misma dependencia en varios proyectos y las herramientas sin provider conocido.
+
+No es estable en sentido fuerte. Se mantiene entre ejecuciones mientras no cambien el scope, la ubicación ni el provider detectado, y cambia si:
+
+- el proyecto se mueve a otra carpeta, porque su raíz forma parte del id;
+- cambia el provider detectado, por ejemplo cuando una herramienta pasa de `unknown` a `pnpm`.
+
+Un integrador que necesite seguir una herramienta a través de esos cambios puede correlacionar por `name` y `scope`, sabiendo que esa combinación puede ser ambigua.
 
 ---
 
@@ -702,8 +710,6 @@ docs/
 │
 ├─ commands/
 │  ├─ status.md
-│  ├─ scan.md
-│  ├─ info.md
 │  └─ explain.md
 │
 └─ decisions/
