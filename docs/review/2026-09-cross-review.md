@@ -4,7 +4,7 @@ Fecha: 2026-09-26
 Documentos revisados: `mvp.md`, `PRD.md`, `architecture.md`, `design.md`
 Estado del repo al momento de la revisión: vacío (README y LICENSE). No hay código contra el cual contrastar.
 
-> Esta revisión describe los documentos en su versión original (commit `cf70c24`). Las secciones citadas se refieren a esa versión. Las correcciones se aplicaron después en commits separados, y el estado de cada decisión está en `open-questions.md`.
+> Esta revisión describe los documentos en su versión original (commit `b7c13dc`). Las secciones citadas se refieren a esa versión. Las correcciones se aplicaron después en commits separados, y el estado de cada decisión está en `open-questions.md`.
 
 ## Resumen
 
