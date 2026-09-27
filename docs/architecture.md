@@ -523,6 +523,7 @@ La lista original incluía `node --version`. Ningún provider del MVP lo usa, as
 - `pnpm` nunca se lanza dentro de un proyecto detectado. Un proyecto puede definir un `.npmrc` o el campo `packageManager`, que activa corepack y puede descargar y ejecutar otra versión de pnpm.
 - Las dependencias de un proyecto se leen de `package.json` y del lockfile a través de Filesystem, sin ejecutar nada.
 - pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
+- A ese entorno se le agregan `npm_config_update_notifier=false`, para que pnpm no consulte la red por su cuenta buscando actualizaciones, y `COREPACK_ENABLE_AUTO_PIN=0` y `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, para que corepack no escriba `packageManager` ni espere una respuesta.
 - La salida de `pnpm.config.list` puede contener tokens. Solo se extraen las claves de registry (§8) y el resto nunca se guarda ni se registra.
 
 ### Git

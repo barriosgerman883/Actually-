@@ -50,6 +50,12 @@ describe("CommandRunner allowlist (architecture.md §7)", () => {
     }
   });
 
+  it("keeps pnpm from reaching the network or pinning versions on its own", () => {
+    expect(buildInvocation({ command: "pnpm.list.global" }, ctx)).toMatchObject({
+      env: { npm_config_update_notifier: "false", COREPACK_ENABLE_AUTO_PIN: "0", LC_ALL: "C" },
+    });
+  });
+
   it("requires an absolute repository for git", () => {
     expect(buildInvocation({ command: "git.tags.head" }, ctx)).toHaveProperty("rejected");
     expect(

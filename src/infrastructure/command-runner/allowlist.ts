@@ -45,6 +45,19 @@ export function gitHardeningEnv(): Record<string, string> {
   };
 }
 
+/**
+ * Environment overrides for every pnpm invocation: no update check (it
+ * would contact the network outside the HTTP client), and no corepack
+ * auto-pinning or download prompts.
+ */
+export function pnpmQuietEnv(): Record<string, string> {
+  return {
+    npm_config_update_notifier: "false",
+    COREPACK_ENABLE_AUTO_PIN: "0",
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+  };
+}
+
 export interface Invocation {
   binary: string;
   args: string[];
@@ -87,5 +100,6 @@ export function buildInvocation(
     Object.assign(env, gitHardeningEnv());
     return { binary: "git", args: [...GIT_HARDENING_ARGS, ...spec.args], cwd, env };
   }
+  Object.assign(env, pnpmQuietEnv());
   return { binary: spec.binary, args: [...spec.args], cwd, env };
 }

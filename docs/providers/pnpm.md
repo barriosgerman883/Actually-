@@ -29,7 +29,7 @@ Installed versions come from pnpm. Latest versions come from the npm registry pr
 
 ## Commands executed
 
-`pnpm --version`, `pnpm root --global`, `pnpm bin --global`, `pnpm list --global --json --depth=0` and `pnpm config list --json`. All of them run in an empty directory owned by actually, never inside a project.
+`pnpm --version`, `pnpm root --global`, `pnpm bin --global`, `pnpm list --global --json --depth=0` and `pnpm config list --json`. All of them run in an empty directory owned by actually, never inside a project, with `npm_config_update_notifier=false` so pnpm does not contact the network by itself, and with corepack auto-pinning and download prompts disabled.
 
 ## Files inspected
 
