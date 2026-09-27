@@ -542,7 +542,31 @@ api.github.com
 registry.npmjs.org
 ```
 
-No deben enviarse rutas locales ni contenido innecesario del proyecto.
+### Qué sale de la máquina
+
+`actually?` no tiene servidor propio y no recopila nada. Pero para saber cuál es la última versión de algo, tiene que preguntarle a un servicio externo, y esa pregunta revela qué se está verificando.
+
+| Destino | Qué recibe |
+|---|---|
+| `registry.npmjs.org` | el nombre de cada paquete consultado, la IP y el user-agent `actually/<versión>` |
+| `api.github.com` | el `owner/repo` de cada repositorio consultado, la IP y el user-agent. Si el token está activado (§14), también la identidad de la cuenta |
+
+Nunca se envían rutas, contenido de archivos, nombres ni raíces de proyectos, lockfiles ni versiones instaladas. Solo se pide la última versión.
+
+La consecuencia, dicha tal cual: esos servicios pueden inferir qué herramientas y dependencias usa la persona, y desde qué IP. Si se consulta el nombre de un paquete o repositorio privado, ese nombre queda expuesto al servicio consultado.
+
+Protecciones contra filtrar nombres privados:
+
+- No se consultan dependencias que no vienen de un registry: `workspace:`, `link:`, `file:`, repositorios git ni URLs.
+- Los scopes que `~/.npmrc` o el `.npmrc` del proyecto asignan a otro registry no se consultan en `registry.npmjs.org`. Leer esos archivos no ejecuta nada. Esas dependencias quedan con `latest` en `unknown` y el motivo "registry privado".
+- `[network] exclude` lista nombres que nunca se consultan, por ejemplo `"@mi-empresa/*"` (design.md §13).
+
+Cómo trabajar sin red:
+
+- `--offline` evita toda consulta en esa ejecución. `[network] enabled = false` la evita siempre.
+- Sin red se usa la caché si tiene la entrada. Si no, `latest` queda en `unknown` con el motivo "offline".
+
+La primera ejecución muestra un aviso con esta misma información (design.md §12).
 
 ---
 
@@ -747,8 +771,9 @@ Borrar ese directorio es siempre seguro.
 
 ### GitHub
 
-- Si `GITHUB_TOKEN` o `GH_TOKEN` están definidos en el entorno, se envían solo a `api.github.com` y solo para ampliar el límite de requests. No se guardan en la caché, la configuración ni los logs.
-- `[network] github_token = false` desactiva ese uso.
+- El token está apagado por defecto, porque le permite a GitHub asociar las consultas a una cuenta.
+- Con `[network] github_token = true`, si `GITHUB_TOKEN` o `GH_TOKEN` están definidos, se envían solo a `api.github.com` y solo para ampliar el límite de requests. No se guardan en la caché, la configuración ni los logs.
+- Sin token, el límite es de 60 requests por hora. Las revalidaciones que reciben un 304 no consumen cuota, así que con la caché alcanza para un uso normal.
 - Tener un token no convierte el acceso a repositorios privados en una funcionalidad soportada del MVP.
 - Si GitHub responde que el límite se agotó, no se hacen más requests a GitHub en esa ejecución. Los datos pendientes quedan `unknown` con ese motivo.
 

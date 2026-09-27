@@ -145,8 +145,10 @@ para consumir los resultados desde otra herramienta.
 
 ### HU6
 Como usuario preocupado por privacidad,
-quiero que el análisis ocurra localmente,
-para no enviar información de mis proyectos a un servidor.
+quiero saber exactamente qué sale de mi máquina y poder evitarlo,
+para decidir qué comparto con npm y GitHub.
+
+El análisis ocurre localmente y `actually?` no tiene servidor. Pero consultar la última versión de un paquete o repositorio le revela su nombre al servicio consultado (architecture.md §8).
 
 ---
 
@@ -209,6 +211,8 @@ Read-only en MVP. La única escritura es la caché propia de `actually?`, fuera 
 
 ### RNF-002 — Privacidad
 Sin telemetría obligatoria.
+
+Transparencia de red: antes de la primera consulta, el usuario sabe qué se envía y a quién, y puede trabajar sin red (architecture.md §8, design.md §12).
 
 ### RNF-003 — Performance
 No recorrer todo el filesystem por defecto.

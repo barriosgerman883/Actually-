@@ -25,7 +25,7 @@ Toda la detección ocurre en la máquina del usuario.
 
 No existe un backend de `actually?`.
 
-La red solo se utiliza para consultar metadata pública necesaria para resolver versiones.
+La red solo se utiliza para consultar metadata pública necesaria para resolver versiones. Esas consultas le revelan al servicio consultado el nombre de cada paquete o repositorio verificado. El detalle de qué se envía y a quién está en architecture.md §8.
 
 Esa metadata se guarda en una caché local con vencimiento (architecture.md §14).
 
@@ -71,7 +71,9 @@ Si `actually?` no puede determinar con seguridad un dato, debe mostrarlo como de
 Nunca debe inferir información inexistente solo para completar una salida.
 
 ### 2.5 Sin telemetría obligatoria
-No se recopilan datos de uso, rutas locales, nombres de proyectos, repositorios privados ni información del entorno.
+`actually?` no recopila datos de uso, rutas locales, nombres de proyectos ni información del entorno, porque no tiene servidor.
+
+Los servicios externos que se consultan, npm y GitHub, sí ven los nombres de los paquetes y repositorios verificados. Eso se explica en el primer uso y se puede evitar con `--offline`.
 
 ---
 
@@ -108,7 +110,7 @@ actually explain <tool>
 - `status` muestra el estado resumido. Sin configuración, revisa las herramientas globales y el proyecto de la carpeta actual, así que no hace falta configurar nada para empezar. Si `scan.paths` está configurado, también revisa los proyectos bajo esas rutas.
 - `status <tool>` muestra el detalle de una herramienta (design.md §8).
 - `explain <tool>` muestra la evidencia de cada afirmación (design.md §9).
-- Ambos comandos aceptan `--json`.
+- Ambos comandos aceptan `--json` y `--offline`.
 - `status` acepta `--exit-code` para usarlo en scripts (architecture.md §3.1).
 
 Quedan fuera del MVP:
@@ -380,7 +382,7 @@ No se implementará inicialmente:
 - backend;
 - cuentas;
 - telemetry;
-- acceso a repositorios privados. Un token de GitHub presente en el entorno solo se usa para ampliar el límite de requests (architecture.md §14);
+- acceso a repositorios privados. El token de GitHub está apagado por defecto y, si se activa, solo se usa para ampliar el límite de requests (architecture.md §14);
 - ejecución automática de migraciones;
 - corrección automática del entorno.
 
