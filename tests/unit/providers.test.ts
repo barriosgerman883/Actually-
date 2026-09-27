@@ -193,6 +193,18 @@ describe("cached GET", () => {
     const http = fakeHttp({ [url]: new NetworkError("network", "down") });
     expect((await cachedGet(url, netContext(http, { cache, now: 10 ** 9 }))).kind).toBe("stale");
   });
+  it("treats a 5xx as an unavailable network and uses the stale entry (F-13)", async () => {
+    const cache = memoryCache({ [url]: { fetchedAt: 0, body: { version: "1.0.0" } } });
+    const http = fakeHttp({ [url]: { status: 503, headers: {}, body: undefined } });
+    const result = await cachedGet(url, netContext(http, { cache, now: 10 ** 9 }));
+    expect(result).toMatchObject({
+      kind: "stale",
+      body: { version: "1.0.0" },
+      cause: { message: "registry.npmjs.org answered 503" },
+    });
+    const noEntry = await cachedGet(url, netContext(http, { now: 10 ** 9 }));
+    expect(noEntry).toMatchObject({ kind: "error", error: { kind: "network" } });
+  });
   it("does not cache non-200 responses", async () => {
     const cache = memoryCache();
     await cachedGet(url, netContext(fakeHttp({}), { cache }));

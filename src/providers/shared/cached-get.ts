@@ -26,7 +26,8 @@ export type CachedGetResult =
  * GET with the cache rules of docs/architecture.md §14:
  * fresh entries are used as is, expired ones are revalidated with a
  * conditional request, and a stale entry is only returned, marked as such,
- * when the network is unavailable. Only 200 responses are stored.
+ * when the network is unavailable, including a server error after the
+ * retry. Only 200 responses are stored.
  */
 export async function cachedGet(
   url: string,
@@ -55,6 +56,10 @@ export async function cachedGet(
 
   try {
     const response = await ctx.http.getJson(url, { headers: conditional });
+    // The client already retried once: a 5xx means the service is unavailable.
+    if (response.status >= 500) {
+      throw new NetworkError("network", `${new URL(url).host} answered ${response.status}`);
+    }
     if (response.status === 304 && entry) {
       await ctx.cache.set(url, { ...entry, fetchedAt: now });
       return {
