@@ -274,6 +274,64 @@ describe("HttpClient (architecture.md §8)", () => {
     expect(ghAuth).toBe("Bearer gh-token");
   });
 
+  it("never follows a redirect to a host outside the allowlist (F-02)", async () => {
+    const { agent, client: http } = client();
+    let evilHit = false;
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/x/latest" })
+      .reply(302, "", { headers: { location: "https://evil.example/x" } });
+    agent
+      .get("https://evil.example")
+      .intercept({ path: "/x" })
+      .reply(() => {
+        evilHit = true;
+        return {
+          statusCode: 200,
+          data: { version: "6.6.6" },
+          responseOptions: { headers: { "content-type": "application/json" } },
+        };
+      });
+    await expect(http.getJson("https://registry.npmjs.org/x/latest")).rejects.toMatchObject({
+      kind: "host-not-allowed",
+    });
+    expect(evilHit).toBe(false);
+  });
+
+  it("follows redirects within an allowed host, sending the token only there", async () => {
+    const { agent, client: http } = client("gh-token");
+    let auth: unknown = "unset";
+    agent
+      .get("https://api.github.com")
+      .intercept({ path: "/repos/old/r/releases/latest" })
+      .reply(301, "", { headers: { location: "/repositories/1/releases/latest" } });
+    agent
+      .get("https://api.github.com")
+      .intercept({ path: "/repositories/1/releases/latest" })
+      .reply((opts) => {
+        auth = (opts.headers as Record<string, string>).authorization;
+        return {
+          statusCode: 200,
+          data: { tag_name: "v1.0.0" },
+          responseOptions: { headers: { "content-type": "application/json" } },
+        };
+      });
+    const res = await http.getJson("https://api.github.com/repos/old/r/releases/latest");
+    expect(res).toMatchObject({ status: 200, body: { tag_name: "v1.0.0" } });
+    expect(auth).toBe("Bearer gh-token");
+  });
+
+  it("does not follow redirects to http, even on an allowed host", async () => {
+    const { agent, client: http } = client();
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/z/latest" })
+      .reply(301, "", { headers: { location: "http://registry.npmjs.org/z/latest" } });
+    await expect(http.getJson("https://registry.npmjs.org/z/latest")).rejects.toMatchObject({
+      kind: "host-not-allowed",
+    });
+  });
+
   it("maps connection failures to recoverable NetworkError", async () => {
     const { client: http } = client();
     await expect(http.getJson("https://registry.npmjs.org/y/latest")).rejects.toBeInstanceOf(

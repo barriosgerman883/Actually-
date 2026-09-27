@@ -7,6 +7,8 @@ export const ALLOWED_HOSTS: ReadonlySet<string> = new Set(["registry.npmjs.org",
 
 const TIMEOUT_MS = 10_000;
 const MAX_CONCURRENT = 8;
+const MAX_REDIRECTS = 5;
+const REDIRECTS: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
 export interface HttpClientOptions {
   userAgent: string;
@@ -40,21 +42,57 @@ export function undiciHttpClient(options: HttpClientOptions): HttpClient {
     else active--;
   }
 
-  async function once(url: URL, headers: Record<string, string>): Promise<HttpResponse> {
+  function assertAllowed(url: URL): void {
+    if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(url.host)) {
+      throw new NetworkError("host-not-allowed", `host not allowed: ${url.host}`);
+    }
+  }
+
+  /** Headers for one hop: the token goes only to api.github.com. */
+  function headersFor(url: URL, base: Record<string, string>): Record<string, string> {
+    const headers = { ...base };
+    if (url.host === "api.github.com" && options.githubToken) {
+      headers.authorization = `Bearer ${options.githubToken}`;
+    }
+    return headers;
+  }
+
+  /**
+   * One request. Redirects are followed by hand, and only to allowed hosts
+   * over https: GitHub redirects renamed repositories within api.github.com.
+   */
+  async function once(start: URL, baseHeaders: Record<string, string>): Promise<HttpResponse> {
+    let url = start;
     let response;
-    try {
-      response = await fetch(url, {
-        headers,
-        dispatcher,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        redirect: "follow",
-      });
-    } catch (error) {
-      const name = (error as Error).name;
-      if (name === "TimeoutError" || name === "AbortError") {
-        throw new NetworkError("timeout", `request to ${url.host} timed out`);
+    for (let hop = 0; ; hop++) {
+      try {
+        response = await fetch(url, {
+          headers: headersFor(url, baseHeaders),
+          dispatcher,
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+          redirect: "manual",
+        });
+      } catch (error) {
+        const name = (error as Error).name;
+        if (name === "TimeoutError" || name === "AbortError") {
+          throw new NetworkError("timeout", `request to ${url.host} timed out`);
+        }
+        throw new NetworkError("network", `could not reach ${url.host}`);
       }
-      throw new NetworkError("network", `could not reach ${url.host}`);
+      const location = response.headers.get("location");
+      if (!REDIRECTS.has(response.status) || location === null) break;
+      await response.body?.cancel();
+      if (hop >= MAX_REDIRECTS) {
+        throw new NetworkError("invalid-response", `too many redirects from ${start.host}`);
+      }
+      let next: URL;
+      try {
+        next = new URL(location, url);
+      } catch {
+        throw new NetworkError("invalid-response", `invalid redirect from ${url.host}`);
+      }
+      assertAllowed(next);
+      url = next;
     }
     const responseHeaders: Record<string, string> = {};
     response.headers.forEach((value, key) => {
@@ -77,24 +115,24 @@ export function undiciHttpClient(options: HttpClientOptions): HttpClient {
   return {
     async getJson(rawUrl, requestOptions = {}) {
       const url = new URL(rawUrl);
-      if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(url.host)) {
-        throw new NetworkError("host-not-allowed", `host not allowed: ${url.host}`);
-      }
+      assertAllowed(url);
       const headers: Record<string, string> = {
         "user-agent": options.userAgent,
         accept: "application/json",
         ...requestOptions.headers,
       };
-      if (url.host === "api.github.com" && options.githubToken) {
-        headers.authorization = `Bearer ${options.githubToken}`;
-      }
       await acquire();
       try {
         try {
           const first = await once(url, headers);
           if (first.status < 500) return first;
         } catch (error) {
-          if (!(error instanceof NetworkError) || error.kind === "invalid-response") throw error;
+          if (
+            !(error instanceof NetworkError) ||
+            error.kind === "invalid-response" ||
+            error.kind === "host-not-allowed"
+          )
+            throw error;
         }
         return await once(url, headers);
       } finally {
