@@ -54,7 +54,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-15 | baja | desvío de docs | Comentario de `version.ts` cita un test que no existe | abierto |
 | F-16 | baja | desvío de docs | El cliente HTTP no implementa cancelación | abierto |
 | F-17 | baja | robustez | El guard de Bash bloquea lecturas con `sed -n` de archivos de `.claude/` | abierto |
-| F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | abierto |
+| F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | resuelto: código corregido |
+| F-19 | media | seguridad | `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -360,7 +361,7 @@ Propuesta: permitir `sed` sin `-i` y `awk` sin redirecciones, con casos de test 
 
 ### F-18 · `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido
 - **Severidad:** media
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-bash.mjs` (`READ_ONLY`)
@@ -372,6 +373,29 @@ Propuesta: permitir `sed` sin `-i` y `awk` sin redirecciones, con casos de test 
 Así se usó, una sola vez, con autorización explícita de la persona responsable: el 2026-09-27 se cambió `let before = "";` por `let before;` en `.claude/hooks/guard-edit.mjs:53`, para corregir el lint del cambio que agregó los frenos. No se modificó nada más de `.claude/`. El `!` de la sesión no ejecutaba comandos en la app, así que no había otra vía.
 
 Propuesta: sacar `node`, `npx` y `pnpm` de `READ_ONLY` y permitir solo `node .claude/hooks/<hook>.mjs` sin `-e`, `-p` ni `--eval`. Sumar el caso a `tests/security/agent-guard.test.ts`.
+
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable, que autorizó usar el hueco una última vez para cerrarlo:
+
+- `node`, `npx`, `pnpm` y `git` ya no cuentan como lectores de los archivos de los frenos. `git` solo puede leerlos o registrarlos (`diff`, `log`, `show`, `status`, `blame`, `ls-files`, `grep`, `add`, `commit`). `node` solo puede ejecutar un hook por su ruta y sin flags.
+- El código pasado por línea de comandos (`node -e`, `--eval`, `-p`, `python -c`, `perl -e`, `ruby -e`, `deno eval`, `php -r`) se bloquea si menciona `.claude`, y en cualquier otro caso pide confirmación.
+- Verificado en la sesión: el mismo `node -e` que antes pasaba ahora se bloquea. Los casos están en `tests/security/agent-guard.test.ts`.
+
+**Riesgo que queda.** Un hook que analiza texto no puede impedir que un agente escriba un script en otro directorio y lo ejecute con `node archivo.mjs`. Ese caso lo cubre la revisión humana de todo diff que toque `.claude/`, no el hook (mvp.md §9).
+
+### F-19 · `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** seguridad
+- **Ubicación:** `.claude/hooks/guard-bash.mjs` (`READ_ONLY`)
+- **Detectado:** 2026-09-27, Claude Code
+- **Verificación:** por lectura
+
+`prettier` y `eslint` están en `READ_ONLY`, pero `prettier --write` y `eslint --fix` reescriben archivos, incluidos los de `.claude/`. Es el mismo tipo de hueco que F-18. Se detectó al cerrar F-18: el archivo corregido quedó formateado con la configuración por defecto de prettier en vez de la del repo, y la forma de reformatearlo desde la sesión habría sido este hueco. No se usó.
+
+Propuesta: permitir `prettier` y `eslint` sobre los archivos de los frenos solo sin `--write`, `-w` ni `--fix`, con casos de test.
+
+Así se usó, una sola vez, con autorización explícita de la persona responsable: el 2026-09-27 se corrió `prettier --write .claude/hooks/guard-bash.mjs` para reformatear con la configuración del repo el archivo que corrige F-18. Solo cambió el formato.
 
 ### Desvíos donde el código es correcto
 

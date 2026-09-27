@@ -121,13 +121,47 @@ const READ_ONLY = new Set([
   "stat",
   "file",
   "jq",
-  "node",
-  "git",
-  "pnpm",
-  "npx",
   "prettier",
   "eslint",
 ]);
+// git subcommands that only read or record guardrail files, never rewrite them.
+const GIT_SAFE_ON_GUARDS = new Set([
+  "diff",
+  "log",
+  "show",
+  "status",
+  "blame",
+  "ls-files",
+  "grep",
+  "add",
+  "commit",
+]);
+const HOOK_SCRIPT = /(^|\/)\.claude\/hooks\/[\w.-]+\.mjs$/;
+
+/**
+ * Whether a command that names a guardrail file only reads it. Running a
+ * hook by path, with no flags, is allowed so the hooks can be tested.
+ */
+function onlyReadsGuards(cmd, args) {
+  if (READ_ONLY.has(cmd)) return true;
+  if (cmd === "git") return GIT_SAFE_ON_GUARDS.has(gitSubcommand(args).sub);
+  if (cmd === "node") return HOOK_SCRIPT.test(args[0] ?? "");
+  return false;
+}
+
+/** The flag that makes an interpreter run code given on the command line. */
+function inlineCodeFlag(cmd, args) {
+  const name = cmd.replace(/[\d.]+$/, "");
+  if (name === "node" || name === "bun")
+    return args.find(
+      (a) => ["-e", "--eval", "-p", "--print"].includes(a) || /^--(eval|print)=/.test(a),
+    );
+  if (name === "deno") return args[0] === "eval" ? "eval" : undefined;
+  if (name === "python") return args.find((a) => /^-[A-Za-z]*c$/.test(a));
+  if (name === "perl" || name === "ruby") return args.find((a) => /^-[A-Za-z]*[eE]/.test(a));
+  if (name === "php") return args.find((a) => a === "-r");
+  return undefined;
+}
 
 const deny = (reason) => ({ decision: "deny", reason });
 const ask = (reason) => ({ decision: "ask", reason });
@@ -461,8 +495,16 @@ function checkCommand(words, pipedFrom, depth) {
     if (SECRET_PATH.test(a.replace(/\/+$/, ""))) found.push(deny(`${a} can contain credentials`));
   }
 
+  // Code given on the command line can write any file, whatever it names.
+  const inline = inlineCodeFlag(cmd, args);
+  if (inline !== undefined) {
+    if (args.some((a) => a.includes(".claude")))
+      found.push(deny(`${cmd} ${inline} runs inline code that touches .claude/`));
+    else found.push(ask(`${cmd} ${inline} runs inline code that can write any file`));
+  }
+
   // The guardrails themselves.
-  if (args.some((a) => GUARD_FILES.test(a)) && !READ_ONLY.has(cmd))
+  if (args.some((a) => GUARD_FILES.test(a)) && !onlyReadsGuards(cmd, args))
     found.push(deny("only the user changes the agent guardrails in .claude/"));
   if (
     (cmd === "sed" || cmd === "perl") &&
@@ -561,10 +603,16 @@ export function evaluate(command) {
   const found = evaluateText(String(command ?? ""), 0);
   const denied = found.filter((f) => f.decision === "deny");
   if (denied.length > 0)
-    return { decision: "deny", reason: [...new Set(denied.map((f) => f.reason))].join("; ") };
+    return {
+      decision: "deny",
+      reason: [...new Set(denied.map((f) => f.reason))].join("; "),
+    };
   const asked = found.filter((f) => f.decision === "ask");
   if (asked.length > 0)
-    return { decision: "ask", reason: [...new Set(asked.map((f) => f.reason))].join("; ") };
+    return {
+      decision: "ask",
+      reason: [...new Set(asked.map((f) => f.reason))].join("; "),
+    };
   return undefined;
 }
 

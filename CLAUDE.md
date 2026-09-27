@@ -62,7 +62,7 @@ Fix a finding only when the user asks for it by id. If the user decides the code
 
 ## Agent guardrails
 
-`.claude/settings.json` runs two `PreToolUse` hooks. `.claude/hooks/guard-bash.mjs` denies destructive or irreversible shell commands and asks before risky ones. `.claude/hooks/guard-edit.mjs` protects the guardrails themselves, `pnpm-lock.yaml`, `.git/` and the review snapshot, and rejects `.skip(`, `.only(`, `@ts-ignore` and `eslint-disable`. Do not try to get around a denial: tell the user what you needed and why. Only the user changes these files.
+`.claude/settings.json` runs two `PreToolUse` hooks. `.claude/hooks/guard-bash.mjs` denies destructive or irreversible shell commands and asks before risky ones, including any inline code such as `node -e` or `python -c`. `.claude/hooks/guard-edit.mjs` protects the guardrails themselves, `pnpm-lock.yaml`, `.git/` and the review snapshot, and rejects `.skip(`, `.only(`, `@ts-ignore` and `eslint-disable`. Do not try to get around a denial: tell the user what you needed and why. Only the user changes these files.
 
 ## Architecture invariants
 

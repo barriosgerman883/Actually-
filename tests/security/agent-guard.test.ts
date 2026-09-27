@@ -41,6 +41,10 @@ describe("bash guard", () => {
     "echo '{}' | node .claude/hooks/guard-bash.mjs",
     "env FOO=1 node x.js",
     "npm install",
+    "git diff .claude/hooks/guard-bash.mjs",
+    "git add .claude/settings.json",
+    "git log -- .claude/settings.json",
+    "node dist/cli/index.js status",
   ])("allows %j", (command) => {
     expect(decide(command)).toBe("allow");
   });
@@ -118,6 +122,16 @@ describe("bash guard", () => {
     ["echo '{}' > .claude/settings.json", "guardrails"],
     ["cp /tmp/x .claude/settings.json", "guardrails"],
     ["rm .claude/settings.json", "guardrails"],
+    // F-18: interpreters and git must not rewrite the guardrails.
+    [`node -e "require('fs').writeFileSync('.claude/settings.json','{}')"`, "inline code"],
+    [`node --eval="require('fs').rmSync('.claude/hooks')"`, "inline code"],
+    [`python3 -c "open('.claude/hooks/guard-bash.mjs','w')"`, "inline code"],
+    [`perl -e 'unlink ".claude/settings.json"'`, "inline code"],
+    ["node --require ./x.js .claude/hooks/guard-bash.mjs", "hook with preloaded code"],
+    ["git checkout HEAD~1 -- .claude/hooks/guard-bash.mjs", "git rewrites guardrails"],
+    ["git restore .claude/settings.json", "git rewrites guardrails"],
+    ["npx x .claude/settings.json", "tool on guardrails"],
+    ["pnpm exec x .claude/hooks/guard-edit.mjs", "tool on guardrails"],
   ])("denies %j (%s)", (command) => {
     expect(decide(command)).toBe("deny");
   });
@@ -148,6 +162,9 @@ describe("bash guard", () => {
     "pnpm self-update",
     "corepack enable",
     "pnpm config set registry https://example.com",
+    `node -e "console.log(1)"`,
+    `python3 -c "print(1)"`,
+    `node -e "require('fs').writeFileSync('.cla'+'ude/settings.json','{}')"`,
   ])("asks before %j", (command) => {
     expect(decide(command)).toBe("ask");
   });
