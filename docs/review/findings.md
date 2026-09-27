@@ -54,7 +54,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-15 | baja | desvío de docs | Comentario de `version.ts` cita un test que no existe | abierto |
 | F-16 | baja | desvío de docs | El cliente HTTP no implementa cancelación | abierto |
 | F-17 | baja | robustez | El guard de Bash bloquea lecturas con `sed -n` de archivos de `.claude/` | abierto |
-| F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | resuelto: código corregido |
+| F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | resuelto: código corregido en `54ec142` |
 | F-19 | media | seguridad | `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
@@ -361,7 +361,7 @@ Propuesta: permitir `sed` sin `-i` y `awk` sin redirecciones, con casos de test 
 
 ### F-18 · `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee
 
-- **Estado:** resuelto: código corregido
+- **Estado:** resuelto: código corregido en `54ec142`
 - **Severidad:** media
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-bash.mjs` (`READ_ONLY`)
