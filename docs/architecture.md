@@ -450,6 +450,7 @@ type AllowedCommand =
   | "pnpm.root.global"
   | "pnpm.bin.global"
   | "pnpm.list.global"
+  | "pnpm.config.list"
   | "git.tags.head"
   | "git.describe.head"
   | "node.version";
@@ -480,6 +481,7 @@ Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argument
 | `pnpm.root.global` | `pnpm root --global` | neutral |
 | `pnpm.bin.global` | `pnpm bin --global` | neutral |
 | `pnpm.list.global` | `pnpm list --global --json --depth=0` | neutral |
+| `pnpm.config.list` | `pnpm config list --json` | neutral |
 | `git.tags.head` | `git tag --points-at HEAD` | repositorio |
 | `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
 | `node.version` | `node --version` | neutral |
@@ -493,6 +495,7 @@ Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún
 - `pnpm` nunca se lanza dentro de un proyecto detectado. Un proyecto puede definir un `.npmrc` o el campo `packageManager`, que activa corepack y puede descargar y ejecutar otra versión de pnpm.
 - Las dependencias de un proyecto se leen de `package.json` y del lockfile a través de Filesystem, sin ejecutar nada.
 - pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
+- La salida de `pnpm.config.list` puede contener tokens. Solo se extraen las claves de registry (§8) y el resto nunca se guarda ni se registra.
 
 ### Git
 
@@ -569,11 +572,26 @@ Nunca se envían rutas, contenido de archivos, nombres ni raíces de proyectos, 
 
 La consecuencia, dicha tal cual: esos servicios pueden inferir qué herramientas y dependencias usa la persona, y desde qué IP. Si se consulta el nombre de un paquete o repositorio privado, ese nombre queda expuesto al servicio consultado.
 
-Protecciones contra filtrar nombres privados:
+### Qué paquetes se consultan
 
-- No se consultan dependencias que no vienen de un registry: `workspace:`, `link:`, `file:`, repositorios git ni URLs.
-- Los scopes que `~/.npmrc` o el `.npmrc` del proyecto asignan a otro registry no se consultan en `registry.npmjs.org`. Leer esos archivos no ejecuta nada. Esas dependencias quedan con `latest` en `unknown` y el motivo "registry privado".
-- `[network] exclude` lista nombres que nunca se consultan, por ejemplo `"@mi-empresa/*"` (design.md §13).
+La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta en `registry.npmjs.org` solo si se cumplen las tres condiciones:
+
+1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git ni URLs.
+2. El registry predeterminado efectivo es `https://registry.npmjs.org/`. Si la persona configuró otro registry predeterminado, por ejemplo un mirror o un registry de su empresa, no se consulta ningún paquete en el registry público.
+3. Su scope no está asignado a otro registry.
+
+Si alguna de las tres no se puede determinar, el paquete no se consulta. `latest` queda en `unknown` con el motivo: "registry privado" o "no se pudo determinar el origen".
+
+Cómo se determina el registry efectivo:
+
+- Se le pregunta a pnpm con `pnpm config list --json`, desde el directorio neutral (§7). La respuesta refleja todas las fuentes que pnpm lee: variables de entorno, `~/.npmrc`, el rc global de pnpm y el npmrc global. Leer esos archivos a mano arriesgaba omitir una fuente y filtrar nombres.
+- **La salida puede incluir tokens de autenticación.** Solo se extraen `registry` y las claves `@scope:registry`. El resto se descarta sin registrarse en logs, evidencia ni diagnósticos.
+- Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
+- En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada.
+
+El spec de cada paquete global de pnpm se lee del `package.json` del directorio global, que está junto a la ruta que devuelve `pnpm root --global`.
+
+Además, en el MVP, `[network] exclude` lista nombres que nunca se consultan, por ejemplo `"@mi-empresa/*"` (design.md §13).
 
 Cómo trabajar sin red:
 
