@@ -79,13 +79,18 @@ function stripPeerSuffix(version: string): string {
 
 type LockVersions = Map<string, string>;
 
-function pnpmLockVersions(text: string, importer: string): LockVersions {
+/**
+ * Versions pinned for one importer. Undefined when the lockfile does not
+ * describe that importer: a lockfile without `importers` describes only
+ * its own directory.
+ */
+function pnpmLockVersions(text: string, importer: string): LockVersions | undefined {
   const doc = parseYaml(text) as Record<string, unknown> | null;
   const out: LockVersions = new Map();
-  if (!doc || typeof doc !== "object") return out;
+  if (!doc || typeof doc !== "object") return importer === "." ? out : undefined;
   const importers = doc.importers as Record<string, Record<string, unknown>> | undefined;
-  const scope = importers ? importers[importer] : doc;
-  if (!scope) return out;
+  const scope = importers ? importers[importer] : importer === "." ? doc : undefined;
+  if (!scope) return importers && importer === "." ? out : undefined;
   for (const section of SECTIONS) {
     const entries = scope[section] as Record<string, unknown> | undefined;
     if (!entries) continue;
@@ -177,18 +182,31 @@ export async function scanProject(
     }
   }
 
-  // Lockfile: this project's directory first, then a workspace root above it.
+  // Lockfile: this project's own lockfiles first. A pnpm-lock.yaml above it
+  // counts only when it lists this project among its importers.
   let lockVersions: LockVersions | undefined;
   let lockSource: string | undefined;
   let lockUnsupported: string | undefined;
-  const pnpmLock = await findUp(fs, root, "pnpm-lock.yaml", stopAt);
+  const ownPnpmLock = join(root, "pnpm-lock.yaml");
   const npmLock = (await fs.exists(join(root, "package-lock.json")))
     ? join(root, "package-lock.json")
     : undefined;
   try {
+    let pnpmLock: string | undefined;
+    let pnpmVersions: LockVersions | undefined;
+    if (await fs.exists(ownPnpmLock)) {
+      pnpmLock = ownPnpmLock;
+      pnpmVersions = pnpmLockVersions(await fs.readText(ownPnpmLock), ".");
+    } else if (!npmLock && root !== stopAt) {
+      const above = await findUp(fs, dirname(root), "pnpm-lock.yaml", stopAt);
+      if (above) {
+        const importer = relative(dirname(above), root).split(sep).join("/");
+        pnpmVersions = pnpmLockVersions(await fs.readText(above), importer);
+        if (pnpmVersions) pnpmLock = above;
+      }
+    }
     if (pnpmLock) {
-      const importer = relative(dirname(pnpmLock), root).split(sep).join("/") || ".";
-      lockVersions = pnpmLockVersions(await fs.readText(pnpmLock), importer);
+      lockVersions = pnpmVersions;
       lockSource = pnpmLock;
       if (!scan.packageManager) {
         scan.packageManager = {

@@ -315,6 +315,44 @@ describe("project scan", () => {
     expect(scan.packageManager).toMatchObject({ value: "npm", evidence: [{ kind: "inference" }] });
     expect(scan.dependencies[0]?.resolved?.version).toBe("1.1.0");
   });
+  it("prefers the project's own package-lock.json over a pnpm-lock.yaml above it (F-08)", async () => {
+    const fs = memoryFs({
+      "/ws/pnpm-lock.yaml":
+        "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      a:\n        specifier: ^1.0.0\n        version: 1.9.9\n",
+      "/ws/app/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      "/ws/app/package-lock.json": JSON.stringify({
+        lockfileVersion: 3,
+        packages: { "": {}, "node_modules/a": { version: "1.2.0" } },
+      }),
+    });
+    const scan = await scanProject(fs, "/ws/app", "/");
+    expect(scan.packageManager?.value).toBe("npm");
+    expect(scan.dependencies[0]?.resolved).toMatchObject({
+      version: "1.2.0",
+      evidence: { source: "/ws/app/package-lock.json" },
+    });
+  });
+  it("ignores a pnpm-lock.yaml above the project unless it lists the project (F-08)", async () => {
+    const v5 = "lockfileVersion: 5.4\ndependencies:\n  a: 1.9.9\n";
+    const fs = memoryFs({
+      "/ws/pnpm-lock.yaml": v5,
+      "/ws/app/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+    });
+    const scan = await scanProject(fs, "/ws/app", "/");
+    expect(scan.packageManager).toBeUndefined();
+    expect(scan.dependencies[0]).toMatchObject({ resolvedUnknownReason: "no lockfile" });
+    expect(scan.dependencies[0]?.resolved).toBeUndefined();
+  });
+  it("uses a workspace pnpm-lock.yaml that lists the project as an importer", async () => {
+    const fs = memoryFs({
+      "/ws/pnpm-lock.yaml":
+        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  packages/app:\n    dependencies:\n      a:\n        specifier: ^1.0.0\n        version: 1.3.0\n",
+      "/ws/packages/app/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+    });
+    const scan = await scanProject(fs, "/ws/packages/app", "/");
+    expect(scan.packageManager?.value).toBe("pnpm");
+    expect(scan.dependencies[0]?.resolved?.version).toBe("1.3.0");
+  });
   it("marks unsupported lockfiles instead of guessing", async () => {
     const fs = memoryFs({
       "/p/package.json": JSON.stringify({ dependencies: { a: "^1" } }),
