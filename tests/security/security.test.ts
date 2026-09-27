@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockAgent } from "undici";
@@ -74,6 +74,8 @@ describe("CommandRunner allowlist (architecture.md §7)", () => {
         GIT_PAGER: "cat",
         GIT_TERMINAL_PROMPT: "0",
         GIT_OPTIONAL_LOCKS: "0",
+        GIT_NO_LAZY_FETCH: "1",
+        GIT_ALLOW_PROTOCOL: "",
         LC_ALL: "C",
       },
     });
@@ -129,6 +131,60 @@ describe("hardened git against a hostile repository", () => {
       env: inv.env,
       stdio: "ignore",
     });
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  // A partial clone whose tag points at a missing object: reading the tag
+  // makes git fetch it with the repository's own core.sshCommand (F-01).
+  function lazyFetchRepo(name: string, marker: string): string {
+    const repo = join(dir, name);
+    execFileSync("git", ["init", "-q", repo]);
+    execFileSync("git", [
+      "-C",
+      repo,
+      "-c",
+      "user.email=a@b",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "x",
+    ]);
+    for (const [key, value] of [
+      ["extensions.partialClone", "origin"],
+      ["remote.origin.url", "ssh://example.invalid/r.git"],
+      ["remote.origin.promisor", "true"],
+      ["core.sshCommand", `touch ${marker}; false`],
+    ] as const) {
+      execFileSync("git", ["-C", repo, "config", key, value]);
+    }
+    writeFileSync(join(repo, ".git", "refs", "tags", "v9.9.9"), `${"1".repeat(40)}\n`);
+    return repo;
+  }
+
+  it("control: an unhardened git describe on a hostile partial clone runs its sshCommand", () => {
+    const marker = join(dir, "lazy-control-pwned");
+    const repo = lazyFetchRepo("lazy-control", marker);
+    try {
+      execFileSync("git", ["describe", "--tags", "--long", "HEAD"], {
+        cwd: repo,
+        stdio: "ignore",
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+    } catch {
+      // git fails after the fetch attempt; the marker is what matters.
+    }
+    expect(existsSync(marker)).toBe(true);
+  });
+
+  it("the hardened environment never lazily fetches, so the sshCommand never runs", async () => {
+    const marker = join(dir, "lazy-hardened-pwned");
+    const repo = lazyFetchRepo("lazy-hardened", marker);
+    const runner = nodeCommandRunner({ neutralDir: async () => dir });
+    await runner.run({ command: "git.tags.head", repository: repo });
+    await runner.run({ command: "git.describe.head", repository: repo });
     expect(existsSync(marker)).toBe(false);
   });
 

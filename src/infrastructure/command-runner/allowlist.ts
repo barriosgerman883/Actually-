@@ -42,6 +42,11 @@ export function gitHardeningEnv(): Record<string, string> {
     GIT_PAGER: "cat",
     GIT_TERMINAL_PROMPT: "0",
     GIT_OPTIONAL_LOCKS: "0",
+    // A repository can declare itself a partial clone and point a ref at a
+    // missing object. Fetching it would run the repository's own transport
+    // configuration, such as core.sshCommand, through a shell.
+    GIT_NO_LAZY_FETCH: "1",
+    GIT_ALLOW_PROTOCOL: "",
   };
 }
 

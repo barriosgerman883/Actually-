@@ -11,7 +11,7 @@
 | Threat | Mitigation |
 |---|---|
 | actually modifies the system | Read-only by design; closed command allowlist; only the cache and state directories are written (RA-001, RA-010) |
-| A hostile repository runs code through git config (`core.fsmonitor`, pager) | Metadata read from files; git hardened; security test with a planted command |
+| A hostile repository runs code through git config (`core.fsmonitor`, pager, `core.sshCommand` through a lazy fetch) | Metadata read from files; git hardened, with no lazy fetch and no transport allowed; security tests with planted commands |
 | A hostile project runs code through pnpm (`.npmrc`, corepack) | pnpm never runs inside a project |
 | Shell injection | No shell; no argument comes from user or repository data |
 | Private names leak to public services | Origin rule: query only registry specs on a public default registry, with no private scope mapping; `exclude`; `--offline` |

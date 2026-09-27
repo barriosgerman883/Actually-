@@ -542,6 +542,8 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 | `GIT_PAGER=cat` | no abre paginadores |
 | `GIT_TERMINAL_PROMPT=0` | nunca pide credenciales |
 | `GIT_OPTIONAL_LOCKS=0` | no escribe locks opcionales dentro del repositorio |
+| `GIT_NO_LAZY_FETCH=1` | un repositorio que se declara clon parcial no puede hacer que git traiga objetos faltantes del remote |
+| `GIT_ALLOW_PROTOCOL` vacío | git no puede usar ningún transporte, así que la configuración de transporte del repositorio, como `core.sshCommand`, nunca se ejecuta |
 
 - Requiere Git 2.32 o posterior, la primera versión con `GIT_CONFIG_GLOBAL`.
 - `safe.directory` no se sobrescribe. Si Git rechaza un repositorio, los datos quedan `unknown` con ese motivo.
