@@ -53,12 +53,12 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-14 | baja | robustez | Respuestas sin límite de tamaño y `maxBuffer` informado como timeout | abierto |
 | F-15 | baja | desvío de docs | Comentario de `version.ts` cita un test que no existe | abierto |
 | F-16 | baja | desvío de docs | El cliente HTTP no implementa cancelación | abierto |
-| D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados |
-| D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados |
-| D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados |
-| D-04 | — | desvío de docs | La allowlist de hosts es obligatoria | resuelto: docs actualizados |
-| D-05 | — | desvío de docs | Directorio de binarios de pnpm | resuelto: docs actualizados |
-| D-06 | — | desvío de docs | Qué marca una raíz de proyecto | resuelto: docs actualizados |
+| D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
+| D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
+| D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
+| D-04 | — | desvío de docs | La allowlist de hosts es obligatoria | resuelto: docs actualizados en `5513334` |
+| D-05 | — | desvío de docs | Directorio de binarios de pnpm | resuelto: docs actualizados en `5513334` |
+| D-06 | — | desvío de docs | Qué marca una raíz de proyecto | resuelto: docs actualizados en `5513334` |
 
 ## Revisión del 2026-09-27
 

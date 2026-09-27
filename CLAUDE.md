@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `actually?` is a local-first, read-only CLI that inventories developer tools, repositories and dependencies. It compares installed and latest versions and explains every conclusion with evidence. The npm package is `@getactually/cli` and the command is `actually`.
 
-The MVP scope in `docs/prd.md` §13–14 is implemented: pnpm global packages, executables in allowed directories, Git repositories used as tools, projects (package.json, pnpm and npm lockfiles, node_modules), npm registry and GitHub resolvers, response cache, `status`, `status <tool>`, `explain`, `--json`.
+The MVP scope in `docs/prd.md` §13–14 is implemented, and open findings are listed in `docs/review/findings.md`: pnpm global packages, executables in allowed directories, Git repositories used as tools, projects (package.json, pnpm and npm lockfiles, node_modules), npm registry and GitHub resolvers, response cache, `status`, `status <tool>`, `explain`, `--json`.
 
 ## Commands
 
@@ -46,8 +46,23 @@ Each concept is defined in exactly one section. Other documents refer to it as `
 | JSON contract | `docs/design.md` §14 |
 | Git repo: project or tool | `docs/mvp.md` §5.3 |
 | Scope, phases, v0.1 | `docs/mvp.md`, `docs/prd.md` §13 |
+| Agent guardrails and the findings protocol | `docs/mvp.md` §9 (Agentes) |
 
 `docs/review/open-questions.md` records every resolved decision and the commit that applied it. `docs/review/2026-09-cross-review.md` is a snapshot that cites the original versions of the documents. Do not update it to match the current text.
+
+## When you find a problem
+
+The docs are the source of truth. If you find a bug, a failing check outside your task, or a difference between the code and the docs:
+
+1. Do not modify code, tests or docs to fix it, and do not work around it.
+2. Record it in `docs/review/findings.md` with the template there.
+3. Tell the user: the id, the location, the impact and a proposed fix.
+
+Fix a finding only when the user asks for it by id. If the user decides the code is right, update the canonical doc section instead and close the finding that way. A failure introduced by your own change in progress is not a finding: fixing it is part of that change.
+
+## Agent guardrails
+
+`.claude/settings.json` runs two `PreToolUse` hooks. `.claude/hooks/guard-bash.mjs` denies destructive or irreversible shell commands and asks before risky ones. `.claude/hooks/guard-edit.mjs` protects the guardrails themselves, `pnpm-lock.yaml`, `.git/` and the review snapshot, and rejects `.skip(`, `.only(`, `@ts-ignore` and `eslint-disable`. Do not try to get around a denial: tell the user what you needed and why. Only the user changes these files.
 
 ## Architecture invariants
 
