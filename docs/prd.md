@@ -316,6 +316,8 @@ contratos de providers, ADRs y requisitos de contribución.
 
 ### v0.1 — Primera versión refutable
 
+> **Absorbida por el MVP.** Se decidió implementar el MVP completo sin publicar antes esta versión reducida. La primera versión, `0.1.0`, incluye todo lo de la Fase 1. Esta sección queda como registro del plan original.
+
 Antes de completar el MVP, una versión mínima que alguien pueda instalar, ejecutar sobre su máquina real y tratar de desmentir. Su objetivo es contrastar el diseño con datos reales, no cubrir casos.
 
 Incluye:

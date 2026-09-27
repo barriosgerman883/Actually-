@@ -374,7 +374,7 @@ Reglas:
 
 - Se escribe siempre en stderr, antes de la primera consulta a la red, también con `--json`. stdout lleva solo el resultado, así que el documento JSON nunca incluye el aviso.
 - No pide confirmación, así que no interrumpe scripts ni el primer uso.
-- Se muestra una sola vez. El marcador es un archivo vacío en el directorio de estado local (architecture.md §3.5), no en la caché. Existe aunque no haya caché, como en la v0.1.
+- Se muestra una sola vez. El marcador es un archivo vacío en el directorio de estado local (architecture.md §3.5), no en la caché. Existe aunque la caché esté desactivada.
 - Borrar el marcador vuelve a mostrar el aviso. Si el marcador no se puede escribir, el aviso se muestra en cada ejecución: es preferible repetirlo a omitirlo.
 - No se muestra con `--offline` ni con la red desactivada.
 - Nombra solo los hosts que la versión instalada realmente consulta.
@@ -489,9 +489,24 @@ Ejemplo de `actually status --json`:
       }
     }
   ],
+  "projects": [],
   "diagnostics": []
 }
 ```
+
+`status --json` también incluye `projects`, con un elemento por cada proyecto inspeccionado:
+
+```json
+{
+  "root": "/home/me/projects/app",
+  "packageManager": { "state": "known", "value": "pnpm", "confidence": "high" },
+  "repository": { "state": "unknown", "reason": "no GitHub remote" },
+  "dependenciesChecked": 47,
+  "updatesAvailable": 3
+}
+```
+
+Las dependencias de ese proyecto están en `tools`, con `scope: "project"` y `projectRoot` igual a su `root`. `status <tool> --json` y `explain --json` devuelven solo `tools` y `diagnostics`.
 
 Reglas:
 

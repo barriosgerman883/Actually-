@@ -52,6 +52,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-13 | baja | robustez | Un 5xx ignora la entrada vencida de la caché | abierto |
 | F-14 | baja | robustez | Respuestas sin límite de tamaño y `maxBuffer` informado como timeout | abierto |
 | F-15 | baja | desvío de docs | Comentario de `version.ts` cita un test que no existe | abierto |
+| F-16 | baja | desvío de docs | El cliente HTTP no implementa cancelación | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados |
@@ -328,6 +329,19 @@ Propuesta:
 Cita `tests/unit/version.test.ts`. El test está en `tests/unit/config-output.test.ts:41`.
 
 Propuesta: corregir la ruta del comentario.
+
+### F-16 · El cliente HTTP no implementa cancelación
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** desvío de docs
+- **Ubicación:** `src/infrastructure/http/undici-http-client.ts`
+- **Detectado:** 2026-09-27, Claude Code
+- **Verificación:** por lectura
+
+architecture.md §8 lista "cancellation" entre las responsabilidades del `HttpClient`. Solo existe el timeout por request: no hay forma de cancelar los requests pendientes, por ejemplo ante Ctrl-C.
+
+Propuesta: aceptar un `AbortSignal` por ejecución, o quitar "cancellation" de §8 si no se necesita en el MVP.
 
 ### Desvíos donde el código es correcto
 
