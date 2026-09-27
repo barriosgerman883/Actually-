@@ -351,6 +351,28 @@ describe("HttpClient (architecture.md §8)", () => {
     });
   });
 
+  it("cancels pending and later requests when its signal aborts (F-16)", async () => {
+    const agent = new MockAgent();
+    agent.disableNetConnect();
+    const controller = new AbortController();
+    const http = undiciHttpClient({
+      userAgent: "actually/test",
+      signal: controller.signal,
+      dispatcher: agent,
+    });
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/slow/latest" })
+      .reply(200, { version: "1.0.0" }, { headers: { "content-type": "application/json" } })
+      .delay(5_000);
+    const pending = http.getJson("https://registry.npmjs.org/slow/latest");
+    setTimeout(() => controller.abort(), 20);
+    await expect(pending).rejects.toMatchObject({ kind: "cancelled" });
+    await expect(http.getJson("https://registry.npmjs.org/other/latest")).rejects.toMatchObject({
+      kind: "cancelled",
+    });
+  });
+
   it("maps connection failures to recoverable NetworkError", async () => {
     const { client: http } = client();
     await expect(http.getJson("https://registry.npmjs.org/y/latest")).rejects.toBeInstanceOf(

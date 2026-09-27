@@ -16,7 +16,7 @@ const REDIRECTS: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
  * returns a few kilobytes (architecture.md §14), so anything much larger is
  * not what was asked for.
  */
-async function readBody(response: Response, url: URL): Promise<string> {
+async function readBody(response: Response, url: URL, cancelled: () => boolean): Promise<string> {
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
     await response.body?.cancel();
@@ -37,6 +37,7 @@ async function readBody(response: Response, url: URL): Promise<string> {
     }
   } catch (error) {
     if (error instanceof NetworkError) throw error;
+    if (cancelled()) throw new NetworkError("cancelled", `request to ${url.host} was cancelled`);
     const name = (error as Error).name;
     if (name === "TimeoutError" || name === "AbortError") {
       throw new NetworkError("timeout", `request to ${url.host} timed out`);
@@ -50,6 +51,8 @@ export interface HttpClientOptions {
   userAgent: string;
   /** Sent only to api.github.com, and only when the user enabled it (§14). */
   githubToken?: string;
+  /** Cancels every pending and later request of this client (architecture.md §8). */
+  signal?: AbortSignal;
   /** For tests only. Defaults to a proxy-aware agent. */
   dispatcher?: Dispatcher;
 }
@@ -62,6 +65,11 @@ export interface HttpClientOptions {
 export function undiciHttpClient(options: HttpClientOptions): HttpClient {
   const dispatcher = options.dispatcher ?? new EnvHttpProxyAgent();
   let active = 0;
+  const cancelled = () => options.signal?.aborted === true;
+  const signalFor = () =>
+    options.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(TIMEOUT_MS)])
+      : AbortSignal.timeout(TIMEOUT_MS);
   const waiting: (() => void)[] = [];
 
   async function acquire(): Promise<void> {
@@ -105,10 +113,13 @@ export function undiciHttpClient(options: HttpClientOptions): HttpClient {
         response = await fetch(url, {
           headers: headersFor(url, baseHeaders),
           dispatcher,
-          signal: AbortSignal.timeout(TIMEOUT_MS),
+          signal: signalFor(),
           redirect: "manual",
         });
       } catch (error) {
+        if (cancelled()) {
+          throw new NetworkError("cancelled", `request to ${url.host} was cancelled`);
+        }
         const name = (error as Error).name;
         if (name === "TimeoutError" || name === "AbortError") {
           throw new NetworkError("timeout", `request to ${url.host} timed out`);
@@ -136,7 +147,7 @@ export function undiciHttpClient(options: HttpClientOptions): HttpClient {
     });
     let body: unknown = undefined;
     if (response.status !== 304) {
-      const text = await readBody(response, url);
+      const text = await readBody(response, url, cancelled);
       if (text.length > 0 && (responseHeaders["content-type"] ?? "").includes("json")) {
         try {
           body = JSON.parse(text);
@@ -157,6 +168,9 @@ export function undiciHttpClient(options: HttpClientOptions): HttpClient {
         accept: "application/json",
         ...requestOptions.headers,
       };
+      if (cancelled()) {
+        throw new NetworkError("cancelled", `request to ${url.host} was cancelled`);
+      }
       await acquire();
       try {
         try {
@@ -166,7 +180,8 @@ export function undiciHttpClient(options: HttpClientOptions): HttpClient {
           if (
             !(error instanceof NetworkError) ||
             error.kind === "invalid-response" ||
-            error.kind === "host-not-allowed"
+            error.kind === "host-not-allowed" ||
+            error.kind === "cancelled"
           )
             throw error;
         }

@@ -23,6 +23,8 @@ export interface Io {
   cwd: string;
   stdoutIsTTY: boolean;
   noColorEnv: boolean;
+  /** Aborted when the user interrupts the run. */
+  signal?: AbortSignal;
 }
 
 export type RuntimeFactory = (options: RuntimeOptions) => Promise<Runtime>;
@@ -108,6 +110,7 @@ export async function run(argv: string[], io: Io, createRuntime: RuntimeFactory)
       noCache: values["no-cache"] === true,
       cwd: io.cwd,
       notice: (text) => io.stderr(`${text}\n`),
+      signal: io.signal,
     });
     const colorSetting = runtime.config.output.color;
     const color =
