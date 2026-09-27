@@ -37,25 +37,25 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 
 | Id | Severidad | Tipo | Título | Estado |
 |---|---|---|---|---|
-| F-01 | crítica | seguridad | Un repositorio hostil ejecuta comandos con git a través de lazy fetch | abierto |
-| F-02 | alta | seguridad | Las redirecciones HTTP saltean la allowlist de hosts | abierto |
-| F-03 | alta | privacidad | Se ignora el `.npmrc` de la raíz de un workspace de pnpm | abierto |
-| F-04 | media | privacidad | Un `.npmrc` ilegible no impide consultar | abierto |
-| F-05 | media | seguridad | Secuencias de escape de datos no confiables llegan a la terminal | abierto |
-| F-06 | media | seguridad | El directorio neutral puede caer en `/tmp` | abierto |
-| F-07 | media | corrección | `status --global` no detecta repositorios usados como herramienta | abierto |
-| F-08 | media | corrección | Un `pnpm-lock.yaml` de un directorio superior le gana al lockfile del proyecto | abierto |
-| F-09 | baja | corrección | Las rutas de configuración no se resuelven con realpath | abierto |
-| F-10 | baja | evidencia | "no releases" como hecho cuando sí hay una release | abierto |
-| F-11 | baja | evidencia | Cualquier fallo de `git describe` se registra como "no reachable tag" | abierto |
-| F-12 | baja | desvío de docs | No hay diagnósticos `error` ni `toolId` | abierto |
-| F-13 | baja | robustez | Un 5xx ignora la entrada vencida de la caché | abierto |
-| F-14 | baja | robustez | Respuestas sin límite de tamaño y `maxBuffer` informado como timeout | abierto |
-| F-15 | baja | desvío de docs | Comentario de `version.ts` cita un test que no existe | abierto |
-| F-16 | baja | desvío de docs | El cliente HTTP no implementa cancelación | abierto |
+| F-01 | crítica | seguridad | Un repositorio hostil ejecuta comandos con git a través de lazy fetch | resuelto: código corregido en `e99c2d8` |
+| F-02 | alta | seguridad | Las redirecciones HTTP saltean la allowlist de hosts | resuelto: código corregido en `2bd5301` |
+| F-03 | alta | privacidad | Se ignora el `.npmrc` de la raíz de un workspace de pnpm | resuelto: código corregido en `52a81ed` |
+| F-04 | media | privacidad | Un `.npmrc` ilegible no impide consultar | resuelto: código corregido en `52a81ed` |
+| F-05 | media | seguridad | Secuencias de escape de datos no confiables llegan a la terminal | resuelto: código corregido en `a4b617e` |
+| F-06 | media | seguridad | El directorio neutral puede caer en `/tmp` | resuelto: código corregido en `739946e` |
+| F-07 | media | corrección | `status --global` no detecta repositorios usados como herramienta | resuelto: código corregido en `c4e5131` |
+| F-08 | media | corrección | Un `pnpm-lock.yaml` de un directorio superior le gana al lockfile del proyecto | resuelto: código corregido en `ae11420` |
+| F-09 | baja | corrección | Las rutas de configuración no se resuelven con realpath | resuelto: código corregido en `c4e5131` |
+| F-10 | baja | evidencia | "no releases" como hecho cuando sí hay una release | resuelto: código corregido en `29b0c13` |
+| F-11 | baja | evidencia | Cualquier fallo de `git describe` se registra como "no reachable tag" | resuelto: código corregido en `397c34f` |
+| F-12 | baja | desvío de docs | No hay diagnósticos `error` ni `toolId` | resuelto: código corregido en `f853df0` |
+| F-13 | baja | robustez | Un 5xx ignora la entrada vencida de la caché | resuelto: código corregido en `021919f` |
+| F-14 | baja | robustez | Respuestas sin límite de tamaño y `maxBuffer` informado como timeout | resuelto: código corregido en `1d0207b` |
+| F-15 | baja | desvío de docs | Comentario de `version.ts` cita un test que no existe | resuelto: código corregido en `eafeab9` |
+| F-16 | baja | desvío de docs | El cliente HTTP no implementa cancelación | resuelto: código corregido en `447c9c9` |
 | F-17 | baja | robustez | El guard de Bash bloquea lecturas con `sed -n` de archivos de `.claude/` | abierto |
 | F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | resuelto: código corregido en `54ec142` |
-| F-19 | media | seguridad | `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos | abierto |
+| F-19 | media | seguridad | `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos | resuelto: código corregido en `940c5ed` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -69,7 +69,7 @@ Revisión completa de `src/`, los tests, la CI y los docs, hecha por Claude Code
 
 ### F-01 · Un repositorio hostil ejecuta comandos con git a través de lazy fetch
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `e99c2d8`
 - **Severidad:** crítica
 - **Tipo:** seguridad
 - **Ubicación:** `src/infrastructure/command-runner/allowlist.ts:38-46`
@@ -93,9 +93,11 @@ Propuesta:
 - Documentar ambos en architecture.md §7.
 - Sumar este repositorio hostil a `tests/security`, con su control.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. git recibe `GIT_NO_LAZY_FETCH=1` y `GIT_ALLOW_PROTOCOL` vacío, documentados en architecture.md §7 y en el modelo de amenazas. `tests/security/security.test.ts` arma el clon parcial hostil: el control sin endurecer crea el marcador, y el runner no.
+
 ### F-02 · Las redirecciones HTTP saltean la allowlist de hosts
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `2bd5301`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `src/infrastructure/http/undici-http-client.ts:50`
@@ -112,9 +114,11 @@ Propuesta:
 - GitHub usa 301 dentro de `api.github.com` para los repositorios renombrados, así que conviene no rechazar todas las redirecciones.
 - Agregar el caso a `tests/security`.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Las redirecciones se siguen a mano, hasta cinco, solo por https y hacia hosts permitidos; el token se recalcula en cada salto. Tests con `MockAgent`: la redirección a `evil.example` se rechaza sin tocar ese host, y un 301 dentro de `api.github.com` se sigue.
+
 ### F-03 · Se ignora el `.npmrc` de la raíz de un workspace de pnpm
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `52a81ed`
 - **Severidad:** alta
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/project/project.ts:273`, `src/application/inventory.ts:387`
@@ -137,9 +141,11 @@ Propuesta:
 - Buscar hacia arriba `pnpm-workspace.yaml`, como ya se hace con `pnpm-lock.yaml`, y aplicar el `.npmrc` de esa raíz antes que el del proyecto.
 - Si hay un `.npmrc` en un directorio intermedio que no se sabe interpretar, dejar el registry como indeterminado.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Se aplica el `.npmrc` de la raíz del workspace (`pnpm-workspace.yaml`) antes que el del proyecto, y un `.npmrc` intermedio deja el registry indeterminado. Documentado en architecture.md §8. Tests en `tests/integration/inventory.test.ts`: la reproducción del hallazgo ya no consulta nada.
+
 ### F-04 · Un `.npmrc` ilegible no impide consultar
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `52a81ed`
 - **Severidad:** media
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/project/project.ts:273-284`, `src/application/inventory.ts:387-389`
@@ -152,9 +158,11 @@ architecture.md §8: si una condición no se puede determinar, no se consulta.
 
 Propuesta: en ese caso, el registry del proyecto pasa a `unknown`, con ese motivo.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Un `.npmrc` que existe y no se puede leer deja el registry `unknown` con ese motivo, además del diagnóstico. Test en `tests/integration/inventory.test.ts`.
+
 ### F-05 · Secuencias de escape de datos no confiables llegan a la terminal
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `a4b617e`
 - **Severidad:** media
 - **Tipo:** seguridad
 - **Ubicación:** `src/cli/output/human.ts`
@@ -178,9 +186,11 @@ Eso contradice la promesa de que cada conclusión se puede verificar con su evid
 
 Propuesta: reemplazar los caracteres de control (C0 salvo `\n`, C1 y DEL) por una forma visible, por ejemplo `\x1b`, en todo texto que venga de datos antes de imprimirlo. La salida JSON ya los escapa.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Todo texto que viene de datos se muestra con sus caracteres de control como `\xNN` antes de darle estilo, también en los mensajes de error. Tests en `tests/security/security.test.ts`, y verificado sobre `dist/` con la dependencia de la reproducción.
+
 ### F-06 · El directorio neutral puede caer en `/tmp`
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `739946e`
 - **Severidad:** media
 - **Tipo:** seguridad
 - **Ubicación:** `src/infrastructure/local-state/file-local-state.ts:21-30`
@@ -197,9 +207,11 @@ architecture.md §7: el directorio neutral está dentro del estado local de `act
 
 Propuesta: sin un directorio neutral válido, los comandos de pnpm fallan con un diagnóstico, y los datos quedan `unknown`.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Sin directorio neutral válido, pnpm no se lanza y sus datos quedan `unknown`; git no depende de él. Documentado en architecture.md §7. Tests en `tests/security/security.test.ts`.
+
 ### F-07 · `status --global` no detecta repositorios usados como herramienta
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `c4e5131`
 - **Severidad:** media
 - **Tipo:** corrección
 - **Ubicación:** `src/application/inventory.ts:107-110`, `:139`
@@ -217,9 +229,11 @@ mvp.md §5.3 define que ese repositorio es una herramienta, sin depender del fla
 
 Propuesta: buscar los repositorios de `scan.paths` también con `--global`, sin escanear sus dependencias como proyectos.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Los repositorios de `scan.paths` se buscan también con `--global`, sin escanearlos como proyectos. Test en `tests/integration/inventory.test.ts`.
+
 ### F-08 · Un `pnpm-lock.yaml` de un directorio superior le gana al lockfile del proyecto
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `ae11420`
 - **Severidad:** media
 - **Tipo:** corrección
 - **Ubicación:** `src/providers/project/project.ts:184-201`, `:87`
@@ -238,9 +252,11 @@ Propuesta:
 - Priorizar los lockfiles del directorio del proyecto.
 - Usar un `pnpm-lock.yaml` superior solo si tiene `importers` con la ruta de este proyecto.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Primero los lockfiles del propio proyecto; un `pnpm-lock.yaml` superior solo cuenta si lista el proyecto en `importers`. Tests con los dos escenarios de la reproducción en `tests/unit/providers.test.ts`.
+
 ### F-09 · Las rutas de configuración no se resuelven con realpath
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `c4e5131`
 - **Severidad:** baja
 - **Tipo:** corrección
 - **Ubicación:** `src/application/inventory.ts:147`
@@ -251,9 +267,11 @@ Propuesta:
 
 Propuesta: resolver con `realpath` las raíces antes de comparar.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Las raíces configuradas se resuelven con `realpath` antes de comparar. Test sobre el filesystem real, con `scan.paths` a través de un symlink.
+
 ### F-10 · "no releases" como hecho cuando sí hay una release
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `29b0c13`
 - **Severidad:** baja
 - **Tipo:** evidencia
 - **Ubicación:** `src/providers/github/resolver.ts:79-95`, `:132`
@@ -264,9 +282,11 @@ Si la última release tiene un tag que no es semver, por ejemplo `nightly`, se c
 
 Propuesta: registrar "latest release is tagged nightly, which is not semver".
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. La evidencia dice "latest release is tagged nightly, which is not semver". Test en `tests/unit/providers.test.ts`.
+
 ### F-11 · Cualquier fallo de `git describe` se registra como "no reachable tag"
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `397c34f`
 - **Severidad:** baja
 - **Tipo:** evidencia
 - **Ubicación:** `src/providers/git/repository.ts:169-175`
@@ -277,9 +297,11 @@ Un timeout o un rechazo por `safe.directory` produce el `fact` "no reachable tag
 
 Propuesta: afirmarlo solo cuando git dice que no encontró nombres. Para los demás fallos, registrar el mensaje.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. "no reachable tag" solo si git dice `No names found` o `No tags can describe`; cualquier otro fallo registra el mensaje de git. Tests en `tests/unit/providers.test.ts`.
+
 ### F-12 · No hay diagnósticos `error` ni `toolId`
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `f853df0`
 - **Severidad:** baja
 - **Tipo:** desvío de docs
 - **Ubicación:** `src/application/inventory.ts`, `src/cli/run.ts:139`
@@ -290,9 +312,11 @@ architecture.md §13 dice que un provider que falla emite un diagnóstico `error
 
 Propuesta: completar `toolId` cuando el diagnóstico es de una herramienta, y decidir si el fallo de un comando de git o pnpm es `error`.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Un comando de git que falla en un repositorio usado como herramienta, un repositorio declarado que no es de Git, y los fallos de `pnpm --version` o `pnpm list` emiten `error`, con `toolId` cuando hay herramienta, que queda en `status: "error"`. Test en `tests/integration/inventory.test.ts`.
+
 ### F-13 · Un 5xx ignora la entrada vencida de la caché
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `021919f`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `src/providers/shared/cached-get.ts:57-82`
@@ -303,9 +327,11 @@ Si el servidor responde 5xx dos veces, el resultado es "registry answered 503", 
 
 Propuesta: tratar un 5xx después del reintento como red no disponible.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Un 5xx después del reintento cuenta como red no disponible: se usa la entrada vencida, marcada. Test en `tests/unit/providers.test.ts`.
+
 ### F-14 · Respuestas sin límite de tamaño y `maxBuffer` informado como timeout
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `1d0207b`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `src/infrastructure/http/undici-http-client.ts:65`, `src/infrastructure/command-runner/node-command-runner.ts:47`
@@ -320,9 +346,11 @@ Propuesta:
 - Cortar las respuestas que superen un tamaño razonable, por ejemplo 5 MB.
 - Distinguir `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Los cuerpos se leen por stream y se cortan a los 5 MB (documentado en architecture.md §8), y `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` se informa como "output too large". Tests en `tests/security/security.test.ts` y `tests/unit/command-runner.test.ts`.
+
 ### F-15 · Comentario de `version.ts` cita un test que no existe
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `eafeab9`
 - **Severidad:** baja
 - **Tipo:** desvío de docs
 - **Ubicación:** `src/version.ts:1`
@@ -333,9 +361,11 @@ Cita `tests/unit/version.test.ts`. El test está en `tests/unit/config-output.te
 
 Propuesta: corregir la ruta del comentario.
 
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. El comentario cita `tests/unit/config-output.test.ts`.
+
 ### F-16 · El cliente HTTP no implementa cancelación
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `447c9c9`
 - **Severidad:** baja
 - **Tipo:** desvío de docs
 - **Ubicación:** `src/infrastructure/http/undici-http-client.ts`
@@ -345,6 +375,8 @@ Propuesta: corregir la ruta del comentario.
 architecture.md §8 lista "cancellation" entre las responsabilidades del `HttpClient`. Solo existe el timeout por request: no hay forma de cancelar los requests pendientes, por ejemplo ante Ctrl-C.
 
 Propuesta: aceptar un `AbortSignal` por ejecución, o quitar "cancellation" de §8 si no se necesita en el MVP.
+
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. El cliente HTTP acepta un `AbortSignal` que cancela los requests pendientes y los siguientes, sin reintento; la CLI lo aborta con Ctrl-C. Test en `tests/security/security.test.ts`.
 
 ### F-17 · El guard de Bash bloquea lecturas con `sed -n` de archivos de `.claude/`
 
@@ -358,6 +390,8 @@ Propuesta: aceptar un `AbortSignal` por ejecución, o quitar "cancellation" de �
 La regla que protege `.claude/settings*.json` y `.claude/hooks/` permite solo los comandos de `READ_ONLY`. `sed` y `awk` no están en esa lista, porque pueden escribir. Por eso `sed -n 50,56p .claude/hooks/guard-edit.mjs`, que solo lee, se bloquea. Es un falso positivo del lado seguro: la herramienta Read sigue sirviendo para leer esos archivos.
 
 Propuesta: permitir `sed` sin `-i` y `awk` sin redirecciones, con casos de test para ambos.
+
+Lo mismo pasa con `git check-ignore .claude/settings.local.json`: `check-ignore` solo lee, pero no está en `GIT_SAFE_ON_GUARDS`. La propuesta suma `check-ignore` a esa lista. No se corrige desde la sesión: `.claude/hooks/` solo lo cambia la persona responsable.
 
 ### F-18 · `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee
 
@@ -384,7 +418,7 @@ Propuesta: sacar `node`, `npx` y `pnpm` de `READ_ONLY` y permitir solo `node .cl
 
 ### F-19 · `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `940c5ed`
 - **Severidad:** media
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-bash.mjs` (`READ_ONLY`)
@@ -396,6 +430,8 @@ Propuesta: sacar `node`, `npx` y `pnpm` de `READ_ONLY` y permitir solo `node .cl
 Propuesta: permitir `prettier` y `eslint` sobre los archivos de los frenos solo sin `--write`, `-w` ni `--fix`, con casos de test.
 
 Así se usó, una sola vez, con autorización explícita de la persona responsable: el 2026-09-27 se corrió `prettier --write .claude/hooks/guard-bash.mjs` para reformatear con la configuración del repo el archivo que corrige F-18. Solo cambió el formato.
+
+**Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable ("solo por esta vez"): `prettier` y `eslint` solo cuentan como lectores de los archivos de los frenos sin `--write`, `-w` ni `--fix`, y esas opciones se bloquean también sobre `.claude` entero. Casos en `tests/security/agent-guard.test.ts`.
 
 ### Desvíos donde el código es correcto
 
