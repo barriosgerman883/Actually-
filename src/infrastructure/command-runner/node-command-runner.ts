@@ -1,9 +1,34 @@
 import { execFile } from "node:child_process";
-import type { CommandResult, CommandRunner } from "../../core/ports.js";
+import type { AllowedCommand, CommandResult, CommandRunner } from "../../core/ports.js";
 import { buildInvocation, COMMAND_TABLE } from "./allowlist.js";
 
 const TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 16 * 1024 * 1024;
+
+/** Maps a failed execFile call to a result. Pure, so it can be tested alone. */
+export function failureResult(
+  error: Error,
+  stderr: string,
+  command: AllowedCommand,
+  binary: string,
+): CommandResult {
+  const err = error as NodeJS.ErrnoException & { killed?: boolean; code?: unknown };
+  if (err.code === "ENOENT") {
+    return { ok: false, reason: "not-found", message: `${binary} is not installed or not in PATH` };
+  }
+  // execFile also kills the process when output exceeds maxBuffer.
+  if (err.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+    return { ok: false, reason: "failed", message: `${command} failed: output too large` };
+  }
+  if (err.killed) return { ok: false, reason: "timeout", message: `${command} timed out` };
+  const firstLine = stderr.trim().split("\n")[0] ?? "";
+  return {
+    ok: false,
+    reason: "failed",
+    message: `${command} failed${firstLine ? `: ${firstLine}` : ""}`,
+    exitCode: typeof err.code === "number" ? err.code : undefined,
+  };
+}
 
 /**
  * The only component that spawns processes (RA-001). It runs commands from
@@ -49,24 +74,7 @@ export function nodeCommandRunner(options: { neutralDir: () => Promise<string> }
               resolve({ ok: true, stdout: String(stdout) });
               return;
             }
-            const err = error as NodeJS.ErrnoException & { killed?: boolean; code?: unknown };
-            if (err.code === "ENOENT") {
-              resolve({
-                ok: false,
-                reason: "not-found",
-                message: `${invocation.binary} is not installed or not in PATH`,
-              });
-            } else if (err.killed) {
-              resolve({ ok: false, reason: "timeout", message: `${request.command} timed out` });
-            } else {
-              const firstLine = String(stderr).trim().split("\n")[0] ?? "";
-              resolve({
-                ok: false,
-                reason: "failed",
-                message: `${request.command} failed${firstLine ? `: ${firstLine}` : ""}`,
-                exitCode: typeof err.code === "number" ? err.code : undefined,
-              });
-            }
+            resolve(failureResult(error, String(stderr), request.command, invocation.binary));
           },
         );
       });

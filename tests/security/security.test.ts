@@ -338,6 +338,19 @@ describe("HttpClient (architecture.md §8)", () => {
     });
   });
 
+  it("cuts responses larger than 5 MB (F-14)", async () => {
+    const { agent, client: http } = client();
+    const big = JSON.stringify({ version: "1.0.0", padding: "x".repeat(6 * 1024 * 1024) });
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/big/latest" })
+      .reply(200, big, { headers: { "content-type": "application/json" } });
+    await expect(http.getJson("https://registry.npmjs.org/big/latest")).rejects.toMatchObject({
+      kind: "invalid-response",
+      message: "response from registry.npmjs.org is too large",
+    });
+  });
+
   it("maps connection failures to recoverable NetworkError", async () => {
     const { client: http } = client();
     await expect(http.getJson("https://registry.npmjs.org/y/latest")).rejects.toBeInstanceOf(

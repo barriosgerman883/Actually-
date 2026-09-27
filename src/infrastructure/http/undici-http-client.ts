@@ -1,4 +1,4 @@
-import { EnvHttpProxyAgent, fetch, type Dispatcher } from "undici";
+import { EnvHttpProxyAgent, fetch, type Dispatcher, type Response } from "undici";
 import { NetworkError } from "../../core/errors.js";
 import type { HttpClient, HttpResponse } from "../../core/ports.js";
 
@@ -8,7 +8,43 @@ export const ALLOWED_HOSTS: ReadonlySet<string> = new Set(["registry.npmjs.org",
 const TIMEOUT_MS = 10_000;
 const MAX_CONCURRENT = 8;
 const MAX_REDIRECTS = 5;
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const REDIRECTS: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Reads a response body up to MAX_BODY_BYTES. The npm manifest endpoint
+ * returns a few kilobytes (architecture.md §14), so anything much larger is
+ * not what was asked for.
+ */
+async function readBody(response: Response, url: URL): Promise<string> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    await response.body?.cancel();
+    throw new NetworkError("invalid-response", `response from ${url.host} is too large`);
+  }
+  if (!response.body) return "";
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  try {
+    for await (const chunk of response.body) {
+      size += chunk.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        await response.body.cancel().catch(() => {});
+        throw new NetworkError("invalid-response", `response from ${url.host} is too large`);
+      }
+      text += decoder.decode(chunk, { stream: true });
+    }
+  } catch (error) {
+    if (error instanceof NetworkError) throw error;
+    const name = (error as Error).name;
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new NetworkError("timeout", `request to ${url.host} timed out`);
+    }
+    throw new NetworkError("network", `could not read the response from ${url.host}`);
+  }
+  return text + decoder.decode();
+}
 
 export interface HttpClientOptions {
   userAgent: string;
@@ -100,7 +136,7 @@ export function undiciHttpClient(options: HttpClientOptions): HttpClient {
     });
     let body: unknown = undefined;
     if (response.status !== 304) {
-      const text = await response.text();
+      const text = await readBody(response, url);
       if (text.length > 0 && (responseHeaders["content-type"] ?? "").includes("json")) {
         try {
           body = JSON.parse(text);

@@ -573,7 +573,7 @@ Todos los requests pasan por `HttpClient`.
 Responsabilidades:
 
 - allowlist obligatoria de hosts, solo con https, que también vale para cada redirección;
-- timeout;
+- timeout y tamaño máximo de respuesta (5 MB);
 - user-agent;
 - retries limitados;
 - rate-limit handling;
