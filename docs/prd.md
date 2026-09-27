@@ -145,8 +145,10 @@ para consumir los resultados desde otra herramienta.
 
 ### HU6
 Como usuario preocupado por privacidad,
-quiero que el análisis ocurra localmente,
-para no enviar información de mis proyectos a un servidor.
+quiero saber exactamente qué sale de mi máquina y poder evitarlo,
+para decidir qué comparto con npm y GitHub.
+
+El análisis ocurre localmente y `actually?` no tiene servidor. Pero consultar la última versión de un paquete o repositorio le revela su nombre al servicio consultado (architecture.md §8).
 
 ---
 
@@ -209,6 +211,8 @@ Read-only en MVP. La única escritura es la caché propia de `actually?`, fuera 
 
 ### RNF-002 — Privacidad
 Sin telemetría obligatoria.
+
+Transparencia de red: antes de la primera consulta, el usuario sabe qué se envía y a quién, y puede trabajar sin red (architecture.md §8, design.md §12).
 
 ### RNF-003 — Performance
 No recorrer todo el filesystem por defecto.
@@ -309,6 +313,22 @@ contratos de providers, ADRs y requisitos de contribución.
 - guardrails;
 - CI;
 - docs.
+
+### v0.1 — Primera versión refutable
+
+Antes de completar el MVP, una versión mínima que alguien pueda instalar, ejecutar sobre su máquina real y tratar de desmentir. Su objetivo es contrastar el diseño con datos reales, no cubrir casos.
+
+Incluye:
+
+- `actually status --global` para los paquetes globales de pnpm;
+- la última versión desde el npm registry;
+- `actually explain <tool>` y `--json`;
+- el aviso de red de la primera ejecución y `--offline`;
+- una plantilla de issue "actually was wrong" que pide la salida de `explain`.
+
+No incluye Git, GitHub, proyectos, caché ni archivo de configuración. Sin GitHub, la caché todavía no es necesaria.
+
+Criterio de éxito: `@getactually/cli@0.1.0` se instala con pnpm, alguien lo ejecuta sobre su máquina real, y cada resultado incorrecto se puede reportar con la salida de `explain`.
 
 ### Fase 1 — MVP
 

@@ -117,7 +117,7 @@ Preferir:
 
 ```text
 2 updates available
-1 major version change
+1 may include breaking changes
 ```
 
 ---
@@ -351,6 +351,35 @@ Save configuration? [Y/n]
 
 No debe seleccionar directorios sensibles indiscriminadamente.
 
+### Aviso de red en la primera ejecución
+
+Antes de la primera consulta a la red, `actually` explica qué va a enviar y a quién:
+
+```text
+actually checks online for the latest versions of what it finds.
+
+It sends package names to registry.npmjs.org and repository names
+(owner/repo) to api.github.com. It never sends file paths, file
+contents, project names or installed versions.
+
+Those services can see which names were checked and your IP address.
+
+Run without network:  actually status --offline
+Turn it off:          set [network] enabled = false in the config
+
+This notice is shown once.
+```
+
+Reglas:
+
+- Se escribe en stderr. Nunca aparece en la salida de `--json`.
+- No pide confirmación, así que no interrumpe scripts ni el primer uso.
+- Se muestra una sola vez. El marcador es un archivo vacío en el directorio de caché, y se escribe aunque la caché esté desactivada.
+- No se muestra con `--offline` ni con la red desactivada.
+- Nombra solo los hosts que la versión instalada realmente consulta.
+
+El detalle completo está en architecture.md §8.
+
 ---
 
 ## 13. Configuración
@@ -372,11 +401,15 @@ bin_paths = []
 [[tools.git]]
 path = "~/tools/gstack"
 
+# Qué se envía y a quién: architecture.md §8.
 [network]
 enabled = true
-# Usar GITHUB_TOKEN o GH_TOKEN del entorno, solo para ampliar
-# el límite de requests (architecture.md §14).
-github_token = true
+# Nombres que nunca se consultan, por ejemplo "@mi-empresa/*".
+exclude = []
+# Usar GITHUB_TOKEN o GH_TOKEN para ampliar el límite de requests.
+# Apagado por defecto: le permite a GitHub asociar las consultas
+# a tu cuenta (architecture.md §14).
+github_token = false
 
 [cache]
 enabled = true
@@ -415,6 +448,7 @@ Ejemplo de `actually status --json`:
       "scope": "global",
       "status": "outdated",
       "updateType": "major",
+      "mayBreak": true,
       "confidence": "high",
       "versions": {
         "requested": { "state": "not-applicable" },
@@ -451,7 +485,8 @@ Reglas:
 
 - Ningún claim se omite. Si no aplica, es `not-applicable`. Si no se sabe, es `unknown` con `reason`.
 - `null` no se usa para representar ausencia de información.
-- `updateType` aparece solo cuando `status` es `outdated`. No es un claim: se deriva de las versiones.
+- `updateType` y `mayBreak` aparecen solo cuando `status` es `outdated`. No son claims: se derivan de las versiones.
+- `updateType` dice qué número cambió. `mayBreak` estima, según semver, si el cambio puede ser incompatible. De `0.2.0` a `0.3.0` es `minor` con `mayBreak: true` (architecture.md §5).
 - `status --json` no incluye `evidence`. `explain --json` sí.
 - `diagnostics` siempre está presente, aunque esté vacío. Su forma está en architecture.md §13.
 
