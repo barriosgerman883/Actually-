@@ -167,10 +167,13 @@ export async function installedFromTags(
       });
     }
   } else {
+    // Only git saying it found no names means there is no tag. A timeout
+    // or a safe.directory refusal says nothing about tags.
+    const noNames = /No names found|No tags can describe/.test(describe.message);
     info.unknownEvidence.push({
       kind: "fact",
       source: "git describe --tags --long HEAD",
-      description: "no reachable tag",
+      description: noNames ? "no reachable tag" : describe.message,
     });
   }
   return info;

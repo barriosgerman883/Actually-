@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { NetworkError } from "../../src/core/errors.js";
-import { parseRemotes, readRepository } from "../../src/providers/git/repository.js";
+import {
+  installedFromTags,
+  parseRemotes,
+  readRepository,
+} from "../../src/providers/git/repository.js";
 import { resolveGithubLatest } from "../../src/providers/github/resolver.js";
 import { parseGithubUrl } from "../../src/providers/github/url.js";
 import { decideOrigin, isRegistrySpec } from "../../src/providers/npm-registry/origin.js";
@@ -10,10 +14,12 @@ import { scanProject } from "../../src/providers/project/project.js";
 import { cachedGet } from "../../src/providers/shared/cached-get.js";
 import {
   fakeHttp,
+  fakeRunner,
   json,
   memoryCache,
   memoryFs,
   netContext,
+  ok,
   PNPM_CONFIG_PUBLIC,
 } from "../helpers/fakes.js";
 
@@ -234,6 +240,20 @@ describe("GitHub", () => {
     });
     expect(claim).toMatchObject({ state: "known", value: "2.1.0", confidence: "medium" });
   });
+  it("says the latest release is not semver instead of claiming there are none (F-10)", async () => {
+    const http = fakeHttp({
+      [`${base}/releases/latest`]: json({ tag_name: "nightly" }),
+      [`${base}/tags?per_page=100`]: json([{ name: "v1.2.0" }]),
+    });
+    const claim = await resolveGithubLatest({ owner: "o", repo: "r" }, netContext(http), {
+      rateLimited: false,
+      diagnostics: [],
+    });
+    expect(claim).toMatchObject({ state: "known", value: "1.2.0" });
+    const descriptions = claim.state === "known" ? claim.evidence.map((e) => e.description) : [];
+    expect(descriptions).toContain("latest release is tagged nightly, which is not semver");
+    expect(descriptions).not.toContain("no releases");
+  });
   it("stops asking GitHub once the rate limit is reached", async () => {
     const http = fakeHttp({
       [`${base}/releases/latest`]: {
@@ -248,6 +268,32 @@ describe("GitHub", () => {
     expect(state.diagnostics).toHaveLength(1);
     await resolveGithubLatest({ owner: "o", repo: "r2" }, netContext(http), state);
     expect(http.calls).toHaveLength(1);
+  });
+});
+
+describe("installed version from tags", () => {
+  const repo = { root: "/r", gitDir: "/r/.git", remotes: [], commit: "a".repeat(40) };
+  async function describeEvidence(message: string) {
+    const runner = fakeRunner({
+      "git.tags.head": ok(""),
+      "git.describe.head": { ok: false, reason: "failed", message },
+    });
+    const info = await installedFromTags(runner, repo);
+    return info.unknownEvidence.find((e) => e.source.startsWith("git describe"))?.description;
+  }
+  it("records no reachable tag only when git found no names (F-11)", async () => {
+    expect(
+      await describeEvidence(
+        "git.describe.head failed: fatal: No names found, cannot describe anything.",
+      ),
+    ).toBe("no reachable tag");
+  });
+  it("records any other failure as it is (F-11)", async () => {
+    const message = "git.describe.head failed: fatal: detected dubious ownership in repository";
+    expect(await describeEvidence(message)).toBe(message);
+    expect(await describeEvidence("git.describe.head timed out")).toBe(
+      "git.describe.head timed out",
+    );
   });
 });
 
