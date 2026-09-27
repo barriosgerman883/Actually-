@@ -5,7 +5,7 @@ Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. To
 | # | Decisión | Estado | Resolución | Ref |
 |---|---|---|---|---|
 | 1 | Un solo modelo de dominio | Resuelta en `8b1e1ff` | architecture.md §5 es la única definición; el JSON es una proyección | §1.1 |
-| 2 | Enum de `status` | Resuelta en `fad3b6e` y `c8b7faf` | Estados y reglas de derivación definidos. `outdated` es un solo estado, con el tipo de cambio en `updateType` | §1.2 |
+| 2 | Enum de `status` | Resuelta en `fad3b6e`, `c8b7faf` y `738f91e` | Estados y reglas de derivación definidos. `outdated` es un solo estado. `updateType` dice qué número cambió y `mayBreak` estima la compatibilidad | §1.2 |
 | 3 | `requested / resolved / installed / latest` en el modelo | Resuelta en `fad3b6e` | `VersionClaims`, con `not-applicable` cuando no corresponde | §1.3 |
 | 4 | Comandos del MVP | Resuelta en `0bbf268` | Solo `status` y `explain`. `scan`, `doctor` e `init` quedan fuera | §1.4 |
 | 5 | npm registry en Fase 1, npm CLI en Fase 2 | Resuelta en `90956b6` | Nombres distintos en todos los documentos | §1.5 |
@@ -14,7 +14,7 @@ Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. To
 | 8 | Repo Git: proyecto o herramienta | Resuelta en `16f1351` | Proyecto por defecto; herramienta por config o por un ejecutable en PATH | D3 |
 | 9 | Formato de `id` | Resuelta en `1a5de5d` | `global:<provider>:<nombre>` o `project:<raíz>:<nombre>`, documentado como opaco | D4 |
 | 10 | Caché en el MVP | Resuelta en `fe7fc7f` | Sí, con TTL, requests condicionales y `--no-cache` | D5 |
-| 11 | `GITHUB_TOKEN` para rate limit | Resuelta en `fe7fc7f` | Sí, solo para límite de requests y con opción para desactivarlo | D5 |
+| 11 | `GITHUB_TOKEN` para rate limit | Resuelta en `fe7fc7f` y `af9f01f` | Solo para límite de requests, y apagado por defecto | D5 |
 | 12 | Cómo leer metadata de Git y pnpm | Resuelta en `a0c5ff6` | Git: archivos para `HEAD` y remotes; git endurecido solo para tags y distancia. pnpm nunca dentro de un proyecto | D6 |
 | 13 | Allowlist | Resuelta en `a0c5ff6` | Comandos completos y exactos, elegidos por identificador | D6 |
 | 14 | Directorios de PATH escaneados | Resuelta en `24268c0` | Directorio global de pnpm, `~/.local/bin` y `scan.bin_paths` | D7 |
@@ -24,6 +24,18 @@ Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. To
 | 18 | `info` como comando separado | Resuelta en `0bbf268` | Reemplazado por `status <tool>` | §5 |
 
 **Cambio respecto de la revisión en #12.** La revisión recomendaba leer `.git` directamente en vez de lanzar git. Eso alcanza para `HEAD` y los remotes, pero no para los tags anotados ni para la distancia al último tag, que exigen interpretar los packfiles de Git. Por eso se adoptó un enfoque mixto.
+
+## Ajustes posteriores a la revisión
+
+La revisión del PR #2 corrigió tres puntos:
+
+| Ajuste | Commit | Motivo |
+|---|---|---|
+| Explicación exacta de qué sale de la máquina, aviso de primera ejecución y `--offline` | `af9f01f` | La promesa de no enviar información de los proyectos era inexacta: consultar npm y GitHub les revela los nombres verificados |
+| `GITHUB_TOKEN` apagado por defecto | `af9f01f` | Con token, GitHub puede asociar las consultas a una cuenta |
+| `updateType` solo numérico, más el campo `mayBreak` | `738f91e` | Llamar `major` a un cambio de 0.2 a 0.3 mezclaba el tamaño del cambio con una estimación de compatibilidad |
+
+También se definió la v0.1 como próximo hito (`c2970ff`). El riesgo principal pasó a ser seguir perfeccionando el diseño sin contrastarlo con una implementación.
 
 ## #16: nombre del paquete
 
