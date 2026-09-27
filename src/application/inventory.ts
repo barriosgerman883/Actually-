@@ -384,9 +384,10 @@ async function projectRecords(
   const { fs, config, net } = deps;
   const scan = await scanProject(fs, root, deps.env.homeDir);
   diagnostics.push(...scan.diagnostics);
-  const registry = scan.npmrc
-    ? applyNpmrc(userRegistry, scan.npmrc.text, scan.npmrc.path)
+  let registry: RegistryConfig = scan.registryUnknown
+    ? { state: "unknown", reason: scan.registryUnknown }
     : userRegistry;
+  for (const npmrc of scan.npmrcs) registry = applyNpmrc(registry, npmrc.text, npmrc.path);
 
   const gitRoot = await findUpDir(fs, root, ".git", deps.env.homeDir);
   const repo = gitRoot ? await readRepository(fs, gitRoot) : undefined;

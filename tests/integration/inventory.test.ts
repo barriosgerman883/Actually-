@@ -236,3 +236,75 @@ describe("projects and Git repositories", () => {
     ).rejects.toBeInstanceOf(UsageError);
   });
 });
+
+describe("project registry (architecture.md §8)", () => {
+  const runner = () => fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) });
+  const deps = { "https://registry.npmjs.org/a/latest": json({ version: "1.0.0" }) };
+
+  async function projectInventory(files: Record<string, string>, cwd: string) {
+    const http = fakeHttp(deps);
+    const inv = await buildInventory(
+      {
+        fs: memoryFs(files),
+        runner: runner(),
+        env: fakeEnv(HOME),
+        net: netContext(http),
+        config: config(),
+        cwd,
+      },
+      { projectOnly: true },
+    );
+    return { inv, http };
+  }
+
+  it("applies the .npmrc of the pnpm workspace root from a subpackage (F-03)", async () => {
+    const { inv, http } = await projectInventory(
+      {
+        [`${HOME}/ws/pnpm-workspace.yaml`]: "packages:\n  - app\n",
+        [`${HOME}/ws/.npmrc`]: "registry=https://npm.mycorp.example/\n",
+        [`${HOME}/ws/app/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      },
+      `${HOME}/ws/app`,
+    );
+    expect(http.calls).toEqual([]);
+    expect(inv.tools[0]?.versions.latest).toMatchObject({ state: "unknown" });
+  });
+
+  it("does not query when a .npmrc between the project and the workspace root exists", async () => {
+    const { http } = await projectInventory(
+      {
+        [`${HOME}/ws/pnpm-workspace.yaml`]: "packages:\n  - packages/*\n",
+        [`${HOME}/ws/packages/.npmrc`]: "registry=https://registry.npmjs.org/\n",
+        [`${HOME}/ws/packages/app/package.json`]: JSON.stringify({
+          dependencies: { a: "^1.0.0" },
+        }),
+      },
+      `${HOME}/ws/packages/app`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  it("does not query when the project .npmrc exists but cannot be read (F-04)", async () => {
+    const { inv, http } = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+        // A directory named .npmrc: it exists, but reading it fails.
+        [`${HOME}/p/.npmrc/x`]: "",
+      },
+      `${HOME}/p`,
+    );
+    expect(http.calls).toEqual([]);
+    expect(inv.tools[0]?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: `origin could not be determined: ${HOME}/p/.npmrc could not be read`,
+    });
+  });
+
+  it("still queries the public registry for a plain project", async () => {
+    const { http } = await projectInventory(
+      { [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }) },
+      `${HOME}/p`,
+    );
+    expect(http.calls.map((c) => c.url)).toEqual(["https://registry.npmjs.org/a/latest"]);
+  });
+});

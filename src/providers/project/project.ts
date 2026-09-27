@@ -20,7 +20,10 @@ export interface ProjectScan {
   manifestPath?: string;
   packageManager?: { value: string; evidence: Evidence[] };
   dependencies: ProjectDependency[];
-  npmrc?: { path: string; text: string };
+  /** .npmrc files to apply, in order: the workspace root's, then the project's. */
+  npmrcs: { path: string; text: string }[];
+  /** Set when a registry setting could apply but cannot be read or interpreted. */
+  registryUnknown?: string;
   diagnostics: Diagnostic[];
 }
 
@@ -138,7 +141,7 @@ export async function scanProject(
   root: string,
   stopAt: string,
 ): Promise<ProjectScan> {
-  const scan: ProjectScan = { root, dependencies: [], diagnostics: [] };
+  const scan: ProjectScan = { root, dependencies: [], npmrcs: [], diagnostics: [] };
   const manifestPath = join(root, "package.json");
   if (!(await fs.exists(manifestPath))) return scan;
   scan.manifestPath = manifestPath;
@@ -288,11 +291,28 @@ export async function scanProject(
     }
   }
 
-  const npmrcPath = join(root, ".npmrc");
-  if (await fs.exists(npmrcPath)) {
+  // pnpm applies the workspace root's .npmrc, then the project's. When in
+  // doubt about which registry applies, nothing is queried (architecture.md §8).
+  const workspaceFile = await findUp(fs, root, "pnpm-workspace.yaml", stopAt);
+  const workspaceRoot = workspaceFile ? dirname(workspaceFile) : undefined;
+  const npmrcDirs = [root];
+  if (workspaceRoot && workspaceRoot !== root) {
+    for (let dir = dirname(root); dir !== workspaceRoot; dir = dirname(dir)) {
+      const between = join(dir, ".npmrc");
+      if (await fs.exists(between)) {
+        scan.registryUnknown ??= `${between} is between the project and its workspace root`;
+      }
+      if (dirname(dir) === dir) break;
+    }
+    npmrcDirs.unshift(workspaceRoot);
+  }
+  for (const dir of npmrcDirs) {
+    const npmrcPath = join(dir, ".npmrc");
+    if (!(await fs.exists(npmrcPath))) continue;
     try {
-      scan.npmrc = { path: npmrcPath, text: await fs.readText(npmrcPath) };
+      scan.npmrcs.push({ path: npmrcPath, text: await fs.readText(npmrcPath) });
     } catch {
+      scan.registryUnknown ??= `${npmrcPath} could not be read`;
       scan.diagnostics.push({
         severity: "warning",
         source: "project",

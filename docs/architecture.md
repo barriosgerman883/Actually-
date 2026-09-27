@@ -620,7 +620,7 @@ Cómo se determina el registry efectivo:
 - Se le pregunta a pnpm con `pnpm config list --json`, desde el directorio neutral (§7). La respuesta refleja todas las fuentes que pnpm lee: variables de entorno, `~/.npmrc`, el rc global de pnpm y el npmrc global. Leer esos archivos a mano arriesgaba omitir una fuente y filtrar nombres.
 - **La salida puede incluir tokens de autenticación.** Solo se extraen `registry` y las claves `@scope:registry`. El resto se descarta sin registrarse en logs, evidencia ni diagnósticos.
 - Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
-- En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada.
+- En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada. Dentro de un workspace de pnpm (`pnpm-workspace.yaml` en un directorio superior), primero se aplica el `.npmrc` de la raíz del workspace y después el del proyecto. Si hay un `.npmrc` en un directorio intermedio, o si un `.npmrc` existe pero no se puede leer, el registry queda indeterminado.
 
 El spec de cada paquete global de pnpm se lee del `package.json` del directorio global, que está junto a la ruta que devuelve `pnpm root --global`.
 
