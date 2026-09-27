@@ -710,8 +710,6 @@ docs/
 │
 ├─ commands/
 │  ├─ status.md
-│  ├─ scan.md
-│  ├─ info.md
 │  └─ explain.md
 │
 └─ decisions/
