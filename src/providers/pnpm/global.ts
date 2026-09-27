@@ -92,7 +92,7 @@ export async function scanPnpmGlobal(
   const version = await runner.run({ command: "pnpm.version" });
   if (!version.ok) {
     if (version.reason !== "not-found") {
-      scan.diagnostics.push({ severity: "warning", source: "pnpm", message: version.message });
+      scan.diagnostics.push({ severity: "error", source: "pnpm", message: version.message });
     }
     return scan;
   }
@@ -115,7 +115,7 @@ export async function scanPnpmGlobal(
   const list = await runner.run({ command: "pnpm.list.global" });
   if (!list.ok) {
     scan.diagnostics.push({
-      severity: "warning",
+      severity: "error",
       source: "pnpm",
       message: `could not list global packages: ${list.message}`,
     });
@@ -126,7 +126,7 @@ export async function scanPnpmGlobal(
     listed = JSON.parse(list.stdout || "[]");
   } catch {
     scan.diagnostics.push({
-      severity: "warning",
+      severity: "error",
       source: "pnpm",
       message: "pnpm list output could not be parsed",
     });

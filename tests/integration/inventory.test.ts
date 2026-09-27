@@ -215,6 +215,27 @@ describe("projects and Git repositories", () => {
     return { fs, runner, env: fakeEnv(HOME), net: netContext(undefined), config: cfg, cwd: "/tmp" };
   }
 
+  it("a failing provider emits an error for the tool it affects (architecture.md §13, F-12)", async () => {
+    const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
+    const world = toolWorld(fs, "/home/me/tools");
+    world.runner = fakeRunner({
+      "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+      "git.tags.head": { ok: false, reason: "timeout", message: "git.tags.head timed out" },
+    });
+    world.config.tools.git = [{ path: "/home/me/missing" }];
+    const inv = await buildInventory(world, { globalOnly: true });
+    const t = inv.tools.find((x) => x.name === "t");
+    const missing = inv.tools.find((x) => x.name === "missing");
+    expect(t).toMatchObject({ status: "error" });
+    expect(missing).toMatchObject({ status: "error" });
+    expect(inv.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ severity: "error", source: "git", toolId: t?.id }),
+        expect.objectContaining({ severity: "error", source: "git", toolId: missing?.id }),
+      ]),
+    );
+  });
+
   it("--global still recognizes a repository used as a tool (F-07)", async () => {
     const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
     const inv = await buildInventory(toolWorld(fs, "/home/me/tools"), { globalOnly: true });

@@ -338,12 +338,7 @@ async function repoToolRecord(
   const repo = await readRepository(deps.fs, root);
   const name = root.split(sep).filter(Boolean).pop() ?? root;
   if (!repo) {
-    diagnostics.push({
-      severity: "warning",
-      source: "git",
-      message: `${root} is declared as a tool but is not a Git repository`,
-    });
-    return buildRecord({
+    const record = buildRecord({
       name,
       scope: "global",
       versions: {
@@ -357,10 +352,16 @@ async function repoToolRecord(
       update: { state: "unknown", reason: "installation method is unknown", evidence: [] },
       failed: true,
     });
+    // A provider that fails emits an error for the tools it affects (§13).
+    diagnostics.push({
+      severity: "error",
+      source: "git",
+      message: `${root} is declared as a tool but is not a Git repository`,
+      toolId: record.id,
+    });
+    return record;
   }
   const tags = await installedFromTags(deps.runner, repo);
-  if (tags.failure)
-    diagnostics.push({ severity: "warning", source: "git", message: `${root}: ${tags.failure}` });
   const installed: Claim<string> = tags.version
     ? claimFrom(tags.version.value, [tags.version.evidence])
     : {
@@ -372,14 +373,24 @@ async function repoToolRecord(
     ? await resolveGithubLatest(repo.github.repo, deps.net, github)
     : { state: "unknown", reason: "no GitHub remote", evidence: [] };
   const installation = claimFrom<Installation>({ provider: "git", path: root }, installEvidence);
-  return buildRecord({
+  const record = buildRecord({
     name,
     scope: "global",
     versions: { requested: notApplicable, resolved: notApplicable, installed, latest },
     installation,
     source: repositorySource(repo),
     update: updateFrom(installation),
+    failed: tags.failure !== undefined,
   });
+  if (tags.failure) {
+    diagnostics.push({
+      severity: "error",
+      source: "git",
+      message: `${root}: ${tags.failure}`,
+      toolId: record.id,
+    });
+  }
+  return record;
 }
 
 async function projectRecords(
