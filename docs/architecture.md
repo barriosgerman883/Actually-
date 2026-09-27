@@ -328,7 +328,9 @@ export type ToolStatus =
 
 export interface ToolRecord {
   /**
-   * Identificador estable y opaco. Los consumidores no deben parsearlo.
+   * Identificador opaco y determinístico. Los consumidores no deben parsearlo.
+   * Cambia si cambia el scope, la ubicación o el provider detectado
+   * (design.md §14).
    * Formato actual:
    *   global:<provider>:<nombre>   (provider "unknown" si no se conoce)
    *   project:<raíz absoluta>:<nombre>

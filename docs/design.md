@@ -491,7 +491,14 @@ Reglas:
 - `status --json` no incluye `evidence`. `explain --json` sí.
 - `diagnostics` siempre está presente, aunque esté vacío. Su forma está en architecture.md §13.
 
-`id` es estable y opaco: los consumidores lo usan para comparar y referenciar, no para extraer datos. Su formato está en architecture.md §5 y distingue la misma dependencia en varios proyectos y las herramientas sin provider conocido.
+`id` es opaco y determinístico: los consumidores lo usan para comparar y referenciar, no para extraer datos. Su formato está en architecture.md §5 y distingue la misma dependencia en varios proyectos y las herramientas sin provider conocido.
+
+No es estable en sentido fuerte. Se mantiene entre ejecuciones mientras no cambien el scope, la ubicación ni el provider detectado, y cambia si:
+
+- el proyecto se mueve a otra carpeta, porque su raíz forma parte del id;
+- cambia el provider detectado, por ejemplo cuando una herramienta pasa de `unknown` a `pnpm`.
+
+Un integrador que necesite seguir una herramienta a través de esos cambios puede correlacionar por `name` y `scope`, sabiendo que esa combinación puede ser ambigua.
 
 ---
 
