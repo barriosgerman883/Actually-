@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readdir, writeFile, access } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readdir, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
@@ -11,7 +10,11 @@ export interface LocalState {
   hasMarker(name: string): Promise<boolean>;
   /** Returns false when the marker could not be written. */
   writeMarker(name: string): Promise<boolean>;
-  /** An empty directory used as the working directory for pnpm (§7). */
+  /**
+   * An empty directory used as the working directory for pnpm (§7).
+   * Rejects when it cannot be created or is not empty: pnpm then does not
+   * run, rather than running somewhere shared such as /tmp.
+   */
   neutralDir(): Promise<string>;
 }
 
@@ -20,13 +23,11 @@ export function fileLocalState(dir: string): LocalState {
 
   async function createNeutral(): Promise<string> {
     const path = join(dir, "empty");
-    try {
-      await mkdir(path, { recursive: true });
-      if ((await readdir(path)).length === 0) return path;
-    } catch {
-      // Fall through to a fresh temporary directory.
+    await mkdir(path, { recursive: true });
+    if ((await readdir(path)).length > 0) {
+      throw new Error(`${path} is not empty, so pnpm cannot run there safely`);
     }
-    return mkdtemp(join(tmpdir(), "actually-"));
+    return path;
   }
 
   return {

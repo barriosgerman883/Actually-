@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import type { CommandResult, CommandRunner } from "../../core/ports.js";
-import { buildInvocation } from "./allowlist.js";
+import { buildInvocation, COMMAND_TABLE } from "./allowlist.js";
 
 const TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 16 * 1024 * 1024;
@@ -13,10 +13,22 @@ const MAX_BUFFER = 16 * 1024 * 1024;
 export function nodeCommandRunner(options: { neutralDir: () => Promise<string> }): CommandRunner {
   return {
     async run(request): Promise<CommandResult> {
-      const invocation = buildInvocation(request, {
-        neutralDir: await options.neutralDir(),
-        baseEnv: process.env,
-      });
+      // Only pnpm runs in the neutral directory; git runs in the repository.
+      let neutralDir = "";
+      if (Object.prototype.hasOwnProperty.call(COMMAND_TABLE, request.command)) {
+        if (COMMAND_TABLE[request.command].cwd === "neutral") {
+          try {
+            neutralDir = await options.neutralDir();
+          } catch (error) {
+            return {
+              ok: false,
+              reason: "failed",
+              message: `${request.command} did not run: no neutral directory (${(error as Error).message})`,
+            };
+          }
+        }
+      }
+      const invocation = buildInvocation(request, { neutralDir, baseEnv: process.env });
       if ("rejected" in invocation) {
         return { ok: false, reason: "rejected", message: invocation.rejected };
       }

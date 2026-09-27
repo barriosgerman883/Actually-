@@ -512,7 +512,7 @@ Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argument
 | `git.tags.head` | `git tag --points-at HEAD` | repositorio |
 | `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
 
-El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe aunque la caché esté desactivada.
+El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe aunque la caché esté desactivada. Si no se puede crear, o si no está vacío, pnpm no se lanza: no hay otro directorio de reemplazo, y los datos que dependen de pnpm quedan `unknown` con ese motivo.
 
 Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún módulo lanza procesos por fuera de esta tabla.
 

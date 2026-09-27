@@ -90,6 +90,8 @@ export function buildInvocation(
     cwd = request.repository;
   } else if (request.repository !== undefined) {
     return { rejected: `${request.command} does not accept a repository` };
+  } else if (!isAbsolute(cwd)) {
+    return { rejected: `${request.command} requires the neutral directory` };
   }
 
   const env: Record<string, string> = {};

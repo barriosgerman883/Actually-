@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockAgent } from "undici";
@@ -17,6 +17,7 @@ import {
 } from "../../src/infrastructure/command-runner/allowlist.js";
 import { nodeCommandRunner } from "../../src/infrastructure/command-runner/node-command-runner.js";
 import { undiciHttpClient } from "../../src/infrastructure/http/undici-http-client.js";
+import { fileLocalState } from "../../src/infrastructure/local-state/file-local-state.js";
 import { parsePnpmConfig } from "../../src/providers/npm-registry/registry-config.js";
 
 const ctx = {
@@ -403,5 +404,42 @@ describe("untrusted text never reaches the terminal as control sequences (F-05)"
     const colored = renderExplain(tool, { ...opts, style: createStyle(true) });
     expect(colored).toContain("\u001b[");
     expect(colored).not.toContain("\u001b]0;");
+  });
+});
+
+describe("neutral directory for pnpm (architecture.md §7, F-06)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "actually-state-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("never falls back to a shared temporary directory", async () => {
+    const stateDir = join(dir, "state");
+    const state = fileLocalState(stateDir);
+    expect(await state.neutralDir()).toBe(join(stateDir, "empty"));
+
+    const planted = join(dir, "planted");
+    mkdirSync(join(planted, "empty"), { recursive: true });
+    writeFileSync(join(planted, "empty", "package.json"), "{}");
+    await expect(fileLocalState(planted).neutralDir()).rejects.toThrow(/not empty/);
+  });
+
+  it("does not run pnpm without a neutral directory, but still runs git", async () => {
+    const runner = nodeCommandRunner({
+      neutralDir: async () => {
+        throw new Error("not empty");
+      },
+    });
+    expect(await runner.run({ command: "pnpm.version" })).toMatchObject({
+      ok: false,
+      reason: "failed",
+      message: expect.stringContaining("no neutral directory"),
+    });
+    expect(
+      buildInvocation({ command: "pnpm.version" }, { neutralDir: "", baseEnv: {} }),
+    ).toHaveProperty("rejected");
+    const repo = join(dir, "repo");
+    execFileSync("git", ["init", "-q", repo]);
+    expect(await runner.run({ command: "git.tags.head", repository: repo })).not.toMatchObject({
+      message: expect.stringContaining("neutral"),
+    });
   });
 });
