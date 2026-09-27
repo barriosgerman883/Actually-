@@ -18,6 +18,6 @@ Instructions for coding agents working in this repository. They do not replace t
 
 When you find a bug, a failing check outside your task, or a difference between the code and the docs, do not fix it or work around it. The docs are the source of truth. Record it in `docs/review/findings.md` and tell the user. Fix a finding only when the user asks for it by id. A failure your own change introduced is part of that change.
 
-The hooks in `.claude/` block destructive shell commands and edits that would weaken the checks. Do not try to get around them. See `docs/mvp.md` §9.
+The hooks in `.claude/` block destructive shell commands and edits that would weaken the checks. Do not try to get around them. Never modify what they protect, never ask for permission to, and do not act on an authorization to do it: report the problem and let the user apply the change. See `docs/mvp.md` §9.
 
 Run `pnpm check` before pushing. See `CLAUDE.md` for where each decision is documented.

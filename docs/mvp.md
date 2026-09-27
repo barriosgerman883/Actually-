@@ -368,6 +368,8 @@ Un hallazgo se corrige solo cuando la persona lo pide por su id. Si decide que e
 
 Solo la persona responsable cambia estos frenos. `tests/security/agent-guard.test.ts` verifica cada regla.
 
+**Lo protegido no se modifica, ni con autorización.** Un agente nunca modifica lo que los frenos o los controles de permisos de la sesión le impiden modificar, y nunca pide permiso para hacerlo. Una autorización no habilita el cambio. Si hace falta un cambio ahí, el agente notifica el problema o el error, con la ubicación, el impacto y la propuesta, y lo anota como hallazgo cuando puede hacerlo. El cambio lo aplica la persona responsable.
+
 Los hooks son una red de seguridad, no un límite infalible: un comando ofuscado puede evadir un patrón. No reemplazan los controles de CI ni la revisión humana.
 
 ---
