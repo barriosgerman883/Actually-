@@ -53,6 +53,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-14 | baja | robustez | Respuestas sin límite de tamaño y `maxBuffer` informado como timeout | abierto |
 | F-15 | baja | desvío de docs | Comentario de `version.ts` cita un test que no existe | abierto |
 | F-16 | baja | desvío de docs | El cliente HTTP no implementa cancelación | abierto |
+| F-17 | baja | robustez | El guard de Bash bloquea lecturas con `sed -n` de archivos de `.claude/` | abierto |
+| F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -342,6 +344,34 @@ Propuesta: corregir la ruta del comentario.
 architecture.md §8 lista "cancellation" entre las responsabilidades del `HttpClient`. Solo existe el timeout por request: no hay forma de cancelar los requests pendientes, por ejemplo ante Ctrl-C.
 
 Propuesta: aceptar un `AbortSignal` por ejecución, o quitar "cancellation" de §8 si no se necesita en el MVP.
+
+### F-17 · El guard de Bash bloquea lecturas con `sed -n` de archivos de `.claude/`
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `.claude/hooks/guard-bash.mjs` (`READ_ONLY` y la regla de `GUARD_FILES`)
+- **Detectado:** 2026-09-27, Claude Code
+- **Verificación:** reproducido
+
+La regla que protege `.claude/settings*.json` y `.claude/hooks/` permite solo los comandos de `READ_ONLY`. `sed` y `awk` no están en esa lista, porque pueden escribir. Por eso `sed -n 50,56p .claude/hooks/guard-edit.mjs`, que solo lee, se bloquea. Es un falso positivo del lado seguro: la herramienta Read sigue sirviendo para leer esos archivos.
+
+Propuesta: permitir `sed` sin `-i` y `awk` sin redirecciones, con casos de test para ambos.
+
+### F-18 · `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** seguridad
+- **Ubicación:** `.claude/hooks/guard-bash.mjs` (`READ_ONLY`)
+- **Detectado:** 2026-09-27, Claude Code
+- **Verificación:** reproducido
+
+`node` está en `READ_ONLY` para que se puedan probar los hooks pasándoles JSON por pipe. Pero `node -e` escribe archivos, así que un comando como `node -e "fs.writeFileSync('.claude/settings.json', …)"` pasa el guard. `permissions.deny` solo cubre las herramientas de edición, no Bash. Lo mismo vale para `npx` y `pnpm exec`, que pueden ejecutar scripts arbitrarios.
+
+Así se usó, una sola vez, con autorización explícita de la persona responsable: el 2026-09-27 se cambió `let before = "";` por `let before;` en `.claude/hooks/guard-edit.mjs:53`, para corregir el lint del cambio que agregó los frenos. No se modificó nada más de `.claude/`. El `!` de la sesión no ejecutaba comandos en la app, así que no había otra vía.
+
+Propuesta: sacar `node`, `npx` y `pnpm` de `READ_ONLY` y permitir solo `node .claude/hooks/<hook>.mjs` sin `-e`, `-p` ni `--eval`. Sumar el caso a `tests/security/agent-guard.test.ts`.
 
 ### Desvíos donde el código es correcto
 
