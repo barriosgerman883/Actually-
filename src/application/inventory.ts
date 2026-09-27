@@ -104,10 +104,11 @@ export async function buildInventory(
 
   // Git repositories under scan.paths, and the ones declared as tools.
   const declaredTools = new Map(config.tools.git.map((t) => [t.path, t]));
-  const scannedRoots =
-    options.globalOnly || options.projectOnly
-      ? []
-      : await findProjects(fs, config.scan.paths, config.scan.depth);
+  // Also with --global: a repository under scan.paths can be a tool
+  // (docs/mvp.md §5.3). It is only scanned as a project without --global.
+  const scannedRoots = options.projectOnly
+    ? []
+    : await findProjects(fs, config.scan.paths, config.scan.depth);
   const repoToolEvidence = new Map<string, Evidence[]>();
   for (const path of declaredTools.keys()) {
     repoToolEvidence.set(path, [
@@ -136,7 +137,13 @@ export async function buildInventory(
     tools.push(...(await pnpmRecords(pnpm, userRegistry, deps, binsInPnpmDir)));
     const owned = new Set(pnpm.packages.flatMap((p) => p.bins));
     const unknownExecutables: Executable[] = [];
-    const repoCandidates = [...scannedRoots, ...declaredTools.keys()];
+    // Executables resolve to real paths, so the roots are compared resolved too.
+    const repoCandidates = await Promise.all(
+      [...scannedRoots, ...declaredTools.keys()].map(async (root) => ({
+        root,
+        real: await fs.realpath(root).catch(() => root),
+      })),
+    );
     for (const exe of executables) {
       if (
         pnpm.binDir &&
@@ -144,7 +151,7 @@ export async function buildInventory(
         (owned.has(exe.name) || PNPM_OWN_BINS.has(exe.name))
       )
         continue;
-      const repo = repoCandidates.find((root) => isInside(exe.realPath, root));
+      const repo = repoCandidates.find((c) => isInside(exe.realPath, c.real))?.root;
       if (repo && (await fs.exists(join(repo, ".git")))) {
         const list = repoToolEvidence.get(repo) ?? [];
         list.push({

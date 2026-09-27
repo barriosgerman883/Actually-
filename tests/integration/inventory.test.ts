@@ -1,6 +1,10 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildInventory } from "../../src/application/inventory.js";
 import { UsageError } from "../../src/core/errors.js";
+import { nodeFilesystem } from "../../src/infrastructure/filesystem/node-filesystem.js";
 import {
   config,
   fakeEnv,
@@ -198,6 +202,63 @@ describe("projects and Git repositories", () => {
       status: "outdated",
       versions: { requested: { value: "^1.0.0" }, installed: { value: "1.5.0" } },
     });
+  });
+
+  function toolWorld(fs: ReturnType<typeof memoryFs>, scanPath: string) {
+    const runner = fakeRunner({
+      "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+      "git.tags.head": ok("v1.0.0\n"),
+    });
+    const cfg = config((c) => {
+      c.scan.paths = [scanPath];
+    });
+    return { fs, runner, env: fakeEnv(HOME), net: netContext(undefined), config: cfg, cwd: "/tmp" };
+  }
+
+  it("--global still recognizes a repository used as a tool (F-07)", async () => {
+    const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
+    const inv = await buildInventory(toolWorld(fs, "/home/me/tools"), { globalOnly: true });
+    expect(inv.tools.find((x) => x.name === "t")).toMatchObject({
+      id: "global:git:t",
+      versions: { installed: { value: "1.0.0" } },
+    });
+    expect(inv.projects).toEqual([]);
+  });
+
+  it("compares scan paths that go through a symlink by their real path (F-09)", async () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), "actually-f09-")));
+    try {
+      const home = join(base, "home");
+      const repo = join(base, "data", "tools", "t");
+      mkdirSync(join(repo, ".git"), { recursive: true });
+      mkdirSync(join(repo, "bin"));
+      mkdirSync(join(home, ".local", "bin"), { recursive: true });
+      writeFileSync(join(repo, ".git", "HEAD"), `${"c".repeat(40)}\n`);
+      writeFileSync(join(repo, "bin", "t"), "#!/bin/sh\n", { mode: 0o755 });
+      symlinkSync(join(base, "data", "tools"), join(home, "tools"));
+      symlinkSync(join(repo, "bin", "t"), join(home, ".local", "bin", "t"));
+      const runner = fakeRunner({
+        "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+        "git.tags.head": ok("v1.0.0\n"),
+      });
+      const cfg = config((c) => {
+        c.scan.paths = [join(home, "tools")];
+      });
+      const inv = await buildInventory(
+        {
+          fs: nodeFilesystem(),
+          runner,
+          env: fakeEnv(home),
+          net: netContext(undefined),
+          config: cfg,
+          cwd: base,
+        },
+        { globalOnly: true },
+      );
+      expect(inv.tools.map((x) => x.id)).toEqual(["global:git:t"]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   it("declared tools count as a fact and --project needs a project", async () => {
