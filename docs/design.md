@@ -206,7 +206,7 @@ gstack
 Installed
 1.0.0
 
-Latest stable
+Latest (npm dist-tag)
 2.0.0
 
 Scope
@@ -248,8 +248,8 @@ Source               github.com/example/gstack    medium
   inference   npm registry: "repository" points to github.com/example/gstack
   inference   repository name matches the package name
 
-Latest stable        2.0.0                        high
-  fact        npm registry: latest version is 2.0.0
+Latest (npm tag)     2.0.0                        high
+  fact        npm registry: dist-tag "latest" is 2.0.0
 
 Not determined
   requested, resolved    not applicable to global tools

@@ -191,7 +191,7 @@ Determina quién administra una instalación.
 Determina el origen lógico o repositorio.
 
 ### Version Provider
-Determina latest stable version.
+Determina la versión que la fuente declara como la última estable (§5).
 
 Una misma herramienta puede tener:
 
@@ -311,7 +311,7 @@ export interface VersionClaims {
   resolved: Claim<string>;
   /** Versión presente en disco. */
   installed: Claim<string>;
-  /** Última versión estable conocida. */
+  /** Versión que la fuente declara como la última estable (ver abajo). */
   latest: Claim<string>;
 }
 
@@ -388,6 +388,14 @@ Es la misma regla que usa el rango `^` de npm. Un cambio de `0.2.0` a `0.3.0` ti
 `mayBreak` es una estimación basada en la convención de versionado. No inspecciona el cambio real, y un proyecto que no sigue semver puede romper sin que `mayBreak` lo anticipe.
 
 Esto permite resúmenes como "2 updates available, 1 may include breaking changes" (design.md §4) sin agregar estados.
+
+### Qué significa `latest`
+
+`versions.latest` es la versión que la fuente declara como la última estable. No es una verificación independiente de estabilidad.
+
+- **npm:** es el dist-tag `latest`, que elige quien publica. Usarlo para la última versión estable es una convención habitual, no una obligación. La evidencia lo dice tal cual: `fact: npm registry: dist-tag "latest" is 2.0.0`.
+- **GitHub:** es la release más reciente no marcada como prerelease. Esa marca también la pone quien publica.
+- Si la versión declarada tiene sufijo de prerelease, por ejemplo `3.0.0-beta.1`, la evidencia contradice la idea de "estable". El claim queda con confianza `low`, según las reglas de §6.
 
 ### Installation
 
@@ -792,7 +800,7 @@ La caché es parte del MVP, pero no de la v0.1. Guarda solo respuestas de red y 
 
 ### Qué guarda
 
-- Solo metadata pública: última versión estable, tags, releases y el campo `repository` de npm.
+- Solo metadata pública: la versión con el dist-tag `latest`, tags, releases y el campo `repository` de npm.
 - La clave es el host más el recurso consultado, por ejemplo `registry.npmjs.org/gstack/latest`.
 - Cada entrada guarda la fecha de obtención y los validadores que haya devuelto el servidor (`ETag` o `Last-Modified`).
 - Nunca guarda tokens, rutas locales, nombres de proyectos ni resultados del inventario local.
@@ -825,7 +833,7 @@ Borrar ese directorio es siempre seguro.
 
 ### npm registry
 
-- Se consulta `/<paquete>/latest`, que devuelve solo el manifiesto de la versión estable, con su campo `repository`. El documento completo del paquete puede pesar decenas de megabytes; el manifiesto, unos pocos kilobytes.
+- Se consulta `/<paquete>/latest`, que devuelve solo el manifiesto de la versión con el dist-tag `latest`, con su campo `repository`. El documento completo del paquete puede pesar decenas de megabytes; el manifiesto, unos pocos kilobytes.
 - Concurrencia máxima por defecto: 8 requests simultáneos. Timeout por request: 10 segundos.
 
 ---
