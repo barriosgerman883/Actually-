@@ -3,6 +3,11 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockAgent } from "undici";
+import { renderDiagnostics, renderExplain, renderStatus } from "../../src/cli/output/human.js";
+import { createStyle } from "../../src/cli/output/style.js";
+import { claimFrom } from "../../src/core/confidence.js";
+import { notApplicable } from "../../src/core/model.js";
+import { buildRecord } from "../../src/core/record.js";
 import { afterAll, describe, expect, it } from "vitest";
 import { NetworkError } from "../../src/core/errors.js";
 import { ALLOWED_COMMANDS } from "../../src/core/ports.js";
@@ -337,5 +342,66 @@ describe("HttpClient (architecture.md §8)", () => {
     await expect(http.getJson("https://registry.npmjs.org/y/latest")).rejects.toBeInstanceOf(
       NetworkError,
     );
+  });
+});
+
+describe("untrusted text never reaches the terminal as control sequences (F-05)", () => {
+  const osc = "\u001b]0;pwned\u0007x";
+  const tool = buildRecord({
+    name: osc,
+    scope: "project",
+    projectRoot: "/p",
+    versions: {
+      requested: claimFrom("^1.0.0", [
+        { kind: "fact", source: "/p/package.json", description: `declares "${osc}"` },
+      ]),
+      resolved: notApplicable,
+      installed: claimFrom("1.0.0", [{ kind: "fact", source: "/p/x", description: "v" }]),
+      latest: claimFrom("2.0.0", [{ kind: "fact", source: "GET x", description: "\u009b2J" }]),
+    },
+    installation: { state: "unknown", reason: `bad \u001b[2K`, evidence: [] },
+    source: { state: "unknown", reason: "none", evidence: [] },
+    update: { state: "unknown", reason: "none", evidence: [] },
+  });
+  const opts = { home: "/home/me", verbose: true, style: createStyle(false) };
+  const hasControl = (text: string) =>
+    [...text].some((c) => {
+      const code = c.codePointAt(0) ?? 0;
+      return code !== 0x0a && (code <= 0x1f || (code >= 0x7f && code <= 0x9f));
+    });
+
+  it("escapes them in status, explain and diagnostics", () => {
+    const status = renderStatus(
+      {
+        tools: [tool],
+        projects: [
+          {
+            root: "/p",
+            packageManager: notApplicable,
+            repository: notApplicable,
+            dependenciesChecked: 1,
+            updatesAvailable: 1,
+          },
+        ],
+        diagnostics: [],
+      },
+      opts,
+    );
+    const explain = renderExplain(tool, opts);
+    const diagnostics = renderDiagnostics(
+      [{ severity: "warning", source: "pnpm", message: `failed: ${osc}\nfake line` }],
+      "/home/me",
+    );
+    for (const text of [status, explain, diagnostics]) {
+      expect(hasControl(text)).toBe(false);
+    }
+    expect(status).toContain("\\x1b]0;pwned\\x07x");
+    expect(diagnostics).toContain("\\x0afake line");
+  });
+
+  it("keeps colors, which the output adds itself", () => {
+    const colored = renderExplain(tool, { ...opts, style: createStyle(true) });
+    expect(colored).toContain("\u001b[");
+    expect(colored).not.toContain("\u001b]0;");
   });
 });

@@ -1,4 +1,5 @@
 import type { Claim, Diagnostic, Inventory, ProjectSummary, ToolRecord } from "../../core/model.js";
+import { sanitizeDeep } from "./sanitize.js";
 import { STATUS_TEXT, symbolFor, type Style } from "./style.js";
 
 export interface HumanOptions {
@@ -101,7 +102,8 @@ export function summaryLine(tools: ToolRecord[]): string {
 }
 
 /** `actually status` (docs/design.md §5). Short by default, --verbose for all. */
-export function renderStatus(inventory: Inventory, opts: HumanOptions): string {
+export function renderStatus(untrusted: Inventory, opts: HumanOptions): string {
+  const inventory = sanitizeDeep(untrusted);
   const out: string[] = [opts.style.bold("actually")];
   const globals = inventory.tools.filter((t) => t.scope === "global");
   if (globals.length > 0 || inventory.projects.length === 0) {
@@ -150,7 +152,8 @@ function detailValue(claim: Claim<unknown>, format: (v: never) => string): strin
 }
 
 /** `actually status <tool>` (docs/design.md §8). */
-export function renderToolDetail(tool: ToolRecord, opts: HumanOptions): string {
+export function renderToolDetail(untrusted: ToolRecord, opts: HumanOptions): string {
+  const tool = sanitizeDeep(untrusted);
   const blocks: [string, string][] = [];
   const v = tool.versions;
   if (v.requested.state !== "not-applicable")
@@ -195,7 +198,8 @@ const EXPLAIN_ORDER: [string, (t: ToolRecord) => Claim<unknown>, (v: never) => s
 ];
 
 /** `actually explain <tool>` (docs/design.md §9): facts, inferences, unknowns. */
-export function renderExplain(tool: ToolRecord, opts: HumanOptions): string {
+export function renderExplain(untrusted: ToolRecord, opts: HumanOptions): string {
+  const tool = sanitizeDeep(untrusted);
   const out = [opts.style.bold(tool.name), opts.style.dim(tool.id), ""];
   const notDetermined: string[] = [];
   const notApplicable: string[] = [];
@@ -233,7 +237,8 @@ export function renderExplain(tool: ToolRecord, opts: HumanOptions): string {
 }
 
 /** Diagnostics go to stderr in plain language (docs/design.md §10). */
-export function renderDiagnostics(diagnostics: Diagnostic[], home: string): string {
+export function renderDiagnostics(untrusted: Diagnostic[], home: string): string {
+  const diagnostics = sanitizeDeep(untrusted);
   if (diagnostics.length === 0) return "";
   const lines = diagnostics.map((d) => `${d.severity}: ${d.source}: ${tildify(d.message, home)}`);
   return `${lines.join("\n")}\nactually continued with the other sources.\n`;

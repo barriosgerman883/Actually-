@@ -11,6 +11,7 @@ import {
   renderToolDetail,
 } from "./output/human.js";
 import { documentJson, inventoryJson } from "./output/json.js";
+import { sanitize } from "./output/sanitize.js";
 import { createStyle } from "./output/style.js";
 
 /** Exit codes (docs/architecture.md §3.1). */
@@ -168,13 +169,13 @@ export async function run(argv: string[], io: Io, createRuntime: RuntimeFactory)
   } catch (error) {
     if (error instanceof UsageError) {
       if (wantsJson) io.stdout(failJson(error.message));
-      io.stderr(`actually: ${error.message}\nRun \`actually --help\` for usage.\n`);
+      io.stderr(`actually: ${sanitize(error.message)}\nRun \`actually --help\` for usage.\n`);
       return EXIT.usage;
     }
     const message =
       error instanceof FatalError ? error.message : `unexpected error: ${(error as Error).message}`;
     if (wantsJson) io.stdout(failJson(message));
-    io.stderr(`actually: ${message}\n`);
+    io.stderr(`actually: ${sanitize(message)}\n`);
     if (values.debug && error instanceof Error && error.stack) io.stderr(`${error.stack}\n`);
     return EXIT.fatal;
   }
