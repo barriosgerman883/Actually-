@@ -314,6 +314,22 @@ contratos de providers, ADRs y requisitos de contribución.
 - CI;
 - docs.
 
+### v0.1 — Primera versión refutable
+
+Antes de completar el MVP, una versión mínima que alguien pueda instalar, ejecutar sobre su máquina real y tratar de desmentir. Su objetivo es contrastar el diseño con datos reales, no cubrir casos.
+
+Incluye:
+
+- `actually status --global` para los paquetes globales de pnpm;
+- la última versión desde el npm registry;
+- `actually explain <tool>` y `--json`;
+- el aviso de red de la primera ejecución y `--offline`;
+- una plantilla de issue "actually was wrong" que pide la salida de `explain`.
+
+No incluye Git, GitHub, proyectos, caché ni archivo de configuración. Sin GitHub, la caché todavía no es necesaria.
+
+Criterio de éxito: `@getactually/cli@0.1.0` se instala con pnpm, alguien lo ejecuta sobre su máquina real, y cada resultado incorrecto se puede reportar con la salida de `explain`.
+
 ### Fase 1 — MVP
 
 - pnpm provider;
