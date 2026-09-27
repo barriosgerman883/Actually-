@@ -121,8 +121,6 @@ const READ_ONLY = new Set([
   "stat",
   "file",
   "jq",
-  "prettier",
-  "eslint",
 ]);
 // git subcommands that only read or record guardrail files, never rewrite them.
 const GIT_SAFE_ON_GUARDS = new Set([
@@ -146,6 +144,14 @@ function onlyReadsGuards(cmd, args) {
   if (READ_ONLY.has(cmd)) return true;
   if (cmd === "git") return GIT_SAFE_ON_GUARDS.has(gitSubcommand(args).sub);
   if (cmd === "node") return HOOK_SCRIPT.test(args[0] ?? "");
+  if (cmd === "prettier" || cmd === "eslint") return !formatterWrites(cmd, args);
+  return false;
+}
+
+/** prettier --write and eslint --fix rewrite the files they are given. */
+function formatterWrites(cmd, args) {
+  if (cmd === "prettier") return args.some((a) => a === "--write" || a === "-w");
+  if (cmd === "eslint") return args.includes("--fix");
   return false;
 }
 
@@ -506,6 +512,8 @@ function checkCommand(words, pipedFrom, depth) {
   // The guardrails themselves.
   if (args.some((a) => GUARD_FILES.test(a)) && !onlyReadsGuards(cmd, args))
     found.push(deny("only the user changes the agent guardrails in .claude/"));
+  if (formatterWrites(cmd, args) && args.some((a) => /^(\.\/)?\.claude\/?$/.test(a)))
+    found.push(deny(`${cmd} would rewrite the agent guardrails in .claude/`));
   if (
     (cmd === "sed" || cmd === "perl") &&
     args.some((a) => /^-[a-zA-Z]*i/.test(a)) &&

@@ -45,6 +45,11 @@ describe("bash guard", () => {
     "git add .claude/settings.json",
     "git log -- .claude/settings.json",
     "node dist/cli/index.js status",
+    "prettier --check .claude/hooks/guard-bash.mjs",
+    "eslint .claude/hooks",
+    "pnpm format:check",
+    "pnpm lint",
+    "prettier --write src/a.ts",
   ])("allows %j", (command) => {
     expect(decide(command)).toBe("allow");
   });
@@ -132,6 +137,11 @@ describe("bash guard", () => {
     ["git restore .claude/settings.json", "git rewrites guardrails"],
     ["npx x .claude/settings.json", "tool on guardrails"],
     ["pnpm exec x .claude/hooks/guard-edit.mjs", "tool on guardrails"],
+    // F-19: formatters that write must not rewrite the guardrails.
+    ["prettier --write .claude/hooks/guard-bash.mjs", "formatter writes guardrails"],
+    ["./node_modules/.bin/prettier -w .claude/settings.json", "formatter writes guardrails"],
+    ["eslint --fix .claude/hooks", "formatter writes guardrails"],
+    ["prettier --write .claude", "formatter writes guardrails"],
   ])("denies %j (%s)", (command) => {
     expect(decide(command)).toBe("deny");
   });
