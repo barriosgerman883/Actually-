@@ -1,5 +1,6 @@
 import { constants } from "node:fs";
 import { access, readdir, readFile, realpath, stat } from "node:fs/promises";
+import { extname } from "node:path";
 import type { DirEntry, Filesystem } from "../../core/ports.js";
 
 /**
@@ -9,8 +10,24 @@ import type { DirEntry, Filesystem } from "../../core/ports.js";
  */
 export const MAX_TEXT_BYTES = 64 * 1024 * 1024;
 
-/** Read-only filesystem. Nothing in this module writes to disk. */
-export function nodeFilesystem(): Filesystem {
+/** What Windows runs without an extension when PATHEXT is not set. */
+const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.PS1";
+
+/**
+ * Read-only filesystem. Nothing in this module writes to disk. On Windows,
+ * where every file passes the X_OK check, an executable is a file whose
+ * extension is in PATHEXT (F-56).
+ */
+export function nodeFilesystem(
+  options: { platform?: NodeJS.Platform; pathext?: string } = {},
+): Filesystem {
+  const windows = (options.platform ?? process.platform) === "win32";
+  const extensions = new Set(
+    (options.pathext || DEFAULT_PATHEXT)
+      .split(";")
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => e.startsWith(".")),
+  );
   return {
     async exists(path) {
       try {
@@ -55,7 +72,7 @@ export function nodeFilesystem(): Filesystem {
       try {
         const info = await stat(path);
         if (!info.isFile()) return false;
-        if (process.platform === "win32") return true;
+        if (windows) return extensions.has(extname(path).toLowerCase());
         await access(path, constants.X_OK);
         return true;
       } catch {

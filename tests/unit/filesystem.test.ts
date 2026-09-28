@@ -66,3 +66,21 @@ describe("nodeFilesystem (F-46)", () => {
     expect(scan.registryUnknown).toMatch(/\.npmrc could not be read/);
   });
 });
+
+describe("executables on Windows (F-56)", () => {
+  it("counts only the extensions of PATHEXT, ignoring case", async () => {
+    const bin = mkdtempSync(join(dir, "bin-"));
+    for (const name of ["tool.exe", "run.CMD", "notes.txt", "README", "script.ps1"]) {
+      writeFileSync(join(bin, name), "x");
+    }
+    const win = nodeFilesystem({ platform: "win32", pathext: ".COM;.EXE;.BAT;.CMD" });
+    const found = [];
+    for (const name of ["tool.exe", "run.CMD", "notes.txt", "README", "script.ps1"]) {
+      if (await win.isExecutableFile(join(bin, name))) found.push(name);
+    }
+    expect(found).toEqual(["tool.exe", "run.CMD"]);
+    const defaults = nodeFilesystem({ platform: "win32" });
+    expect(await defaults.isExecutableFile(join(bin, "script.ps1"))).toBe(true);
+    expect(await defaults.isExecutableFile(join(bin, "notes.txt"))).toBe(false);
+  });
+});

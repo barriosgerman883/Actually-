@@ -52,7 +52,7 @@ This notice is shown once.
 export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const env = nodeEnvironment();
   const dirs = appDirs(env);
-  const fs = nodeFilesystem();
+  const fs = nodeFilesystem({ pathext: env.get("PATHEXT") });
   const { config, warnings } = await loadConfig(dirs.configFile, fs, env);
   const state = fileLocalState(dirs.state);
   const runner = nodeCommandRunner({ neutralDir: () => state.neutralDir() });

@@ -166,6 +166,8 @@ Un repositorio encontrado por `GitRepositoryScanner` es un proyecto salvo eviden
 - `~/.local/bin`;
 - los directorios declarados en `[scan] bin_paths` (design.md §13).
 
+Un ejecutable es un archivo regular con permiso de ejecución. En Windows, donde ese permiso no distingue nada, es un archivo cuya extensión está en `PATHEXT` (`.COM;.EXE;.BAT;.CMD;.PS1` si la variable no está definida), sin distinguir mayúsculas.
+
 Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando llegue su provider en la Fase 2.
 
 ---
