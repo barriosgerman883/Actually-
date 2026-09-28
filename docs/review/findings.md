@@ -93,6 +93,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
 | F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | resuelto: código corregido en `7a5bfa9` |
 | F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | abierto |
+| F-57 | baja | evidencia | Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1171,6 +1172,23 @@ Reproducción, en la misma VM Windows 11: un archivo de texto plano en `~/.local
 El efecto se agranda una vez que se corrija F-55: hoy, sin pnpm funcionando, `pnpm.binDir` nunca se completa en Windows, así que solo se escanean `~/.local/bin` y `[scan] bin_paths`, que en una instalación típica de Windows no suelen existir. Corregido F-55, se sumaría también el directorio global de bins de pnpm a este mismo problema.
 
 Propuesta: en Windows, en vez de `return true`, resolver el nombre contra `PATHEXT` (o una lista por defecto `.EXE;.CMD;.BAT;.COM;.PS1` si la variable no está seteada), comparando la extensión sin distinguir mayúsculas. Un archivo sin extensión reconocida no cuenta como ejecutable. Test en `tests/unit` con un doble de `Filesystem` que simule `platform: "win32"` y un directorio con un `.exe`, un `.cmd` y un `.txt` mezclados.
+
+### F-57 · Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** evidencia
+- **Ubicación:** `src/providers/pnpm/global.ts` (`scanPnpmGlobal`); `docs/providers/pnpm.md` ("Known limitations")
+- **Detectado:** 2026-09-28, prueba de la persona responsable en un GitHub Codespace
+- **Verificación:** reproducido
+
+`actually` lanza pnpm siempre desde el directorio neutral (architecture.md §7). Ahí corepack no ve ningún `packageManager` y usa el pnpm del sistema. Dentro de un proyecto que fija otra versión, corepack usa la del proyecto, y cada versión mayor guarda los paquetes globales en otro lugar.
+
+Reproducción, en el Codespace, con `PNPM_HOME` y `XDG_*_HOME` en directorios temporales: `pnpm add -g cowsay` dentro de este repositorio corrió con pnpm 10.33.0, fijado por su `packageManager`, e instaló en `$PNPM_HOME/global/5`. Después, `actually status --global` usó pnpm 12.6.0, el del sistema. No listó `cowsay` ni como paquete ni como ejecutable, no emitió ningún diagnóstico, y `actually explain cowsay` respondió que no existe ninguna herramienta con ese nombre.
+
+La conducta sigue la regla de §7, que evita ejecutar el pnpm de un proyecto. El problema es que el límite no está escrito en ningún doc y que la salida no deja ver por qué falta un paquete que la persona acaba de instalar.
+
+Propuesta: sumarlo a "Known limitations" de `docs/providers/pnpm.md` y a "Requirements and limits" del README: `actually` solo ve los globales del pnpm que corre fuera de los proyectos. Opcionalmente, cuando el `packageManager` del proyecto analizado fija un pnpm de otra versión mayor que la del directorio neutral, emitir un diagnóstico `warning` que lo diga. Los dos datos ya se leen (`packageManager` del `package.json` y `pnpm --version`), así que no hace falta ejecutar nada nuevo.
 
 ### Verificaciones
 
