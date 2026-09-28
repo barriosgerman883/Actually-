@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import { claimFrom } from "../core/confidence.js";
 import type { Claim, Evidence, ToolSource } from "../core/model.js";
 import { githubWebUrl, parseGithubUrl } from "../providers/github/url.js";
@@ -70,8 +69,4 @@ export function updateFrom(installation: Claim<{ provider: string }>): Claim<{ p
     ],
     { cap: installation.confidence },
   );
-}
-
-export function displayName(path: string): string {
-  return basename(path);
 }

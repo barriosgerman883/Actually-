@@ -12,7 +12,7 @@ import { undiciHttpClient } from "./infrastructure/http/undici-http-client.js";
 import { fileLocalState } from "./infrastructure/local-state/file-local-state.js";
 import { VERSION } from "./version.js";
 
-export const NOTICE_MARKER = "network-notice-shown";
+const NOTICE_MARKER = "network-notice-shown";
 
 export interface RuntimeOptions {
   offline: boolean;

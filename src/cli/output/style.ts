@@ -26,7 +26,7 @@ export function createStyle(enabled: boolean): Style {
 }
 
 /** Symbols are never the only carrier of meaning (docs/design.md §6). */
-export const SYMBOL: Record<ToolStatus, string> = {
+const SYMBOL: Record<ToolStatus, string> = {
   current: "✓",
   outdated: "↑",
   unknown: "?",

@@ -8,7 +8,7 @@ export interface HumanOptions {
   style: Style;
 }
 
-export function tildify(path: string, home: string): string {
+function tildify(path: string, home: string): string {
   return path === home ? "~" : path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
 

@@ -3,7 +3,7 @@ import { NetworkError } from "../../core/errors.js";
 import type { HttpClient, HttpResponse } from "../../core/ports.js";
 
 /** The only hosts actually talks to (docs/architecture.md §8). */
-export const ALLOWED_HOSTS: ReadonlySet<string> = new Set(["registry.npmjs.org", "api.github.com"]);
+const ALLOWED_HOSTS: ReadonlySet<string> = new Set(["registry.npmjs.org", "api.github.com"]);
 
 const TIMEOUT_MS = 10_000;
 const MAX_CONCURRENT = 8;

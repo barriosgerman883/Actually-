@@ -1,13 +1,13 @@
 import type { Claim, Diagnostic, Inventory, ProjectSummary, ToolRecord } from "../../core/model.js";
 
-export const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 1;
 
 /**
  * JSON projection of the domain model (docs/design.md §14). Claims are never
  * omitted and `null` never stands for missing information. Evidence is
  * included only for `explain`.
  */
-export function claimJson<T>(claim: Claim<T>, withEvidence: boolean): Record<string, unknown> {
+function claimJson<T>(claim: Claim<T>, withEvidence: boolean): Record<string, unknown> {
   switch (claim.state) {
     case "known":
       return {

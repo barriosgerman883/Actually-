@@ -32,7 +32,7 @@ export function isRegistrySpec(spec: string): boolean {
   return /^[a-zA-Z][a-zA-Z0-9._-]*$/.test(s);
 }
 
-export function scopeOf(name: string): string | undefined {
+function scopeOf(name: string): string | undefined {
   return name.startsWith("@") ? name.slice(0, name.indexOf("/")) : undefined;
 }
 
