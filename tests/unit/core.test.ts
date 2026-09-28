@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { claimFrom, confidenceFor, minConfidence } from "../../src/core/confidence.js";
 import { notApplicable, type Evidence, type VersionClaims } from "../../src/core/model.js";
 import { buildRecord, makeToolId } from "../../src/core/record.js";
+import { redactSpec } from "../../src/core/redact.js";
 import { deriveStatus, mayBreak, updateTypeOf } from "../../src/core/versions.js";
 
 const fact: Evidence = { kind: "fact", source: "a", description: "x" };
@@ -16,6 +17,22 @@ function versions(installed?: string, latest?: string, resolved?: string): Versi
     latest: latest ? known(latest) : { state: "unknown", reason: "r", evidence: [] },
   };
 }
+
+describe("redactSpec (F-53)", () => {
+  it.each([
+    ["https://user:TOKEN@files.corp.example/a.tgz?x=1", "https://files.corp.example/…"],
+    ["git+ssh://git@github.com/o/r.git", "git+ssh://github.com/…"],
+    ["http://[bad", "http://…"],
+  ])("keeps only the scheme and host of %s", (spec, shown) => {
+    expect(redactSpec(spec)).toBe(shown);
+  });
+  it.each(["^1.2.0", "latest", "file:../x", "github:o/r", "npm:other@1"])(
+    "leaves %s as it is",
+    (spec) => {
+      expect(redactSpec(spec)).toBe(spec);
+    },
+  );
+});
 
 describe("confidence rules (architecture.md §6)", () => {
   it("is high with a fact and no contradiction", () => {

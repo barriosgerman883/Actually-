@@ -1,5 +1,6 @@
 import semver from "semver";
 import type { Evidence } from "../../core/model.js";
+import { redactSpec } from "../../core/redact.js";
 import type { RegistryConfig } from "./registry-config.js";
 
 export type OriginDecision =
@@ -85,10 +86,14 @@ export function decideOrigin(input: {
     evidence.push({
       kind: "fact",
       source: input.specSource ?? "package.json",
-      description: `declared as "${input.spec}"`,
+      description: `declared as "${redactSpec(input.spec)}"`,
     });
     if (!isRegistrySpec(input.spec)) {
-      return { query: false, reason: `not installed from a registry ("${input.spec}")`, evidence };
+      return {
+        query: false,
+        reason: `not installed from a registry ("${redactSpec(input.spec)}")`,
+        evidence,
+      };
     }
   }
   if (input.local) {

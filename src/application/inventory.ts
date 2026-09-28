@@ -14,6 +14,7 @@ import {
   type ToolSource,
 } from "../core/model.js";
 import type { CommandRunner, Environment, Filesystem } from "../core/ports.js";
+import { redactSpec } from "../core/redact.js";
 import { buildRecord } from "../core/record.js";
 import {
   installedFromTags,
@@ -290,7 +291,7 @@ async function pnpmRecords(
               ? claimFrom(pkg.installedVersion, pkg.evidence)
               : {
                   state: "unknown",
-                  reason: `pnpm reports a non-registry version (${pkg.spec ?? "unknown"})`,
+                  reason: `pnpm reports a non-registry version (${pkg.spec ? redactSpec(pkg.spec) : "unknown"})`,
                   evidence: pkg.evidence,
                 },
             latest: latest.latest,
@@ -470,11 +471,11 @@ async function projectRecords(
         scope: "project",
         projectRoot: root,
         versions: {
-          requested: claimFrom(dep.requested, [
+          requested: claimFrom(redactSpec(dep.requested), [
             {
               kind: "fact",
               source: scan.manifestPath ?? root,
-              description: `${dep.section} declares "${dep.requested}"`,
+              description: `${dep.section} declares "${redactSpec(dep.requested)}"`,
             },
           ]),
           resolved: dep.resolved

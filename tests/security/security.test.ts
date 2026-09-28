@@ -30,6 +30,7 @@ import {
   memoryFs,
   netContext,
   ok,
+  PNPM_CONFIG_PUBLIC,
 } from "../helpers/fakes.js";
 
 const ctx = {
@@ -255,6 +256,57 @@ describe("pnpm config output may contain secrets", () => {
       /SECRET|corp\.example/,
     );
     expect(parsed).toMatchObject({ state: "known", defaultPublic: false });
+  });
+
+  it("never shows the credentials of a spec that is a URL (F-53)", async () => {
+    const home = "/home/me";
+    const root = `${home}/p`;
+    const pnpmHome = `${home}/.local/share/pnpm`;
+    const inventory = await buildInventory(
+      {
+        fs: memoryFs({
+          [`${root}/package.json`]: JSON.stringify({
+            dependencies: {
+              a: "https://user:SECRET-1@files.corp.example/SECRET-2/a-1.0.0.tgz?t=SECRET-3",
+              b: "git+https://SECRET-4@github.com/o/b.git#SECRET-5",
+            },
+          }),
+        }),
+        runner: fakeRunner({
+          "pnpm.version": ok("10.0.0\n"),
+          "pnpm.root.global": ok(`${pnpmHome}/global/5/node_modules\n`),
+          "pnpm.bin.global": ok(`${pnpmHome}\n`),
+          "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+          "pnpm.list.global": ok(
+            JSON.stringify([
+              {
+                path: `${pnpmHome}/global/5`,
+                dependencies: {
+                  g: { version: "https://u:SECRET-6@files.corp.example/g.tgz", path: "/x/g" },
+                },
+              },
+            ]),
+          ),
+        }),
+        env: fakeEnv(home),
+        net: netContext(fakeHttp({})),
+        config: config(),
+        cwd: root,
+      },
+      {},
+    );
+    const names = inventory.tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["a", "b", "g"]));
+    const outputs = [
+      JSON.stringify(inventory),
+      ...inventory.tools.map((tool) =>
+        renderExplain(tool, { home, verbose: true, style: createStyle(false) }),
+      ),
+      ...inventory.tools.map((tool) => JSON.stringify(toolJson(tool, true))),
+    ];
+    for (const text of outputs) expect(text).not.toMatch(/SECRET|user:/);
+    const a = inventory.tools.find((t) => t.name === "a");
+    expect(a?.versions.requested).toMatchObject({ value: "https://files.corp.example/…" });
   });
 
   it("never shows a registry URL in explain or JSON output (F-31)", async () => {
