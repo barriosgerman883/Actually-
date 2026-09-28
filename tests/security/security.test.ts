@@ -6,6 +6,7 @@ import { MockAgent } from "undici";
 import { buildInventory } from "../../src/application/inventory.js";
 import { renderDiagnostics, renderExplain, renderStatus } from "../../src/cli/output/human.js";
 import { toolJson } from "../../src/cli/output/json.js";
+import { sanitize } from "../../src/cli/output/sanitize.js";
 import { createStyle } from "../../src/cli/output/style.js";
 import { claimFrom } from "../../src/core/confidence.js";
 import { notApplicable } from "../../src/core/model.js";
@@ -505,6 +506,16 @@ describe("untrusted text never reaches the terminal as control sequences (F-05)"
     }
     expect(status).toContain("\\x1b]0;pwned\\x07x");
     expect(diagnostics).toContain("\\x0afake line");
+  });
+
+  it("escapes bidi and zero-width characters that reorder or hide text (F-45)", () => {
+    const tricky = "v1.0.0\u202e0.0.2v\u2066x\u200b\ufeff\u2028y";
+    expect(sanitize(tricky)).toBe("v1.0.0\\u{202e}0.0.2v\\u{2066}x\\u{200b}\\u{feff}\\u{2028}y");
+    const explain = renderExplain({ ...tool, name: tricky }, opts);
+    expect(
+      [...explain].some((c) => /[\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/.test(c)),
+    ).toBe(false);
+    expect(sanitize("café ñandú 日本")).toBe("café ñandú 日本");
   });
 
   it("keeps colors, which the output adds itself", () => {
