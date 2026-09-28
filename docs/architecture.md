@@ -622,7 +622,7 @@ Cómo se determina el registry efectivo:
 - Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
 - En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada. Dentro de un workspace de pnpm (`pnpm-workspace.yaml` en un directorio superior), primero se aplica el `.npmrc` de la raíz del workspace y después el del proyecto. Si hay un `.npmrc` en un directorio intermedio, o si un `.npmrc` existe pero no se puede leer, el registry queda indeterminado.
 
-El spec de cada paquete global de pnpm se lee del `package.json` del directorio global, que está junto a la ruta que devuelve `pnpm root --global`.
+El spec de cada paquete global de pnpm se lee del `package.json` que lo declara. Con pnpm 10, es el del directorio global, junto a la ruta que devuelve `pnpm root --global`. Con pnpm 12, cada paquete tiene su propio directorio directamente dentro de esa ruta, con su `package.json`. No se usa ningún otro `package.json`: podría ser el de un proyecto.
 
 Además, en el MVP, `[network] exclude` lista nombres que nunca se consultan, por ejemplo `"@mi-empresa/*"` (design.md §13).
 

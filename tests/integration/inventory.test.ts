@@ -58,6 +58,53 @@ function pnpmWorld(pnpmConfig = PNPM_CONFIG_PUBLIC) {
   return { runner, fs };
 }
 
+// pnpm 12 layout, as `pnpm add -g` 12.6.0 leaves it: `pnpm root --global` is
+// global/v11 and each package gets its own directory with its own package.json.
+const PNPM12_ROOT = `${PNPM_HOME}/global/v11`;
+
+function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC) {
+  const isNumber = `${PNPM12_ROOT}/2c-18d9606f358acbc3-0`;
+  const types = `${PNPM12_ROOT}/2c-18d9606f75c4749e-2`;
+  const runner = fakeRunner({
+    "pnpm.version": ok("12.6.0\n"),
+    "pnpm.root.global": ok(`${PNPM12_ROOT}\n`),
+    "pnpm.bin.global": ok(`${PNPM_HOME}/bin\n`),
+    "pnpm.config.list": ok(pnpmConfig),
+    "pnpm.list.global": ok(
+      JSON.stringify([
+        {
+          path: PNPM12_ROOT,
+          private: true,
+          dependencies: {
+            "@types/node": {
+              from: "@types/node",
+              version: "22.0.0",
+              path: `${types}/node_modules/@types/node`,
+            },
+            "is-number": {
+              from: "is-number",
+              version: "6.0.0",
+              path: `${isNumber}/node_modules/is-number`,
+            },
+            stray: {
+              from: "stray",
+              version: "1.0.0",
+              path: "/home/me/elsewhere/node_modules/stray",
+            },
+          },
+        },
+      ]),
+    ),
+  });
+  const fs = memoryFs({
+    [`${isNumber}/package.json`]: JSON.stringify({ dependencies: { "is-number": "6.0.0" } }),
+    [`${types}/package.json`]: JSON.stringify({ dependencies: { "@types/node": "22.0.0" } }),
+    // A manifest outside the global root must never supply a spec.
+    "/home/me/elsewhere/package.json": JSON.stringify({ dependencies: { stray: "^1.0.0" } }),
+  });
+  return { runner, fs };
+}
+
 const registry = {
   "https://registry.npmjs.org/gstack/latest": json({
     version: "2.0.0",
@@ -112,6 +159,55 @@ describe("global inventory with pnpm", () => {
     expect(inv.tools.find((t) => t.name === "gstack")?.versions.latest).toMatchObject({
       state: "unknown",
       reason: "private default registry configured",
+    });
+  });
+
+  it("reads each package's spec from its own directory with pnpm 12 (F-50)", async () => {
+    const { runner, fs } = pnpm12World();
+    const http = fakeHttp({
+      "https://registry.npmjs.org/is-number/latest": json({ version: "7.0.0" }),
+      "https://registry.npmjs.org/@types%2Fnode/latest": json({ version: "22.1.0" }),
+      "https://registry.npmjs.org/pnpm/latest": json({ version: "12.6.0" }),
+    });
+    const inv = await buildInventory(
+      { fs, runner, env: fakeEnv(HOME), net: netContext(http), config: config(), cwd: "/tmp" },
+      { globalOnly: true },
+    );
+    expect(inv.tools.find((t) => t.name === "is-number")).toMatchObject({
+      status: "outdated",
+      updateType: "major",
+    });
+    expect(inv.tools.find((t) => t.name === "@types/node")).toMatchObject({ status: "outdated" });
+    // The package outside the global root is not trusted, so it is never queried.
+    expect(inv.tools.find((t) => t.name === "stray")?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: "origin could not be determined: no spec found",
+    });
+    expect(http.calls.map((c) => c.url).sort()).toEqual([
+      "https://registry.npmjs.org/@types%2Fnode/latest",
+      "https://registry.npmjs.org/is-number/latest",
+      "https://registry.npmjs.org/pnpm/latest",
+    ]);
+  });
+
+  it("cites the pnpm 12 manifest that declares the spec (F-50)", async () => {
+    const { runner, fs } = pnpm12World(JSON.stringify({ registry: "https://npm.corp.example/" }));
+    const inv = await buildInventory(
+      {
+        fs,
+        runner,
+        env: fakeEnv(HOME),
+        net: netContext(fakeHttp({})),
+        config: config(),
+        cwd: "/tmp",
+      },
+      { globalOnly: true },
+    );
+    const latest = inv.tools.find((t) => t.name === "is-number")?.versions.latest;
+    expect(latest?.state === "unknown" ? latest.evidence : []).toContainEqual({
+      kind: "fact",
+      source: `${PNPM12_ROOT}/2c-18d9606f358acbc3-0/package.json`,
+      description: 'declared as "6.0.0"',
     });
   });
 

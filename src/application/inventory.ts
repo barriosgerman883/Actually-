@@ -240,7 +240,7 @@ async function pnpmRecords(
         const origin = decideOrigin({
           name: pkg.name,
           spec: pkg.spec,
-          specSource: pnpm.globalManifest,
+          specSource: pkg.specSource,
           registry,
           exclude: config.network.exclude,
           resolvedTarball: pkg.resolved,

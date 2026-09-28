@@ -8,8 +8,8 @@ Detect pnpm itself and the packages installed globally with pnpm, and read proje
 
 - `pnpm --version` tells whether pnpm exists and its version.
 - `pnpm root --global` and `pnpm bin --global` locate the global directory and its bin directory.
-- `pnpm list --global --json --depth=0` lists global packages with their versions and tarball URLs.
-- The global `package.json`, next to the `pnpm root --global` directory, gives each package's declared spec.
+- `pnpm list --global --json --depth=0` lists global packages with their versions and paths. pnpm 10 also reports tarball URLs; pnpm 12 does not.
+- The global `package.json` that declares each package gives its spec. With pnpm 10, that is the one next to the `pnpm root --global` directory. With pnpm 12, each package has its own directory directly inside `pnpm root --global`, with its own `package.json`. No other `package.json` is used, because it could belong to a project.
 - Each package's own `package.json` gives its `bin` names and `repository` field.
 
 ## Evidence used
@@ -33,7 +33,7 @@ Installed versions come from pnpm. Latest versions come from the npm registry pr
 
 ## Files inspected
 
-The global `package.json`, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`.
+The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`.
 
 ## Network requests
 

@@ -1,4 +1,4 @@
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import semver from "semver";
 import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { CommandRunner, Filesystem } from "../../core/ports.js";
@@ -6,8 +6,10 @@ import type { CommandRunner, Filesystem } from "../../core/ports.js";
 export interface PnpmGlobalPackage {
   name: string;
   installedVersion?: string;
-  /** Spec from the global package.json, for example "7.5.0" or "link:../x". */
+  /** Declared spec, for example "7.5.0" or "link:../x". */
   spec?: string;
+  /** Where the spec came from: the package.json that declares it, or pnpm list. */
+  specSource?: string;
   /** Tarball pnpm reports it was installed from. */
   resolved?: string;
   dir?: string;
@@ -22,7 +24,6 @@ export interface PnpmGlobalScan {
   versionEvidence: Evidence[];
   rootDir?: string;
   binDir?: string;
-  globalManifest?: string;
   packages: PnpmGlobalPackage[];
   diagnostics: Diagnostic[];
 }
@@ -72,11 +73,28 @@ async function readJson(
 }
 
 /**
+ * The package.json files that can declare a global package's spec. pnpm 10
+ * keeps one for every global package next to `pnpm root --global`; pnpm 12
+ * gives each package its own directory directly inside that root. A
+ * package.json anywhere else is never used: it could belong to a project.
+ */
+function specManifests(rootDir: string, packagePath: unknown): string[] {
+  const manifests = [join(dirname(rootDir), "package.json")];
+  if (typeof packagePath === "string") {
+    const i = packagePath.indexOf(`${sep}node_modules${sep}`);
+    const dir = i > 0 ? packagePath.slice(0, i) : undefined;
+    if (dir && dirname(dir) === rootDir) manifests.push(join(dir, "package.json"));
+  }
+  return manifests;
+}
+
+/**
  * Inspects pnpm's global installation (docs/providers/pnpm.md).
  *
  * Installed versions come from `pnpm list --global --json` (fact). Specs
- * come from the global package.json next to `pnpm root --global`, which the
- * npm-registry origin rule needs. pnpm is never run inside a project.
+ * come from the global package.json that declares each package (see
+ * specManifests), which the npm-registry origin rule needs. pnpm is never
+ * run inside a project.
  */
 export async function scanPnpmGlobal(
   runner: CommandRunner,
@@ -137,12 +155,17 @@ export async function scanPnpmGlobal(
     : undefined;
   const deps = (first?.dependencies ?? {}) as Record<string, ListedDependency>;
 
-  let specs: Record<string, unknown> = {};
-  if (scan.rootDir) {
-    scan.globalManifest = join(dirname(scan.rootDir), "package.json");
-    const manifest = await readJson(fs, scan.globalManifest);
-    specs = { ...((manifest?.dependencies as Record<string, unknown>) ?? {}) };
-  }
+  const manifests = new Map<string, Record<string, unknown> | undefined>();
+  const declaredSpec = async (name: string, packagePath: unknown) => {
+    if (!scan.rootDir) return undefined;
+    for (const path of specManifests(scan.rootDir, packagePath)) {
+      if (!manifests.has(path)) manifests.set(path, await readJson(fs, path));
+      const declared = manifests.get(path)?.dependencies as Record<string, unknown> | undefined;
+      const spec = declared?.[name];
+      if (typeof spec === "string") return { spec, source: path };
+    }
+    return undefined;
+  };
 
   for (const [name, dep] of Object.entries(deps)) {
     const pkg: PnpmGlobalPackage = { name, bins: [], evidence: [] };
@@ -161,9 +184,14 @@ export async function scanPnpmGlobal(
       });
     }
     if (typeof dep.resolved === "string") pkg.resolved = dep.resolved;
-    const spec = specs[name];
-    if (typeof spec === "string") pkg.spec = spec;
-    else if (typeof dep.version === "string" && !semver.valid(dep.version)) pkg.spec = dep.version;
+    const declared = await declaredSpec(name, dep.path);
+    if (declared) {
+      pkg.spec = declared.spec;
+      pkg.specSource = declared.source;
+    } else if (typeof dep.version === "string" && !semver.valid(dep.version)) {
+      pkg.spec = dep.version;
+      pkg.specSource = "pnpm list --global --json";
+    }
     if (typeof dep.path === "string") {
       pkg.dir = dep.path;
       const manifest = await readJson(fs, join(dep.path, "package.json"));
