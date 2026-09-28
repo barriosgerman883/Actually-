@@ -67,8 +67,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-28 | baja | robustez | Falsos positivos del guard de Bash con backticks y con `.npmrc` | abierto |
 | F-29 | baja | robustez | El guard de edición revisa archivos fuera del repositorio | abierto |
 | F-30 | baja | seguridad | Los hooks fallan abiertos ante una entrada inválida | abierto |
-| F-31 | alta | privacidad | Credenciales dentro de la URL del registry llegan a la evidencia y a `explain` | abierto |
-| F-32 | alta | privacidad | En workspaces se consultan en el registry público paquetes que resuelven a uno local | abierto |
+| F-31 | alta | privacidad | Credenciales dentro de la URL del registry llegan a la evidencia y a `explain` | resuelto: código corregido en `55d8461` |
+| F-32 | alta | privacidad | En workspaces se consultan en el registry público paquetes que resuelven a uno local | resuelto: código corregido en `93a1807` |
 | F-33 | media | privacidad | Specs locales tratados como de registry: tarballs `.tgz` y `optionalDependencies` | abierto |
 | F-34 | media | privacidad | El `.npmrc` del proyecto se interpreta distinto que en npm y pnpm | abierto |
 | F-35 | media | evidencia | "installed by" con confianza `high` cuando el package manager solo se infiere | abierto |
@@ -174,6 +174,8 @@ Propuesta:
 - Si hay un `.npmrc` en un directorio intermedio que no se sabe interpretar, dejar el registry como indeterminado.
 
 **Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Se aplica el `.npmrc` de la raíz del workspace (`pnpm-workspace.yaml`) antes que el del proyecto, y un `.npmrc` intermedio deja el registry indeterminado. Documentado en architecture.md §8. Tests en `tests/integration/inventory.test.ts`: la reproducción del hallazgo ya no consulta nada.
+
+**Nota del 2026-09-28.** La corrección de F-32 (`93a1807`) reemplazó esta regla. Ahora se leen todos los `.npmrc` desde el proyecto hasta home, incluido el intermedio, y un registry es público solo si ninguno dice otra cosa. La reproducción de este hallazgo sigue sin consultar nada.
 
 ### F-04 · Un `.npmrc` ilegible no impide consultar
 
@@ -686,7 +688,7 @@ Pedida por la persona responsable: revisión de punta a punta de `src/`, tests, 
 
 ### F-31 · Credenciales dentro de la URL del registry llegan a la evidencia y a `explain`
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `55d8461`
 - **Severidad:** alta
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/npm-registry/registry-config.ts:58`, `:97`; `src/providers/npm-registry/origin.ts:93`
@@ -701,9 +703,11 @@ architecture.md §8 dice que de la salida de `pnpm config list` solo se extraen 
 
 Propuesta: quitar `username`, `password` y la query de toda URL de registry antes de armar la evidencia, en `parsePnpmConfig` y en `applyNpmrc`. Test en `tests/security` con una URL con credenciales, sobre `explain` y `explain --json`.
 
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable, y distinta de la propuesta. Quitar usuario, contraseña y query no alcanza: hay registries que llevan el token en el path, como `https://npm.fury.io/<TOKEN>/`. Lo señaló Codex al revisar el plan. `RegistryConfig` ya no guarda URLs, solo si cada registry es el público. La evidencia dice "is the public registry" o "is not the public registry", con el comando o el archivo que lo configuró; `10fe43a` ajustó la redacción para el `.npmrc`. Las decisiones de consulta no cambian. Documentado en architecture.md §8 y docs/providers/pnpm.md. Tests en `tests/security/security.test.ts`, con credenciales en el usuario, la query y el path, por `pnpm config list` y por `.npmrc`, sobre `explain`, `toolJson` y el inventario serializado entero; fallan sin el cambio. De punta a punta en Docker con pnpm 10.33.0: el `pnpm config list --json` real imprime la URL con la credencial completa, y `actually explain` y `explain --json` no muestran ni la credencial ni la URL.
+
 ### F-32 · En workspaces se consultan en el registry público paquetes que resuelven a uno local
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `93a1807`
 - **Severidad:** alta
 - **Tipo:** privacidad
 - **Ubicación:** `src/application/inventory.ts:420-426`, `src/providers/project/project.ts:194`, `:296`
@@ -724,6 +728,29 @@ Propuesta:
 - No consultar un paquete si el lockfile lo resuelve a algo que no es una versión de registry (`link:`, `file:`, `link: true`, una ruta).
 - Reconocer la raíz de un workspace npm o yarn (`workspaces` en un `package.json` superior), aplicar su `.npmrc` y tratar como locales los nombres de sus miembros. Si la raíz no se puede interpretar, registry indeterminado.
 - Sumar a §8 la resolución del lockfile como condición.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable. La revisión del plan con Codex cambió tres puntos de la propuesta:
+
+- **Nombres del workspace.** La raíz es el directorio más alto con `pnpm-workspace.yaml` o con `workspaces` en su `package.json`. Emular los globs de cada gestor podía dar menos miembros de los reales, así que se juntan los `name` de todos los `package.json` bajo la raíz, hasta la profundidad que alcanzan los patrones. Un paquete con uno de esos nombres no se consulta.
+- **Lockfile tipado.** No se consulta un paquete que el lockfile resuelve a `link:`, `file:`, `workspace:`, `link: true`, `resolved: file:` (el caso de `overrides`), git o una URL, ni uno cuyo tarball no es de `registry.npmjs.org`. La evidencia nombra solo el tipo de resolución.
+- **`.npmrc`.** En lugar de modelar cuál aplica en cada gestor, se leen todos desde el proyecto hasta home, y un registry es público solo si ninguno dice otra cosa. Reemplaza la regla de F-03 sobre el `.npmrc` intermedio. Costo: un proyecto que vuelve al registry público sobre un mirror configurado para el usuario deja de consultarse.
+
+Además, en un miembro de un workspace npm, `resolved` sale del `package-lock.json` de la raíz, e `installed` se busca hasta la raíz, como lo hace Node.
+
+Documentado en architecture.md §8, CLAUDE.md, README y docs/providers. Hay 15 tests nuevos en `tests/integration/inventory.test.ts` y `tests/unit/providers.test.ts`, que fallan sin el cambio. `pnpm check` en Linux: 308 tests.
+
+De punta a punta en Docker, con un workspace npm real (`npm install`) y `actually` sin red (`--network none`):
+
+- `@corp/utils` da "a package of the same workspace";
+- `is-number`, del mismo miembro, da "could not reach registry.npmjs.org": solo para él se intentó la consulta;
+- `resolved` e `installed` salen del lockfile y del `node_modules` de la raíz.
+
+Con los gestores reales se verificó lo que dice §8 de cada uno:
+
+- npm 10.9.9 avisa `ignoring workspace config` para el `.npmrc` de un miembro;
+- yarn 1.22.22 hace sus requests al registry de un `.npmrc` que está dos niveles arriba.
+
+Pérdida funcional acotada: con un lockfile v5 (pnpm 7), una dependencia con sufijo de peers (`1.2.3_react@18`) deja de consultarse hasta que se corrija F-47.
 
 ### F-33 · Specs locales tratados como de registry: tarballs `.tgz` y `optionalDependencies`
 
