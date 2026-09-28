@@ -88,10 +88,10 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-49 | baja | robustez | Ni el composition root ni el aviso de primera ejecución tienen tests | abierto |
 | F-50 | alta | corrección | Con pnpm 12, ningún paquete global recibe su `latest` | resuelto: código corregido en `793c369` |
 | F-51 | baja | corrección | El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea | abierto |
-| F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | abierto |
+| F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `f10a354` |
 | F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
-| F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | abierto |
+| F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | resuelto: código corregido en `7a5bfa9` |
 | F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
@@ -515,6 +515,8 @@ Propuesta:
 - Sumar `.claude/` a `.prettierignore` y a los `ignores` de ESLint.
 - En el guard: tratar `pnpm exec`, `npx` y `pnpm dlx` como envoltorios del comando interno; pedir confirmación ante una redirección cuyo destino tiene una variable, un glob o una sustitución; denegar `.claude` como destino de `cp`, `mv`, `rsync`, `ln`, `git checkout` y `git restore`.
 
+**Corrección propuesta, parcial.** 2026-09-28. La persona responsable pidió corregirlo desde una sesión en la nube; los frenos no se editan ni con autorización (mvp.md §9), así que el cambio quedó como un parche fuera del repositorio, `guardrails-F-20-21-22-26.patch`, verificado con `tests/security/agent-guard.test.ts` sobre copias de los hooks (219 casos). Aplicado en el repo: `.claude/` en `.prettierignore` y en los `ignores` de ESLint (`b2b2d68`). En el parche: `npx`, `pnpx` y `bunx` evalúan el comando interno; un glob que expande a un freno (`.claude/set*.json`, `.clau?e/hooks/`) cuenta como nombrarlo; una variable con `.claude` en su valor se deniega; una redirección a un destino con variable, glob o sustitución pide confirmación; `cp`, `mv`, `rsync`, `ln`, `cd`, `pushd` y `tar -C` hacia `.claude/` se deniegan, igual que `git checkout` y `git restore` sobre `.claude`; `git apply`, `git am`, `patch` y extraer un `tar` piden confirmación; un heredoc a `node`, `python`, `perl`, `ruby`, `deno`, `bun` o `php` pide confirmación, y se deniega si menciona `.claude`. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: evaluar el comando interno de `pnpm exec` y `pnpm dlx`, y pedir confirmación cuando algo que no es `curl` o `wget` se canaliza a un shell (`base64 -d | sh`).
+
 ### F-21 · Un symlink a `.claude/` saltea el guard de edición
 
 - **Estado:** abierto
@@ -533,6 +535,8 @@ Tampoco están protegidos:
 
 Propuesta: resolver con `realpath` la ruta, o la del directorio padre si el archivo es nuevo, antes de comparar; proteger todo `.claude/` y `~/.claude/settings*.json`; denegar `ln` cuando el destino es `.claude`.
 
+**Corrección propuesta, parcial.** 2026-09-28, en el mismo parche que F-20. En el parche: el guard de edición deniega todo `.claude/` (agentes, comandos, skills incluidos), y el guard de Bash deniega `ln` con `.claude` en el origen o en el destino, con lo que el symlink no se puede crear desde Bash. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: resolver la ruta con `realpath` antes de comparar, y proteger `~/.claude/settings*.json` y `~/.claude/hooks/`. Un symlink creado por otra vía sigue salteando el guard de edición.
+
 ### F-22 · Las reglas que solo cambia la persona responsable no están protegidas
 
 - **Estado:** abierto
@@ -550,6 +554,8 @@ La persona responsable decidió que las reglas solo las modifica ella, a mano, y
 Hoy estas reglas se cumplen solo porque las instrucciones lo piden.
 
 Propuesta: denegar la edición de `CLAUDE.md` y `AGENTS.md`; denegar o pedir confirmación para los cambios en `docs/mvp.md` y `docs/review/findings.md` que toquen esas secciones; pedir confirmación para `package.json` (campos `simple-git-hooks` y `scripts`), `vitest.config.ts`, `eslint.config.js` y `.prettierignore`. La nueva regla también tendría que quedar escrita en CLAUDE.md y en mvp.md §9; eso lo hace la persona responsable.
+
+**Corrección propuesta, parcial.** 2026-09-28, en el mismo parche que F-20. En el parche: el guard de edición deniega `CLAUDE.md` y `AGENTS.md`, y pide confirmación para `vitest.config.ts`, `eslint.config.js` y `.prettierignore`; el parche también escribe la regla en CLAUDE.md, AGENTS.md y mvp.md §9. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: pedir confirmación cuando una edición cambia `scripts` o `simple-git-hooks` en `package.json`, o toca la sección "Agentes" de `docs/mvp.md` o "Cómo se usa" de este archivo.
 
 ### F-23 · Formas de saltear los hooks de git que el guard no detecta
 
@@ -617,6 +623,8 @@ El parser toma la primera palabra como comando, así que `(rm`, `{`, `then` o `d
 - descargar y después ejecutar: `curl -o i.sh … && sh i.sh`.
 
 Propuesta: quitar del parser los tokens de agrupamiento y las palabras reservadas (`(`, `)`, `{`, `}`, `then`, `do`, `else`, `elif`, `!`); balancear paréntesis en `substitutions`; al pasar el límite de profundidad, denegar en vez de permitir; tratar `busybox` y `toybox` como envoltorios; pedir confirmación para `sh`, `bash` o `source` sobre un archivo descargado en el mismo comando.
+
+**Corrección propuesta, parcial.** 2026-09-28, en el mismo parche que F-20. En el parche: `(` y `)` sin comillas separan comandos, `{` y `}` solos también, y `if`, `then`, `else`, `elif`, `while`, `until`, `do`, `fi`, `done` y `!` al inicio de un comando se saltan, así que `(rm -rf ~)`, `{ rm -rf ~; }` e `if …; then rm -rf ~; fi` se deniegan; `substitutions` balancea paréntesis, con lo que `$( (rm -rf ~) )` se deniega; más de cuatro niveles de `$( )` se deniegan en vez de permitirse; `busybox` y `toybox` son envoltorios. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: denegar más de cuatro niveles de `bash -c` (hoy se permiten), y denegar `sh`, `bash`, `source` o un intérprete sobre un archivo que `curl -o` o `wget -O` descargó en el mismo comando.
 
 ### F-27 · Formas de debilitar o borrar tests que el guard no detecta
 
@@ -1052,7 +1060,7 @@ Propuesta: sanear cada id y cada dato, no el mensaje armado; o partir el mensaje
 
 ### F-52 · Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `f10a354`
 - **Severidad:** alta
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/project/project.ts` (solo se leen `.npmrc`), `src/application/inventory.ts` (`projectRecords`)
@@ -1070,6 +1078,8 @@ Reproducción:
 architecture.md §8: "ante la duda, no se consulta".
 
 Propuesta: sumar `npmRegistryServer` y `npmScopes.<scope>.npmRegistryServer` de cada `.yarnrc.yml`, desde el proyecto hasta home, como fuentes más de la regla de F-32. El registry queda indeterminado si el archivo no se puede interpretar o usa `${VAR}`. Mientras no esté hecho, dejar indeterminado el registry de todo proyecto con un `.yarnrc.yml`.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable, según la propuesta y algo más amplia. `scanProject` lee, además de cada `.npmrc`, cada `.yarnrc.yml` y cada `.yarnrc` de yarn classic desde el proyecto hasta home, incluido home, porque pnpm no refleja esos archivos. `buildInventory` suma la variable `YARN_NPM_REGISTRY_SERVER`, que yarn berry lee antes que los archivos; con eso queda cubierto lo que el hallazgo dejaba sin verificar. La regla es la de F-32: público solo si todas las fuentes coinciden; un archivo ilegible o no interpretable, un valor que no es una cadena o que usa `${VAR}`, dejan el registry indeterminado. Documentado en architecture.md §8, `docs/providers/npm-registry.md`, `docs/providers/pnpm.md` y README. Tests: `tests/unit/providers.test.ts` (cuatro casos F-52) y `tests/integration/inventory.test.ts` (dos casos F-52, incluidos `~/.yarnrc.yml`, un `npmScopes` que bloquea solo su scope, un `.yarnrc.yml` ilegible y la variable de entorno); fallan sin el cambio.
 
 ### F-53 · Credenciales dentro de un spec que es una URL llegan a `explain`
 
@@ -1107,7 +1117,7 @@ Propuesta: denegar solo cuando hay un valor después de la clave, o con `--unset
 
 ### F-55 · Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `7a5bfa9`
 - **Severidad:** alta
 - **Tipo:** robustez
 - **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`failureResult`, que solo distingue `ENOENT`), `src/providers/pnpm/global.ts:110-114` (el fallo con motivo `not-found` no genera diagnóstico), `src/application/inventory.ts:95-103` (mismo patrón al leer `pnpm.config.list`)
@@ -1128,6 +1138,8 @@ El layout de ese pnpm 10.33.0 real (`global/5/node_modules`) es el mismo que ya 
 Propuesta, acotada al fallo silencioso, sin implementar: que `scanPnpmGlobal` y la lectura del registry en `inventory.ts` agreguen un diagnóstico también cuando el motivo es `not-found`, en vez de omitirlo. El usuario pierde el mensaje "pnpm no está instalado" (que hoy tampoco se muestra en ningún lado como diagnóstico, solo se infiere de la ausencia de datos), pero gana saber que algo no se pudo revisar. Test en `tests/unit` sobre `scanPnpmGlobal` con un doble de `CommandRunner` que devuelva `reason: "not-found"`.
 
 Hacer que pnpm funcione de verdad en Windows es un trabajo aparte, más grande, que no resuelve este hallazgo por sí solo: se investigó (ver la nota en `RNF-004` de que el bloqueo es real) y hay un camino concreto sin usar shell —leer el shim `.cmd` como texto en vez de ejecutarlo, porque sigue uno de dos patrones conocidos generados por `cmd-shim`: apunta directo a un `.exe` real, o a `node` más la ruta de un `.js`. Verificado leyendo shims reales en esa misma VM: la instalación standalone de pnpm despacha a un `@pnpm/exe/pnpm.exe` nativo; la que gestiona Corepack despacha a `node ... corepack/dist/pnpm.js`. No verificado: qué forma tienen los shims de nvm-windows, Volta, Scoop o Winget. Esto queda fuera de este hallazgo porque es soporte de plataforma nueva, no un error a corregir; si se retoma, actualizar RNF-004 y `docs/providers/pnpm.md` en el mismo cambio.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable, como propone el hallazgo. `scanPnpmGlobal` emite un `warning` cuando `pnpm --version` falla con motivo `not-found` ("global packages were not checked") y mantiene el `error` para los demás motivos. `buildInventory` emite otro `warning` cuando `pnpm config list` falla, con el motivo, porque sin registry no se consulta ningún paquete; antes ese silencio también afectaba a `--project`. Documentado en `docs/providers/pnpm.md`, "Failure modes". Tests: `tests/unit/providers.test.ts` ("pnpm global scan") y `tests/integration/inventory.test.ts` (dos casos F-55); fallan sin el cambio.
 
 ### F-56 · En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable
 

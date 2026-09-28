@@ -33,7 +33,7 @@ Installed versions come from pnpm. Latest versions come from the npm registry pr
 
 ## Files inspected
 
-The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`.
+The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`.
 
 ## Network requests
 
@@ -41,9 +41,10 @@ None. See npm-registry.md.
 
 ## Failure modes
 
-- pnpm is not installed: no pnpm records and no diagnostic.
+- pnpm cannot run (not installed, not in `PATH`, or a `.cmd` shim on Windows): no pnpm records, and a warning diagnostic saying global packages were not checked. The effective registry is unknown too, so a second warning says no package was queried. A silent gap would look like "nothing found".
+- Any other failure of `pnpm --version` or `pnpm list`: an error diagnostic.
 - `pnpm bin --global` prints nothing when `PNPM_HOME` is not configured: executables are not attributed and no bin evidence is added.
-- Unparseable output: a warning diagnostic, and the scan continues.
+- Unparseable `pnpm list` output: an error diagnostic, and the scan continues with the other sources.
 
 ## Security considerations
 

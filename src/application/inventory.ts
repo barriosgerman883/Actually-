@@ -24,7 +24,8 @@ import { resolveGithubLatest, type GithubRunState } from "../providers/github/re
 import { githubWebUrl } from "../providers/github/url.js";
 import { decideOrigin } from "../providers/npm-registry/origin.js";
 import {
-  applyNpmrc,
+  applyRegistryFile,
+  applyYarnEnvironment,
   parsePnpmConfig,
   type RegistryConfig,
 } from "../providers/npm-registry/registry-config.js";
@@ -93,15 +94,24 @@ export async function buildInventory(
 
   // Effective registry, read once from pnpm (architecture.md §8).
   const registryResult = await runner.run({ command: "pnpm.config.list" });
-  const userRegistry: RegistryConfig = registryResult.ok
-    ? parsePnpmConfig(registryResult.stdout)
-    : {
-        state: "unknown",
-        reason:
-          registryResult.reason === "not-found"
-            ? "pnpm is not installed"
-            : "pnpm config could not be read",
-      };
+  let userRegistry: RegistryConfig;
+  if (registryResult.ok) {
+    userRegistry = parsePnpmConfig(registryResult.stdout);
+  } else {
+    // Without the registry nothing is queried, so say so (§13, F-55).
+    userRegistry = {
+      state: "unknown",
+      reason:
+        registryResult.reason === "not-found"
+          ? "pnpm is not installed"
+          : "pnpm config could not be read",
+    };
+    diagnostics.push({
+      severity: "warning",
+      source: "pnpm",
+      message: `default registry not determined (${registryResult.message}): no package was queried on registry.npmjs.org`,
+    });
+  }
 
   // Git repositories under scan.paths, and the ones declared as tools.
   const declaredTools = new Map(config.tools.git.map((t) => [t.path, t]));
@@ -416,8 +426,8 @@ async function projectRecords(
   diagnostics.push(...scan.diagnostics);
   let registry: RegistryConfig = scan.registryUnknown
     ? { state: "unknown", reason: scan.registryUnknown }
-    : userRegistry;
-  for (const npmrc of scan.npmrcs) registry = applyNpmrc(registry, npmrc.text, npmrc.path);
+    : applyYarnEnvironment(userRegistry, deps.env.get("YARN_NPM_REGISTRY_SERVER"));
+  for (const file of scan.registryFiles) registry = applyRegistryFile(registry, file);
 
   const gitRoot = await findUpDir(fs, root, ".git", deps.env.homeDir);
   const repo = gitRoot ? await readRepository(fs, gitRoot) : undefined;

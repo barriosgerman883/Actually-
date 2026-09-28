@@ -109,9 +109,18 @@ export async function scanPnpmGlobal(
 
   const version = await runner.run({ command: "pnpm.version" });
   if (!version.ok) {
-    if (version.reason !== "not-found") {
-      scan.diagnostics.push({ severity: "error", source: "pnpm", message: version.message });
-    }
+    // A missing pnpm is a valid but incomplete result; any other failure is
+    // an error. Both are reported: a silent gap looks like "nothing found"
+    // (architecture.md §13, F-55).
+    scan.diagnostics.push(
+      version.reason === "not-found"
+        ? {
+            severity: "warning",
+            source: "pnpm",
+            message: `${version.message}: global packages were not checked`,
+          }
+        : { severity: "error", source: "pnpm", message: version.message },
+    );
     return scan;
   }
   scan.installed = true;

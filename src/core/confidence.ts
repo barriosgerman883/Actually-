@@ -7,7 +7,7 @@ export function minConfidence(levels: ConfidenceLevel[]): ConfidenceLevel | unde
   return levels.reduce((a, b) => (order[a] <= order[b] ? a : b));
 }
 
-export function capConfidence(level: ConfidenceLevel, cap: ConfidenceLevel): ConfidenceLevel {
+function capConfidence(level: ConfidenceLevel, cap: ConfidenceLevel): ConfidenceLevel {
   return order[level] <= order[cap] ? level : cap;
 }
 

@@ -3,6 +3,7 @@ import semver from "semver";
 import { parse as parseYaml } from "yaml";
 import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { Filesystem } from "../../core/ports.js";
+import type { RegistryFile } from "../npm-registry/registry-config.js";
 import { findWorkspace, type WorkspaceCache } from "./workspace.js";
 
 export type DependencySection = "dependencies" | "devDependencies" | "optionalDependencies";
@@ -25,8 +26,8 @@ export interface ProjectScan {
   manifestPath?: string;
   packageManager?: { value: string; evidence: Evidence[] };
   dependencies: ProjectDependency[];
-  /** Every .npmrc that could apply, from the outermost directory to the project. */
-  npmrcs: { path: string; text: string }[];
+  /** Every registry file that could apply, from the outermost directory to the project. */
+  registryFiles: RegistryFile[];
   /** Set when a registry setting could apply but cannot be read or interpreted. */
   registryUnknown?: string;
   diagnostics: Diagnostic[];
@@ -205,7 +206,7 @@ export async function scanProject(
   stopAt: string,
   workspaces: WorkspaceCache = new Map(),
 ): Promise<ProjectScan> {
-  const scan: ProjectScan = { root, dependencies: [], npmrcs: [], diagnostics: [] };
+  const scan: ProjectScan = { root, dependencies: [], registryFiles: [], diagnostics: [] };
   const manifestPath = join(root, "package.json");
   if (!(await fs.exists(manifestPath))) return scan;
   scan.manifestPath = manifestPath;
@@ -401,27 +402,37 @@ export async function scanProject(
     }
   }
 
-  // Which .npmrc applies depends on the package manager: npm reads the
-  // workspace root's, pnpm the root's and the project's, yarn classic every
-  // ancestor's. All of them are read, and a registry counts as public only if
-  // none says otherwise. ~/.npmrc is already in pnpm's config (architecture.md §8).
-  const npmrcDirs: string[] = [];
+  // Which file applies depends on the package manager: npm reads the
+  // workspace root's .npmrc, pnpm the root's and the project's, yarn classic
+  // every ancestor's .npmrc and .yarnrc, yarn berry every ancestor's
+  // .yarnrc.yml and never .npmrc. All of them are read, and a registry counts
+  // as public only if none says otherwise. ~/.npmrc is already in pnpm's
+  // config; the yarn files in home are not (architecture.md §8, F-52).
+  const dirs: string[] = [];
   for (let dir = root; ; dir = dirname(dir)) {
-    if (dir !== stopAt || dir === root) npmrcDirs.unshift(dir);
+    dirs.unshift(dir);
     if (dir === stopAt || dirname(dir) === dir) break;
   }
-  for (const dir of npmrcDirs) {
-    const npmrcPath = join(dir, ".npmrc");
-    if (!(await fs.exists(npmrcPath))) continue;
-    try {
-      scan.npmrcs.push({ path: npmrcPath, text: await fs.readText(npmrcPath) });
-    } catch {
-      scan.registryUnknown ??= `${npmrcPath} could not be read`;
-      scan.diagnostics.push({
-        severity: "warning",
-        source: "project",
-        message: `${npmrcPath} could not be read`,
-      });
+  const registryFiles: [string, RegistryFile["format"]][] = [
+    [".npmrc", "npmrc"],
+    [".yarnrc", "yarnrc"],
+    [".yarnrc.yml", "yarnrc.yml"],
+  ];
+  for (const dir of dirs) {
+    for (const [name, format] of registryFiles) {
+      if (format === "npmrc" && dir === stopAt && dir !== root) continue;
+      const path = join(dir, name);
+      if (!(await fs.exists(path))) continue;
+      try {
+        scan.registryFiles.push({ path, text: await fs.readText(path), format });
+      } catch {
+        scan.registryUnknown ??= `${path} could not be read`;
+        scan.diagnostics.push({
+          severity: "warning",
+          source: "project",
+          message: `${path} could not be read`,
+        });
+      }
     }
   }
   return scan;

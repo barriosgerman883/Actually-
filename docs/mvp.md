@@ -329,8 +329,11 @@ El repositorio debe incluir:
 
 ### Pre-commit
 
-- lint de archivos modificados;
-- checks rápidos.
+```bash
+pnpm lint && pnpm format:check && pnpm test:architecture
+```
+
+Sobre todo el repositorio, no solo los archivos modificados: los tres tardan segundos, y así el hook no depende de qué haya en el índice.
 
 ### Pre-push
 

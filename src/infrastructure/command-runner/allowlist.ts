@@ -32,10 +32,10 @@ export const COMMAND_TABLE: Readonly<Record<AllowedCommand, CommandSpec>> = Obje
 });
 
 /** Options git always receives before the subcommand. */
-export const GIT_HARDENING_ARGS = ["-c", "core.fsmonitor=false"] as const;
+const GIT_HARDENING_ARGS = ["-c", "core.fsmonitor=false"] as const;
 
 /** Environment overrides for every git invocation (architecture.md §7). */
-export function gitHardeningEnv(): Record<string, string> {
+function gitHardeningEnv(): Record<string, string> {
   return {
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: devNull,
@@ -55,7 +55,7 @@ export function gitHardeningEnv(): Record<string, string> {
  * would contact the network outside the HTTP client), and no corepack
  * auto-pinning or download prompts.
  */
-export function pnpmQuietEnv(): Record<string, string> {
+function pnpmQuietEnv(): Record<string, string> {
   return {
     npm_config_update_notifier: "false",
     COREPACK_ENABLE_AUTO_PIN: "0",

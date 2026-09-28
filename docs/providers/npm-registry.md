@@ -15,7 +15,7 @@ A package is queried on `registry.npmjs.org` only if all of these hold:
 5. when pnpm or the lockfile reports the tarball, it came from `registry.npmjs.org`;
 6. its name is not in `[network] exclude`.
 
-The config sources are `pnpm config list --json` and every `.npmrc` from the project up to home: which one applies depends on the package manager, so a registry counts as public only if none says otherwise. A registry set through `${VAR}` cannot be resolved safely, so nothing is queried. If any condition cannot be determined, the package is not queried and `latest` is unknown with the reason. architecture.md §8 has the full rule, including how a workspace and its packages are found.
+The config sources are `pnpm config list --json`, every `.npmrc` from the project up to home, every `.yarnrc.yml` (`npmRegistryServer`, `npmScopes`) and `.yarnrc` (`registry`, `"@scope:registry"`) from the project up to and including home, and `YARN_NPM_REGISTRY_SERVER`: which one applies depends on the package manager, so a registry counts as public only if none says otherwise. A registry set through `${VAR}`, or a file that cannot be read or parsed, cannot be resolved safely, so nothing is queried. If any condition cannot be determined, the package is not queried and `latest` is unknown with the reason. architecture.md §8 has the full rule, including how a workspace and its packages are found.
 
 ## Evidence used
 
@@ -35,7 +35,7 @@ The config sources are `pnpm config list --json` and every `.npmrc` from the pro
 
 ## Files inspected
 
-Every `.npmrc` from the project up to home, the workspace markers (`pnpm-workspace.yaml`, `workspaces` in `package.json`) and the `package.json` of the workspace's packages, and the lockfile.
+Every `.npmrc`, `.yarnrc` and `.yarnrc.yml` from the project up to home, the workspace markers (`pnpm-workspace.yaml`, `workspaces` in `package.json`) and the `package.json` of the workspace's packages, and the lockfile.
 
 ## Network requests
 

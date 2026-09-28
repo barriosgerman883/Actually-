@@ -271,18 +271,15 @@ Evitar:
 Error: ENOENT at Object.openSync...
 ```
 
-Preferir:
+Preferir un diagnóstico por línea, en stderr, con su severidad, el componente que lo emitió y el motivo en lenguaje llano, seguido de una línea que aclara que la ejecución siguió:
 
 ```text
-Could not inspect Git metadata.
-
-Reason:
-repository is not accessible
-
-actually continued scanning other sources.
+error: git: ~/tools/gstack: git describe failed: not a git repository
+warning: github: GitHub rate limit reached; some versions are unknown
+actually continued with the other sources.
 ```
 
-Con `--json`, el mismo problema aparece en `diagnostics` (§14).
+Las rutas dentro de home se muestran con `~`. Con `--json`, los mismos diagnósticos aparecen en `diagnostics` (§14) y stderr los muestra igual.
 
 Con debug:
 
@@ -327,29 +324,7 @@ Luego el detalle.
 
 ## 12. Configuración inicial
 
-`actually init` no entra en el MVP. Sin configuración, `status` revisa las herramientas globales y el proyecto de la carpeta actual, así que configurar no es obligatorio. Se reconsidera si la configuración pasa a ser necesaria.
-
-Un flujo posible:
-
-```bash
-actually init
-```
-
-Flujo:
-
-```text
-actually needs directories to scan.
-
-Detected common locations:
-
-[x] ~/projects
-[x] ~/dev
-[ ] ~/Documents
-
-Save configuration? [Y/n]
-```
-
-No debe seleccionar directorios sensibles indiscriminadamente.
+No hay `actually init`. Sin configuración, `status` revisa las herramientas globales y el proyecto de la carpeta actual, así que configurar no es obligatorio; el archivo se escribe a mano (§13). Se reconsidera si la configuración pasa a ser necesaria, y en ese caso el asistente no debe seleccionar directorios sensibles por su cuenta.
 
 ### Aviso de red en la primera ejecución
 
@@ -653,15 +628,7 @@ Estas instrucciones no reemplazan controles automáticos.
 
 ### Pre-commit
 
-Debe ser rápido.
-
-Ejemplo:
-
-```text
-lint staged files
-format check
-light architecture checks
-```
+Debe ser rápido. Lo que corre está en mvp.md §9: lint, chequeo de formato y tests de arquitectura, sobre todo el repositorio.
 
 ### Pre-push
 

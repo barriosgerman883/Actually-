@@ -316,30 +316,7 @@ contratos de providers, ADRs y requisitos de contribución.
 
 ### v0.1 — Primera versión refutable
 
-> **Absorbida por el MVP.** Se decidió implementar el MVP completo sin publicar antes esta versión reducida. La primera versión, `0.1.0`, incluye todo lo de la Fase 1. Esta sección queda como registro del plan original.
-
-Antes de completar el MVP, una versión mínima que alguien pueda instalar, ejecutar sobre su máquina real y tratar de desmentir. Su objetivo es contrastar el diseño con datos reales, no cubrir casos.
-
-Incluye:
-
-- `actually status --global` para los paquetes globales de pnpm;
-- la última versión desde el npm registry;
-- `actually explain <tool>` y `--json`;
-- el aviso de red de la primera ejecución y `--offline`;
-- una plantilla de issue "actually was wrong" que pide la salida de `explain`.
-
-No incluye Git, GitHub, proyectos, caché ni archivo de configuración. Sin GitHub, la caché todavía no es necesaria.
-
-Protecciones de red en v0.1 (architecture.md §8):
-
-- **Incluidas:**
-  - un paquete se consulta solo si su spec es de registry, el registry predeterminado efectivo es el público y su scope no está asignado a otro registry;
-  - el registry efectivo se obtiene de `pnpm config list --json`;
-  - si el origen no se puede determinar, `latest` queda `unknown` y el paquete no se consulta;
-  - `--offline` evita toda consulta.
-- **No incluidas:** `[network] exclude`, porque requiere archivo de configuración. Para no revelar un nombre concreto, la alternativa en v0.1 es `--offline`.
-
-Criterio de éxito: `@getactually/cli@0.1.0` se instala con pnpm, alguien lo ejecuta sobre su máquina real, y cada resultado incorrecto se puede reportar con la salida de `explain`.
+> **Absorbida por el MVP.** Iba a ser una versión reducida, solo `status --global` con pnpm y el npm registry más `explain`, `--json` y `--offline`, publicada antes del MVP para contrastar el diseño con máquinas reales. Se decidió implementar el MVP completo sin publicarla: la primera versión, `0.1.0`, incluye todo lo de la Fase 1. El criterio de éxito sigue vigente: alguien la ejecuta sobre su máquina real y cada resultado incorrecto se puede reportar con la salida de `explain`.
 
 ### Fase 1 — MVP
 
