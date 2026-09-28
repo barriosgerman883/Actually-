@@ -57,12 +57,12 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | resuelto: código corregido en `54ec142` |
 | F-19 | media | seguridad | `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos | resuelto: código corregido en `940c5ed` |
 | F-20 | alta | seguridad | Bash puede escribir los archivos de los frenos por rutas que el guard no ve | abierto |
-| F-21 | alta | seguridad | Un symlink a `.claude/` saltea el guard de edición | abierto |
-| F-22 | alta | seguridad | Las reglas que solo cambia la persona responsable no están protegidas | abierto |
+| F-21 | alta | seguridad | Un symlink a `.claude/` saltea el guard de edición | resuelto: código corregido en `fd26adb` |
+| F-22 | alta | seguridad | Las reglas que solo cambia la persona responsable no están protegidas | resuelto: código corregido en `fd26adb` |
 | F-23 | media | seguridad | Formas de saltear los hooks de git que el guard no detecta | abierto |
 | F-24 | media | seguridad | Una opción con valor antes del subcomando esconde `publish` | abierto |
 | F-25 | media | privacidad | Secretos legibles con variables, globs y búsquedas recursivas | abierto |
-| F-26 | alta | seguridad | Comandos destructivos dentro de subshells, grupos o `if` pasan el guard | abierto |
+| F-26 | alta | seguridad | Comandos destructivos dentro de subshells, grupos o `if` pasan el guard | resuelto: código corregido en `fd26adb` |
 | F-27 | media | robustez | Formas de debilitar o borrar tests que el guard no detecta | abierto |
 | F-28 | baja | robustez | Falsos positivos del guard de Bash con backticks y con `.npmrc` | abierto |
 | F-29 | baja | robustez | El guard de edición revisa archivos fuera del repositorio | abierto |
@@ -517,9 +517,11 @@ Propuesta:
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28. La persona responsable pidió corregirlo desde una sesión en la nube; los frenos no se editan ni con autorización (mvp.md §9), así que el cambio se preparó como un parche fuera del repositorio, verificado con `tests/security/agent-guard.test.ts` sobre copias de los hooks (219 casos), y la persona responsable lo aplicó a mano en `7d080f2`. Antes, en `b2b2d68`: `.claude/` en `.prettierignore` y en los `ignores` de ESLint. Sigue `abierto` por lo que quedó afuera. En `7d080f2`: `npx`, `pnpx` y `bunx` evalúan el comando interno; un glob que expande a un freno (`.claude/set*.json`, `.clau?e/hooks/`) cuenta como nombrarlo; una variable con `.claude` en su valor se deniega; una redirección a un destino con variable, glob o sustitución pide confirmación; `cp`, `mv`, `rsync`, `ln`, `cd`, `pushd` y `tar -C` hacia `.claude/` se deniegan, igual que `git checkout` y `git restore` sobre `.claude`; `git apply`, `git am`, `patch` y extraer un `tar` piden confirmación; un heredoc a `node`, `python`, `perl`, `ruby`, `deno`, `bun` o `php` pide confirmación, y se deniega si menciona `.claude`. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: evaluar el comando interno de `pnpm exec` y `pnpm dlx`, y pedir confirmación cuando algo que no es `curl` o `wget` se canaliza a un shell (`base64 -d | sh`).
 
+**Segunda corrección parcial, aplicada en `fd26adb`.** 2026-09-28, también como parche que aplicó la persona responsable. `pnpm exec`, `pnpm dlx`, `npm exec`, `yarn exec` y `yarn dlx` evalúan el comando interno, y el texto de `npx -c`, `--call` y `--shell-mode` se revisa como un comando más; el texto canalizado a un shell o a un intérprete que lee de stdin pide confirmación, y se deniega si nombra `.claude`. Con esto, lo que el guard puede ver está cubierto. Sigue `abierto` por la primera propuesta, que un hook de texto no puede cumplir: un intérprete que ejecuta un archivo (`node x.mjs`) puede escribir `.claude/` sin nombrarlo, y eso solo lo cierra una protección fuera del agente, como `.claude/` sin permiso de escritura para su usuario o un check de CI o `CODEOWNERS` que exija la aprobación de la persona responsable.
+
 ### F-21 · Un symlink a `.claude/` saltea el guard de edición
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `fd26adb`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-edit.mjs` (`evaluate`), `.claude/hooks/guard-bash.mjs`
@@ -537,9 +539,11 @@ Propuesta: resolver con `realpath` la ruta, o la del directorio padre si el arch
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28, junto con F-20; sigue `abierto` por lo que quedó afuera. En `7d080f2`: el guard de edición deniega todo `.claude/` (agentes, comandos, skills incluidos), y el guard de Bash deniega `ln` con `.claude` en el origen o en el destino, con lo que el symlink no se puede crear desde Bash. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: resolver la ruta con `realpath` antes de comparar, y proteger `~/.claude/settings*.json` y `~/.claude/hooks/`. Un symlink creado por otra vía sigue salteando el guard de edición.
 
+**Corregido en `fd26adb`.** 2026-09-28, como parche que aplicó la persona responsable. El guard de edición resuelve los symlinks de la ruta, o de su directorio existente más cercano si el archivo es nuevo, y exige que pasen tanto la ruta escrita como la resuelta; deniega también `~/.claude/settings*.json` y `~/.claude/hooks/`, con la ruta del home escrita o resuelta. `tests/security/agent-guard.test.ts` lo verifica con symlinks reales a `.claude/` y a un archivo dentro, y con un home temporal.
+
 ### F-22 · Las reglas que solo cambia la persona responsable no están protegidas
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `fd26adb`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-edit.mjs` (`DENY_PATHS`)
@@ -556,6 +560,8 @@ Hoy estas reglas se cumplen solo porque las instrucciones lo piden.
 Propuesta: denegar la edición de `CLAUDE.md` y `AGENTS.md`; denegar o pedir confirmación para los cambios en `docs/mvp.md` y `docs/review/findings.md` que toquen esas secciones; pedir confirmación para `package.json` (campos `simple-git-hooks` y `scripts`), `vitest.config.ts`, `eslint.config.js` y `.prettierignore`. La nueva regla también tendría que quedar escrita en CLAUDE.md y en mvp.md §9; eso lo hace la persona responsable.
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28, junto con F-20; sigue `abierto` por lo que quedó afuera. En `7d080f2`: el guard de edición deniega `CLAUDE.md` y `AGENTS.md`, y pide confirmación para `vitest.config.ts`, `eslint.config.js` y `.prettierignore`; el mismo commit escribe la regla en CLAUDE.md, AGENTS.md y mvp.md §9. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: pedir confirmación cuando una edición cambia `scripts` o `simple-git-hooks` en `package.json`, o toca la sección "Agentes" de `docs/mvp.md` o "Cómo se usa" de este archivo.
+
+**Corregido en `fd26adb`.** 2026-09-28, como parche que aplicó la persona responsable. El guard de edición calcula el texto que deja la edición y pide confirmación si cambian `scripts` o `simple-git-hooks` de `package.json` (o si alguno de los dos no parsea), la sección "Agentes" de `docs/mvp.md` o "Cómo se usa" de este archivo; el resto de esos archivos se edita sin confirmación. CLAUDE.md y mvp.md §9 describen la regla.
 
 ### F-23 · Formas de saltear los hooks de git que el guard no detecta
 
@@ -607,7 +613,7 @@ Propuesta: denegar la expansión de variables cuyo nombre sugiere un secreto (`T
 
 ### F-26 · Comandos destructivos dentro de subshells, grupos o `if` pasan el guard
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `fd26adb`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-bash.mjs` (`parse`, `substitutions`, `checkCommand`)
@@ -625,6 +631,8 @@ El parser toma la primera palabra como comando, así que `(rm`, `{`, `then` o `d
 Propuesta: quitar del parser los tokens de agrupamiento y las palabras reservadas (`(`, `)`, `{`, `}`, `then`, `do`, `else`, `elif`, `!`); balancear paréntesis en `substitutions`; al pasar el límite de profundidad, denegar en vez de permitir; tratar `busybox` y `toybox` como envoltorios; pedir confirmación para `sh`, `bash` o `source` sobre un archivo descargado en el mismo comando.
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28, junto con F-20; sigue `abierto` por lo que quedó afuera. En `7d080f2`: `(` y `)` sin comillas separan comandos, `{` y `}` solos también, y `if`, `then`, `else`, `elif`, `while`, `until`, `do`, `fi`, `done` y `!` al inicio de un comando se saltan, así que `(rm -rf ~)`, `{ rm -rf ~; }` e `if …; then rm -rf ~; fi` se deniegan; `substitutions` balancea paréntesis, con lo que `$( (rm -rf ~) )` se deniega; más de cuatro niveles de `$( )` se deniegan en vez de permitirse; `busybox` y `toybox` son envoltorios. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: denegar más de cuatro niveles de `bash -c` (hoy se permiten), y denegar `sh`, `bash`, `source` o un intérprete sobre un archivo que `curl -o` o `wget -O` descargó en el mismo comando.
+
+**Corregido en `fd26adb`.** 2026-09-28, como parche que aplicó la persona responsable. Más de cuatro niveles de `bash -c` o `eval` se deniegan, igual que `$( )`. Los archivos que `curl` (`-o`, `--output`, `-O`) o `wget` (`-O`, `--output-document`, o el nombre de la URL) guardan quedan registrados para el resto de la línea, incluidos los `bash -c` anidados, y ejecutarlos con un shell, `source`, `.`, un intérprete o por su ruta (`./i.sh`) se deniega.
 
 ### F-27 · Formas de debilitar o borrar tests que el guard no detecta
 
