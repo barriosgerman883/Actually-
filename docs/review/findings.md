@@ -91,7 +91,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | abierto |
 | F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
-| F-55 | alta | corrección | En Windows, `pnpm` nunca se puede ejecutar y `status --global` reporta vacío sin avisar | abierto |
+| F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | abierto |
 | F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
@@ -1105,18 +1105,18 @@ Propuesta: cuando un spec o una versión parsea como URL, mostrar solo el esquem
 
 Propuesta: denegar solo cuando hay un valor después de la clave, o con `--unset`, `--replace-all` o `--add`. Permitir `git config core.hooksPath`, `git config --get core.hooksPath` y `--get-regexp`. Tests en `tests/security/agent-guard.test.ts` con las dos formas. Solo la persona responsable cambia `.claude/hooks/`.
 
-### F-55 · En Windows, `pnpm` nunca se puede ejecutar y `status --global` reporta vacío sin avisar
+### F-55 · Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico
 
 - **Estado:** abierto
 - **Severidad:** alta
-- **Tipo:** corrección
-- **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`failureResult`, `execFile` con `shell: false`), `src/providers/pnpm/global.ts:110-114` (el fallo con motivo `not-found` no genera diagnóstico)
-- **Detectado:** 2026-09-28, hipótesis de Claude Code a partir de una investigación pedida por la persona responsable; confirmado por ella en una VM Windows 11 real
+- **Tipo:** robustez
+- **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`failureResult`, que solo distingue `ENOENT`), `src/providers/pnpm/global.ts:110-114` (el fallo con motivo `not-found` no genera diagnóstico), `src/application/inventory.ts:95-103` (mismo patrón al leer `pnpm.config.list`)
+- **Detectado:** 2026-09-28, la persona responsable, verificando en una VM Windows 11 real una limitación que ya documentan `prd.md §9` (RNF-004) y `docs/providers/pnpm.md`
 - **Verificación:** reproducido
 
-Cuando pnpm se instala por la vía habitual en Windows (Corepack o `npm install -g`), el ejecutable que queda en PATH es un shim `.cmd` o `.ps1`, no un `.exe`. Desde que Node.js corrigió `CVE-2024-27980` (y su bypass, `CVE-2024-36138`), `execFile`/`spawn` de un `.bat` o `.cmd` sin `shell: true` deja de funcionar. `CommandRunner` llama a `execFile("pnpm", args, { shell: false })` (architecture.md §7 prohíbe el shell), así que en Windows esa llamada siempre falla.
+**Que pnpm no se pueda ejecutar en Windows no es nuevo: ya está documentado**, en dos lugares. `docs/prd.md §9`, RNF-004: "En Windows, pnpm es un shim `.cmd` que no se puede ejecutar sin shell, así que su soporte queda para después del MVP." Y `docs/providers/pnpm.md`, "Known limitations": "Windows is not supported: pnpm is a `.cmd` shim there, which cannot be run without a shell." La causa es real: desde que Node.js corrigió `CVE-2024-27980` (y su bypass, `CVE-2024-36138`), `execFile`/`spawn` de un `.cmd` sin `shell: true` no funciona, y `CommandRunner` llama a `execFile("pnpm", args, { shell: false })` sin excepción (architecture.md §7 prohíbe el shell).
 
-El problema no es solo que falle: es que falla de un modo indistinguible de "pnpm no está instalado". `failureResult` solo reconoce `ENOENT` como `reason: "not-found"`, y todo indica que el error que da Node en este caso cae en esa rama, porque `scanPnpmGlobal` solo agrega un diagnóstico "si `version.reason !== "not-found"`" (`global.ts:112`), y no se generó ninguno.
+Lo que no estaba documentado, y es el motivo real de este hallazgo: **qué pasa si se usa igual**. No hay ningún error, ni una advertencia, ni un exit code distinto. `status --global` da `0 updates available`, como si hubiera revisado todo y no hubiera encontrado nada. La causa es genérica, no específica de Windows: `failureResult` solo reconoce `ENOENT` como `reason: "not-found"`, y `scanPnpmGlobal` solo agrega un diagnóstico "si `version.reason !== "not-found"`" (`global.ts:112`). El mismo patrón se repite en `inventory.ts` al leer la config de pnpm para decidir el registry. Cualquier fallo de `execFile` que Node clasifique como `ENOENT` —no solo el de Windows, también un PATH roto en Linux o macOS— desaparece de la misma forma.
 
 Reproducción, en una VM Windows 11 real con pnpm 10.33.0 (vía Git Bash/MINGW64):
 
@@ -1125,11 +1125,9 @@ Reproducción, en una VM Windows 11 real con pnpm 10.33.0 (vía Git Bash/MINGW64
 
 El layout de ese pnpm 10.33.0 real (`global/5/node_modules`) es el mismo que ya cubren los tests existentes (`pnpmWorld()` en `tests/integration/inventory.test.ts`), así que la lógica de detección en sí no está en duda: el bloqueo es enteramente en cómo se invoca el proceso.
 
-`architecture.md §7` no distingue plataformas al describir `CommandRunner`, y no dice qué pasa en Windows.
+Propuesta, acotada al fallo silencioso, sin implementar: que `scanPnpmGlobal` y la lectura del registry en `inventory.ts` agreguen un diagnóstico también cuando el motivo es `not-found`, en vez de omitirlo. El usuario pierde el mensaje "pnpm no está instalado" (que hoy tampoco se muestra en ningún lado como diagnóstico, solo se infiere de la ausencia de datos), pero gana saber que algo no se pudo revisar. Test en `tests/unit` sobre `scanPnpmGlobal` con un doble de `CommandRunner` que devuelva `reason: "not-found"`.
 
-Propuesta, investigada pero no implementada: cuando el binario resuelto por PATH sea un `.cmd`, no ejecutarlo — leerlo como texto. Los shims que genera `cmd-shim` (la misma librería que usa pnpm) son de una sola línea y siguen uno de dos patrones conocidos: apuntan directo a un `.exe` real, o a `node` más la ruta de un `.js`. Verificado leyendo shims reales: la instalación standalone de pnpm en Windows despacha a un `@pnpm/exe/pnpm.exe` nativo; la que gestiona Corepack despacha a `node ... corepack/dist/pnpm.js`. En cualquiera de los dos casos, `execFile` se llama sobre lo que el shim señala, nunca sobre el `.cmd`, así que no hace falta `shell: true` ni tocar esa regla de arquitectura. Si el shim no calza con ninguno de los dos patrones, el resultado queda como "no determinado", igual que hoy con "no encontrado". No verificado: qué forma tienen los shims de nvm-windows, Volta, Scoop o Winget.
-
-Por separado, y aunque no es el foco de este hallazgo: `scanPnpmGlobal` debería distinguir "no se encontró el binario" de "se encontró pero no se pudo ejecutar", en vez de tratarlos igual. Hoy un fallo real de `execFile` que sí caiga en `ENOENT` (por ejemplo, PATH mal armado) también queda mudo, no solo el caso de Windows.
+Hacer que pnpm funcione de verdad en Windows es un trabajo aparte, más grande, que no resuelve este hallazgo por sí solo: se investigó (ver la nota en `RNF-004` de que el bloqueo es real) y hay un camino concreto sin usar shell —leer el shim `.cmd` como texto en vez de ejecutarlo, porque sigue uno de dos patrones conocidos generados por `cmd-shim`: apunta directo a un `.exe` real, o a `node` más la ruta de un `.js`. Verificado leyendo shims reales en esa misma VM: la instalación standalone de pnpm despacha a un `@pnpm/exe/pnpm.exe` nativo; la que gestiona Corepack despacha a `node ... corepack/dist/pnpm.js`. No verificado: qué forma tienen los shims de nvm-windows, Volta, Scoop o Winget. Esto queda fuera de este hallazgo porque es soporte de plataforma nueva, no un error a corregir; si se retoma, actualizar RNF-004 y `docs/providers/pnpm.md` en el mismo cambio.
 
 ### F-56 · En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable
 
