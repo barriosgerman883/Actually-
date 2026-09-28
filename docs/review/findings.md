@@ -88,6 +88,9 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-49 | baja | robustez | Ni el composition root ni el aviso de primera ejecución tienen tests | abierto |
 | F-50 | alta | corrección | Con pnpm 12, ningún paquete global recibe su `latest` | resuelto: código corregido en `793c369` |
 | F-51 | baja | corrección | El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea | abierto |
+| F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | abierto |
+| F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
+| F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1044,6 +1047,61 @@ Propuesta: tomar el spec del `package.json` del directorio que contiene el `node
 `findTool` arma el mensaje de ambigüedad con saltos de línea, y `run` le aplica `sanitize` entero, que escapa `\n`. La salida real fue `actually: "is-number" matches 2 tools. Pass one of these ids:\x0a  global:pnpm:is-number\x0a  project:/home/node/projects/app:is-number`. Es un efecto de la corrección de F-05. design.md §9 pide listar los ids para elegir uno.
 
 Propuesta: sanear cada id y cada dato, no el mensaje armado; o partir el mensaje en líneas y sanear cada una. Test del mensaje de ambigüedad en `tests/integration/cli.test.ts`.
+
+### F-52 · Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público
+
+- **Estado:** abierto
+- **Severidad:** alta
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/project/project.ts` (solo se leen `.npmrc`), `src/application/inventory.ts` (`projectRecords`)
+- **Detectado:** 2026-09-28, Codex, al revisar el plan de F-32; verificado por Claude Code
+- **Verificación:** reproducido
+
+Yarn berry (2 en adelante) no lee `.npmrc`. Su registry sale de `npmRegistryServer` y de `npmScopes` en `.yarnrc.yml`, y por defecto es `https://registry.yarnpkg.com`. `actually` no lee ese archivo. En un proyecto yarn berry con registry privado toma la config de pnpm, que dice el registry público, y consulta en `registry.npmjs.org` los nombres de sus dependencias.
+
+Reproducción:
+
+- Con yarn 4.5.0 real, en un proyecto con `packageManager: yarn@4.5.0`, `yarn config get npmRegistryServer` da `https://registry.yarnpkg.com` con solo un `.npmrc` privado, y `https://npm.corp.example` con ese valor en `.yarnrc.yml`.
+- Con los dobles de tests, el mismo proyecto con `.yarnrc.yml` privado consultó `https://registry.npmjs.org/a/latest`.
+- No verificado: que yarn berry también lea el `.yarnrc.yml` de los directorios superiores y la variable `YARN_NPM_REGISTRY_SERVER`, como dice su documentación según Codex.
+
+architecture.md §8: "ante la duda, no se consulta".
+
+Propuesta: sumar `npmRegistryServer` y `npmScopes.<scope>.npmRegistryServer` de cada `.yarnrc.yml`, desde el proyecto hasta home, como fuentes más de la regla de F-32. El registry queda indeterminado si el archivo no se puede interpretar o usa `${VAR}`. Mientras no esté hecho, dejar indeterminado el registry de todo proyecto con un `.yarnrc.yml`.
+
+### F-53 · Credenciales dentro de un spec que es una URL llegan a `explain`
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** privacidad
+- **Ubicación:** `src/application/inventory.ts:460` (claim `requested`), `src/providers/npm-registry/origin.ts:84` (`declared as`), `src/application/inventory.ts:283` (global con versión que no es de registry)
+- **Detectado:** 2026-09-28, Claude Code, durante la corrección de F-31
+- **Verificación:** reproducido
+
+Un spec que es una URL con credenciales sale tal cual en tres lugares:
+
+- en `requested`;
+- en la evidencia `declared as "..."` de `latest`;
+- en `explain --json`.
+
+Por ejemplo, `"a": "https://user:TOKEN@files.corp.example/a-1.0.0.tgz"` en `package.json`. Si un paquete global se instaló desde un tarball así y pnpm informa esa URL como versión, también aparece en el motivo "pnpm reports a non-registry version (...)". Es el riesgo de F-31 por otro camino, y la plantilla de issues pide pegar esa salida. Es menos probable que F-31, porque exige escribir la credencial en el spec.
+
+Reproducción: con los dobles de tests, un proyecto con ese spec. `renderExplain` contiene el token.
+
+Propuesta: cuando un spec o una versión parsea como URL, mostrar solo el esquema y el host (`https://files.corp.example/…`). El path también puede llevar un token, como en F-31. La decisión de origen no cambia: un spec URL ya no se consulta. Test en `tests/security` sobre `explain` y `toolJson`.
+
+### F-54 · El guard de Bash bloquea leer `core.hooksPath`
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `.claude/hooks/guard-bash.mjs:340`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido
+
+`git config core.hooksPath`, que solo lee el valor, se deniega con "changing core.hooksPath disables the git hooks". La regla no distingue lectura de escritura. El error va del lado seguro, pero el mensaje afirma algo falso sobre el comando, y para saber qué hooks corren hay que buscar otro camino.
+
+Propuesta: denegar solo cuando hay un valor después de la clave, o con `--unset`, `--replace-all` o `--add`. Permitir `git config core.hooksPath`, `git config --get core.hooksPath` y `--get-regexp`. Tests en `tests/security/agent-guard.test.ts` con las dos formas. Solo la persona responsable cambia `.claude/hooks/`.
 
 ### Verificaciones
 
