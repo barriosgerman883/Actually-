@@ -8,7 +8,7 @@ Resolve the latest version of npm packages and read their `repository` field.
 
 A package is queried on `registry.npmjs.org` only if all of these hold:
 
-1. its spec is a registry spec: a semver range or a dist-tag, not `npm:`, `workspace:`, `link:`, `file:`, git or a URL;
+1. its spec is a registry spec: a semver range or a dist-tag, not `npm:`, `workspace:`, `link:`, `file:`, git, a URL or a local tarball (`.tgz`, `.tar.gz`, `.tar`). As in npm, `optionalDependencies` replaces the same name in `dependencies`;
 2. it is not a package of the same workspace, and the lockfile does not resolve it to something other than a registry version;
 3. every config source that could apply makes `https://registry.npmjs.org/` the default registry;
 4. no source maps its scope to another registry;

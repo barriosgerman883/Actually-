@@ -245,7 +245,10 @@ export async function scanProject(
     if (typeof entries !== "object" || entries === null) continue;
     for (const [name, spec] of Object.entries(entries as Record<string, unknown>)) {
       if (typeof spec !== "string") continue;
-      if (scan.dependencies.some((d) => d.name === name)) continue;
+      // npm lets optionalDependencies replace the same entry in dependencies (F-33).
+      const earlier = scan.dependencies.findIndex((d) => d.name === name);
+      if (earlier >= 0 && section !== "optionalDependencies") continue;
+      if (earlier >= 0) scan.dependencies.splice(earlier, 1);
       scan.dependencies.push({ name, requested: spec, section });
     }
   }

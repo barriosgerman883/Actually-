@@ -22,11 +22,15 @@ const NON_REGISTRY_PREFIXES = [
   "https:",
 ];
 
+/** npm treats a spec ending like a tarball as a local file (npm-package-arg). */
+const TARBALL = /\.(tgz|tar\.gz|tar)$/i;
+
 /** True for semver ranges and dist-tags: specs resolved from a registry. */
 export function isRegistrySpec(spec: string): boolean {
   const s = spec.trim();
   if (s === "") return false;
   if (NON_REGISTRY_PREFIXES.some((p) => s.toLowerCase().startsWith(p))) return false;
+  if (TARBALL.test(s)) return false;
   if (s.includes("/") || s.includes(":")) return false;
   if (semver.validRange(s) !== null) return true;
   return /^[a-zA-Z][a-zA-Z0-9._-]*$/.test(s);

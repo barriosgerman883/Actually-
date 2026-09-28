@@ -607,7 +607,7 @@ La consecuencia, dicha tal cual: esos servicios pueden inferir qué herramientas
 
 La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta en `registry.npmjs.org` solo si se cumplen las cuatro condiciones:
 
-1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git ni URLs.
+1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git, URLs ni specs terminados en `.tgz`, `.tar.gz` o `.tar`, que npm trata como archivos locales. Si un paquete figura en `dependencies` y en `optionalDependencies`, vale el spec de `optionalDependencies`, como en npm.
 2. Nada lo resuelve a algo local. En un workspace, un rango semver puede resolver a otro paquete del mismo repositorio, y su nombre es un nombre de proyecto. No se consulta:
    - un paquete con el nombre de cualquier paquete del workspace;
    - un paquete que el lockfile resuelve a algo que no es una versión de registry: `link:`, `file:`, `workspace:`, `link: true` de npm, una ruta, un repositorio git o una URL.

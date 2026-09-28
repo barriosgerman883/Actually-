@@ -47,6 +47,9 @@ describe("registry specs", () => {
     "git+https://x/y.git",
     "https://x/y.tgz",
     "catalog:",
+    "internal-lib-1.0.0.tgz",
+    "lib.tar.gz",
+    "LIB.TAR",
     "",
   ])("rejects %s", (spec) => {
     expect(isRegistrySpec(spec)).toBe(false);
@@ -506,6 +509,22 @@ describe("project scan", () => {
     expect(a?.installed?.version).toBe("1.2.0");
     expect(b?.resolved?.version).toBe("2.1.0");
     expect(b?.installed).toBeUndefined();
+  });
+  it("lets optionalDependencies replace the same entry in dependencies, as npm does (F-33)", async () => {
+    const fs = memoryFs({
+      "/p/package.json": JSON.stringify({
+        dependencies: { secret: "^1.0.0" },
+        optionalDependencies: { secret: "file:../secret" },
+      }),
+    });
+    const scan = await scanProject(fs, "/p", "/");
+    expect(scan.dependencies).toEqual([
+      expect.objectContaining({
+        name: "secret",
+        requested: "file:../secret",
+        section: "optionalDependencies",
+      }),
+    ]);
   });
   it("reads package-lock.json and infers npm", async () => {
     const fs = memoryFs({

@@ -792,6 +792,18 @@ describe("project registry (architecture.md §8)", () => {
     expect(env.http.calls).toEqual([]);
   });
 
+  it("never queries a local tarball spec or a dependency optionalDependencies makes local (F-33)", async () => {
+    const { http } = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: JSON.stringify({
+          dependencies: { a: "a-1.0.0.tgz", b: "^1.0.0" },
+          optionalDependencies: { b: "file:../b" },
+        }),
+      },
+      `${HOME}/p`,
+    );
+    expect(http.calls).toEqual([]);
+  });
   it("still queries the public registry for a plain project", async () => {
     const { http } = await projectInventory(
       { [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }) },
