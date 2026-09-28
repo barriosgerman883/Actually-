@@ -35,5 +35,15 @@ jobs:
         run: pnpm test:architecture
       - name: Build
         run: pnpm build
+      # Runs the compiled CLI, which no unit test does (F-49): offline, with
+      # empty home and XDG directories, so nothing leaves the runner.
+      - name: Smoke test of the built CLI
+        run: |
+          export HOME="$(mktemp -d)" XDG_STATE_HOME="$(mktemp -d)" XDG_CACHE_HOME="$(mktemp -d)" XDG_CONFIG_HOME="$(mktemp -d)"
+          node dist/cli/index.js status --offline --json > "$RUNNER_TEMP/status.json"
+          jq -e '.schemaVersion == 1 and (.diagnostics | type == "array")' "$RUNNER_TEMP/status.json"
+          set +e
+          node dist/cli/index.js --no-such-flag
+          test $? -eq 2
       - name: Dependency audit
         run: pnpm audit --prod

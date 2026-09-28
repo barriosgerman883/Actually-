@@ -21,7 +21,7 @@ Development is supported on Linux and macOS. On Windows, use WSL: the test doubl
 | `pnpm test:architecture`                                | layer boundaries (RA-001…RA-010)                                         |
 | `pnpm vitest run tests/unit/core.test.ts -t "mayBreak"` | a single test                                                            |
 
-CI runs the same checks plus `pnpm audit --prod`, and blocks merges when any of them fails.
+CI runs the same checks, then `pnpm build`, a smoke run of the compiled CLI (`status --offline --json` and an invalid flag) and `pnpm audit --prod`, and blocks merges when any of them fails.
 
 ## Architecture in one paragraph
 

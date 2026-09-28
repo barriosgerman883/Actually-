@@ -8,8 +8,8 @@ import { join } from "node:path";
  */
 export interface LocalState {
   hasMarker(name: string): Promise<boolean>;
-  /** Returns false when the marker could not be written. */
-  writeMarker(name: string): Promise<boolean>;
+  /** Best effort: a marker that cannot be written is simply missing next time. */
+  writeMarker(name: string): Promise<void>;
   /**
    * An empty directory used as the working directory for pnpm (§7).
    * Rejects when it cannot be created or is not empty: pnpm then does not
@@ -43,9 +43,8 @@ export function fileLocalState(dir: string): LocalState {
       try {
         await mkdir(dir, { recursive: true });
         await writeFile(join(dir, name), "", "utf8");
-        return true;
       } catch {
-        return false;
+        // Not written: hasMarker stays false, so the notice is shown again.
       }
     },
     neutralDir() {
