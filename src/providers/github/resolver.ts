@@ -75,15 +75,26 @@ export async function resolveGithubLatest(
     return { state: "unknown", reason: "GitHub rate limit reached", evidence: [] };
   const base = `https://api.github.com/repos/${repo.owner}/${repo.repo}`;
 
-  const release = await cachedGet(`${base}/releases/latest`, ctx, HEADERS);
-  if (release.kind === "offline-miss") return { state: "unknown", reason: "offline", evidence: [] };
+  // A repository without releases answers 404: that answer is cached too, so
+  // it is not asked again within the TTL and works offline (F-41).
+  const release = await cachedGet(`${base}/releases/latest`, ctx, HEADERS, [404]);
   if (release.kind === "error")
     return { state: "unknown", reason: release.error.message, evidence: [] };
   if (isRateLimited(release)) return rateLimitReached(state);
-  const releaseStatus = release.kind === "stale" ? 200 : release.status;
   // What the releases endpoint said, for the evidence of the tag fallback.
-  let releaseNote = "no releases";
-  if (releaseStatus === 200) {
+  let releaseNote: Evidence = {
+    kind: "fact",
+    source: `GET ${base}/releases/latest`,
+    description: "no releases",
+  };
+  if (release.kind === "offline-miss") {
+    // Offline with no cached answer: the tags may still be cached.
+    releaseNote = {
+      kind: "inference",
+      source: "cache",
+      description: "whether it has releases is unknown: running offline with no cached answer",
+    };
+  } else if (release.status === 200) {
     const tag = (release.body as { tag_name?: unknown } | undefined)?.tag_name;
     const v = typeof tag === "string" ? version(tag) : undefined;
     if (typeof tag === "string" && v) {
@@ -112,19 +123,22 @@ export async function resolveGithubLatest(
         { contradicted: prerelease, cap: release.kind === "stale" ? "medium" : undefined },
       );
     }
-    releaseNote =
-      typeof tag === "string"
-        ? `latest release is tagged ${tag}, which is not semver`
-        : "latest release has no tag";
-  } else if (releaseStatus !== 404) {
-    return { state: "unknown", reason: `GitHub answered ${releaseStatus}`, evidence: [] };
+    releaseNote = {
+      ...releaseNote,
+      description:
+        typeof tag === "string"
+          ? `latest release is tagged ${tag}, which is not semver`
+          : "latest release has no tag",
+    };
+  } else if (release.status !== 404) {
+    return { state: "unknown", reason: `GitHub answered ${release.status}`, evidence: [] };
   }
 
   const tags = await cachedGet(`${base}/tags?per_page=100`, ctx, HEADERS);
   if (tags.kind === "offline-miss") return { state: "unknown", reason: "offline", evidence: [] };
   if (tags.kind === "error") return { state: "unknown", reason: tags.error.message, evidence: [] };
   if (isRateLimited(tags)) return rateLimitReached(state);
-  const tagsStatus = tags.kind === "stale" ? 200 : tags.status;
+  const tagsStatus = tags.status;
   if (tagsStatus === 404)
     return { state: "unknown", reason: "repository not found or private", evidence: [] };
   if (tagsStatus !== 200 || !Array.isArray(tags.body)) {
@@ -141,16 +155,19 @@ export async function resolveGithubLatest(
     return {
       state: "unknown",
       reason:
-        releaseNote === "no releases"
-          ? "no releases and no semver tags"
-          : "no semver release and no semver tags",
-      evidence: [{ kind: "fact", source: `GET ${base}/releases/latest`, description: releaseNote }],
+        release.kind === "offline-miss"
+          ? "no semver tags, and releases are unknown offline"
+          : releaseNote.description === "no releases"
+            ? "no releases and no semver tags"
+            : "no semver release and no semver tags",
+      evidence: [releaseNote],
     };
   }
   return claimFrom(
     best.v,
     [
-      { kind: "fact", source: `GET ${base}/releases/latest`, description: releaseNote },
+      releaseNote,
+      ...(release.kind === "offline-miss" ? [] : cacheEvidence(release)),
       {
         kind: "fact",
         source: `GET ${base}/tags`,

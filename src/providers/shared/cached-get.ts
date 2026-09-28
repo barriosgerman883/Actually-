@@ -18,7 +18,13 @@ export type CachedGetResult =
       fetchedAt: number;
       headers: Record<string, string>;
     }
-  | { kind: "stale"; body: unknown; fetchedAt: number; cause: "offline" | NetworkError }
+  | {
+      kind: "stale";
+      status: number;
+      body: unknown;
+      fetchedAt: number;
+      cause: "offline" | NetworkError;
+    }
   | { kind: "offline-miss" }
   | { kind: "error"; error: NetworkError };
 
@@ -27,19 +33,22 @@ export type CachedGetResult =
  * fresh entries are used as is, expired ones are revalidated with a
  * conditional request, and a stale entry is only returned, marked as such,
  * when the network is unavailable, including a server error after the
- * retry. Only 200 responses are stored.
+ * retry. Only 200 responses are stored, plus the statuses in `cacheable`,
+ * such as the 404 GitHub gives a repository without releases (F-41).
  */
 export async function cachedGet(
   url: string,
   ctx: NetContext,
   headers: Record<string, string> = {},
+  cacheable: readonly number[] = [],
 ): Promise<CachedGetResult> {
   const entry = await ctx.cache.get(url);
   const now = ctx.clock.now();
+  const storedStatus = entry?.status ?? 200;
   if (entry && now - entry.fetchedAt < ctx.ttlMs) {
     return {
       kind: "cached",
-      status: 200,
+      status: storedStatus,
       body: entry.body,
       fetchedAt: entry.fetchedAt,
       headers: {},
@@ -47,7 +56,13 @@ export async function cachedGet(
   }
   if (!ctx.http) {
     return entry
-      ? { kind: "stale", body: entry.body, fetchedAt: entry.fetchedAt, cause: "offline" }
+      ? {
+          kind: "stale",
+          status: storedStatus,
+          body: entry.body,
+          fetchedAt: entry.fetchedAt,
+          cause: "offline",
+        }
       : { kind: "offline-miss" };
   }
   const conditional: Record<string, string> = { ...headers };
@@ -64,15 +79,16 @@ export async function cachedGet(
       await ctx.cache.set(url, { ...entry, fetchedAt: now });
       return {
         kind: "revalidated",
-        status: 200,
+        status: storedStatus,
         body: entry.body,
         fetchedAt: now,
         headers: response.headers,
       };
     }
-    if (response.status === 200) {
+    if (response.status === 200 || cacheable.includes(response.status)) {
       await ctx.cache.set(url, {
         fetchedAt: now,
+        status: response.status === 200 ? undefined : response.status,
         etag: response.headers.etag,
         lastModified: response.headers["last-modified"],
         body: response.body,
@@ -88,7 +104,13 @@ export async function cachedGet(
   } catch (error) {
     if (!(error instanceof NetworkError)) throw error;
     return entry
-      ? { kind: "stale", body: entry.body, fetchedAt: entry.fetchedAt, cause: error }
+      ? {
+          kind: "stale",
+          status: storedStatus,
+          body: entry.body,
+          fetchedAt: entry.fetchedAt,
+          cause: error,
+        }
       : { kind: "error", error };
   }
 }

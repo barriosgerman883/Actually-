@@ -819,6 +819,7 @@ La caché es parte del MVP. Guarda solo respuestas de red y es descartable. El e
 - Solo metadata pública: la versión con el dist-tag `latest`, tags, releases y el campo `repository` de npm.
 - La clave es el host más el recurso consultado, por ejemplo `registry.npmjs.org/gstack/latest`.
 - Cada entrada guarda la fecha de obtención y los validadores que haya devuelto el servidor (`ETag` o `Last-Modified`).
+- Se guardan las respuestas 200 y, además, el 404 de `/releases/latest` de GitHub, que dice que un repositorio no tiene releases. Así esa consulta no se repite dentro del TTL ni hace falta red para saberlo.
 - Nunca guarda tokens, rutas locales, nombres de proyectos ni resultados del inventario local.
 
 ### Dónde
@@ -845,7 +846,8 @@ Borrar ese directorio es siempre seguro.
 - Con `[network] github_token = true`, si `GITHUB_TOKEN` o `GH_TOKEN` están definidos, se envían solo a `api.github.com` y solo para ampliar el límite de requests. No se guardan en la caché, la configuración ni los logs.
 - Sin token, el límite es de 60 requests por hora. Las revalidaciones que reciben un 304 no consumen cuota, así que con la caché alcanza para un uso normal.
 - Tener un token no convierte el acceso a repositorios privados en una funcionalidad soportada del MVP.
-- Si GitHub responde que el límite se agotó, no se hacen más requests a GitHub en esa ejecución. Los datos pendientes quedan `unknown` con ese motivo.
+- Si GitHub responde que el límite se agotó, en releases o en tags, no se hacen más requests a GitHub en esa ejecución, se emite un `warning` y los datos pendientes quedan `unknown` con ese motivo.
+- Sin red y sin respuesta de releases en caché, se usan los tags en caché si los hay. La evidencia dice que no se sabe si el repositorio tiene releases.
 
 ### npm registry
 

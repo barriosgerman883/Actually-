@@ -400,6 +400,55 @@ describe("GitHub", () => {
   });
 });
 
+describe("GitHub without releases (F-41)", () => {
+  const base = "https://api.github.com/repos/o/r";
+  const state = () => ({ rateLimited: false, diagnostics: [] });
+  it("caches the 404 of /releases/latest, so it is not asked again within the TTL", async () => {
+    const http = fakeHttp({ [`${base}/tags?per_page=100`]: json([{ name: "v1.0.0" }]) });
+    const cache = memoryCache();
+    await resolveGithubLatest({ owner: "o", repo: "r" }, netContext(http, { cache }), state());
+    const again = await resolveGithubLatest(
+      { owner: "o", repo: "r" },
+      netContext(http, { cache }),
+      state(),
+    );
+    expect(again).toMatchObject({ state: "known", value: "1.0.0", confidence: "medium" });
+    expect(http.calls.map((c) => c.url)).toEqual([
+      `${base}/releases/latest`,
+      `${base}/tags?per_page=100`,
+    ]);
+  });
+  it("uses cached tags offline and says whether it has releases is unknown", async () => {
+    const cache = memoryCache({
+      [`${base}/tags?per_page=100`]: { fetchedAt: 0, body: [{ name: "v1.0.0" }] },
+    });
+    const claim = await resolveGithubLatest(
+      { owner: "o", repo: "r" },
+      netContext(undefined, { cache }),
+      state(),
+    );
+    expect(claim).toMatchObject({ state: "known", value: "1.0.0", confidence: "medium" });
+    expect(claim.state === "known" && claim.evidence.map((e) => e.description)).toContain(
+      "whether it has releases is unknown: running offline with no cached answer",
+    );
+  });
+  it("uses a cached 404 of /releases/latest offline", async () => {
+    const cache = memoryCache({
+      [`${base}/releases/latest`]: { fetchedAt: 0, status: 404, body: undefined },
+      [`${base}/tags?per_page=100`]: { fetchedAt: 0, body: [{ name: "v2.0.0" }] },
+    });
+    const claim = await resolveGithubLatest(
+      { owner: "o", repo: "r" },
+      netContext(undefined, { cache }),
+      state(),
+    );
+    expect(claim).toMatchObject({ state: "known", value: "2.0.0", confidence: "medium" });
+    expect(claim.state === "known" && claim.evidence.map((e) => e.description)).toContain(
+      "no releases",
+    );
+  });
+});
+
 describe("GitHub rate limit", () => {
   it("warns when the limit is reached on /tags too (F-42)", async () => {
     const base = "https://api.github.com/repos/o/r";

@@ -57,7 +57,7 @@ export async function resolveNpmLatest(
   if (result.kind === "error") {
     return { latest: { state: "unknown", reason: result.error.message, evidence: [] } };
   }
-  if (result.kind !== "stale" && result.status === 404) {
+  if (result.status === 404) {
     return {
       latest: {
         state: "unknown",
@@ -66,7 +66,7 @@ export async function resolveNpmLatest(
       },
     };
   }
-  if (result.kind !== "stale" && result.status !== 200) {
+  if (result.status !== 200) {
     return {
       latest: { state: "unknown", reason: `registry answered ${result.status}`, evidence: [] },
     };

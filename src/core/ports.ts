@@ -71,6 +71,8 @@ export interface HttpClient {
 
 export interface CacheEntry {
   fetchedAt: number;
+  /** HTTP status of the stored response; absent means 200. */
+  status?: number;
   etag?: string;
   lastModified?: string;
   body: unknown;
