@@ -324,29 +324,7 @@ Luego el detalle.
 
 ## 12. Configuración inicial
 
-`actually init` no entra en el MVP. Sin configuración, `status` revisa las herramientas globales y el proyecto de la carpeta actual, así que configurar no es obligatorio. Se reconsidera si la configuración pasa a ser necesaria.
-
-Un flujo posible:
-
-```bash
-actually init
-```
-
-Flujo:
-
-```text
-actually needs directories to scan.
-
-Detected common locations:
-
-[x] ~/projects
-[x] ~/dev
-[ ] ~/Documents
-
-Save configuration? [Y/n]
-```
-
-No debe seleccionar directorios sensibles indiscriminadamente.
+No hay `actually init`. Sin configuración, `status` revisa las herramientas globales y el proyecto de la carpeta actual, así que configurar no es obligatorio; el archivo se escribe a mano (§13). Se reconsidera si la configuración pasa a ser necesaria, y en ese caso el asistente no debe seleccionar directorios sensibles por su cuenta.
 
 ### Aviso de red en la primera ejecución
 
