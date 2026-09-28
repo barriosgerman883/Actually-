@@ -94,6 +94,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | resuelto: código corregido en `7a5bfa9` |
 | F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | resuelto: código corregido en `b6743b4` |
 | F-57 | baja | evidencia | Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa | resuelto: código corregido en `13b88a5` |
+| F-58 | baja | desvío de docs | CLAUDE.md quedó desactualizado en tres puntos | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1231,6 +1232,23 @@ La conducta sigue la regla de §7, que evita ejecutar el pnpm de un proyecto. El
 Propuesta: sumarlo a "Known limitations" de `docs/providers/pnpm.md` y a "Requirements and limits" del README: `actually` solo ve los globales del pnpm que corre fuera de los proyectos. Opcionalmente, cuando el `packageManager` del proyecto analizado fija un pnpm de otra versión mayor que la del directorio neutral, emitir un diagnóstico `warning` que lo diga. Los dos datos ya se leen (`packageManager` del `package.json` y `pnpm --version`), así que no hace falta ejecutar nada nuevo.
 
 **Corregido en `13b88a5`.** 2026-09-28, a pedido de la persona responsable. Cuando el `packageManager` del proyecto fija pnpm con otra versión mayor que la del pnpm que corre fuera de los proyectos, se emite un `warning` que nombra las dos. El límite está en el README y en pnpm.md.
+
+### F-58 · CLAUDE.md quedó desactualizado en tres puntos
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** desvío de docs
+- **Ubicación:** `CLAUDE.md`, "Where decisions live", "Agent guardrails" y "Architecture invariants"
+- **Detectado:** 2026-09-28, Claude Code, durante la poda de docs
+- **Verificación:** por lectura
+
+- **Registry queries.** Dice que las fuentes de config son "pnpm's config and each `.npmrc` up to home". Desde F-52 también cuentan cada `.yarnrc` y `.yarnrc.yml` hasta home y la variable `YARN_NPM_REGISTRY_SERVER` (architecture.md §8).
+- **Where decisions live.** Ubica los directorios de caché en architecture.md §3.5. Ahí están solo los del estado local; los de la caché están en §14, "Dónde".
+- **Agent guardrails.** La lista de lo que hace el guard de edición omite que pide confirmación para `.github/workflows/` y que también rechaza `.todo(`, `@ts-nocheck`, `xit` y `fit`.
+
+CLAUDE.md está protegido: lo cambia solo la persona responsable.
+
+Propuesta: en "Registry queries", "every config source that could apply (pnpm's config, each `.npmrc`, `.yarnrc` and `.yarnrc.yml` up to home, and `YARN_NPM_REGISTRY_SERVER`)"; en la tabla, "Cache and LocalState directories | `docs/architecture.md` §3.5 (state), §14 (cache)"; en "Agent guardrails", sumar el ask de `.github/workflows/` y los patrones que faltan.
 
 ### Verificaciones
 
