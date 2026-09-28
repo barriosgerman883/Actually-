@@ -190,6 +190,8 @@ export async function installedFromTags(
       source: "git describe --tags --long HEAD",
       description: noNames ? "no reachable tag" : describe.message,
     });
+    // Any other failure is a failed provider: an error, not just evidence (F-43).
+    if (!noNames) info.failure = describe.message;
   }
   return info;
 }

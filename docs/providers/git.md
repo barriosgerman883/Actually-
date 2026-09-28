@@ -36,7 +36,7 @@ None. See github.md.
 
 ## Failure modes
 
-A declared tool that is not a repository becomes an error record with a diagnostic. A `.git` file that cannot be read skips that repository with a warning; the rest of the run continues. git refusing a repository (`safe.directory`) leaves the version unknown.
+A declared tool that is not a repository becomes an error record with a diagnostic. A `.git` file that cannot be read skips that repository with a warning; the rest of the run continues. git failing on a repository, for example refusing it (`safe.directory`) or timing out, in either command, makes the tool an error record with a diagnostic. Only git saying it found no tag leaves the version unknown without an error.
 
 ## Security considerations
 

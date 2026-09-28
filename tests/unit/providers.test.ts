@@ -471,21 +471,26 @@ describe("installed version from tags", () => {
       "git.describe.head": { ok: false, reason: "failed", message },
     });
     const info = await installedFromTags(runner, repo);
-    return info.unknownEvidence.find((e) => e.source.startsWith("git describe"))?.description;
+    return {
+      description: info.unknownEvidence.find((e) => e.source.startsWith("git describe"))
+        ?.description,
+      failure: info.failure,
+    };
   }
   it("records no reachable tag only when git found no names (F-11)", async () => {
     expect(
       await describeEvidence(
         "git.describe.head failed: fatal: No names found, cannot describe anything.",
       ),
-    ).toBe("no reachable tag");
+    ).toEqual({ description: "no reachable tag", failure: undefined });
   });
-  it("records any other failure as it is (F-11)", async () => {
+  it("records any other failure as it is, and as a failure (F-11, F-43)", async () => {
     const message = "git.describe.head failed: fatal: detected dubious ownership in repository";
-    expect(await describeEvidence(message)).toBe(message);
-    expect(await describeEvidence("git.describe.head timed out")).toBe(
-      "git.describe.head timed out",
-    );
+    expect(await describeEvidence(message)).toEqual({ description: message, failure: message });
+    expect(await describeEvidence("git.describe.head timed out")).toEqual({
+      description: "git.describe.head timed out",
+      failure: "git.describe.head timed out",
+    });
   });
 });
 
