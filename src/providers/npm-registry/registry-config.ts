@@ -23,8 +23,7 @@ function isPublicRegistry(url: string): boolean {
   return normalized.toLowerCase() === PUBLIC_REGISTRY;
 }
 
-function describeRegistry(key: string, isPublic: boolean): string {
-  const subject = key === "registry" ? "effective default registry" : key;
+function describeRegistry(subject: string, isPublic: boolean): string {
   return `${subject} is ${isPublic ? "" : "not "}the public registry`;
 }
 
@@ -64,7 +63,7 @@ export function parsePnpmConfig(stdout: string): RegistryConfig {
       {
         kind: "fact",
         source: "pnpm config list --json",
-        description: describeRegistry("registry", defaultPublic),
+        description: describeRegistry("effective default registry", defaultPublic),
       },
     ],
   };
