@@ -46,17 +46,18 @@ async function readJson(
 }
 
 /**
- * Finds the nearest directory with a package.json, walking up from `start`
+ * The nearest directory that has any of `entries`, walking up from `start`
  * but never above `stopAt` (the home directory).
  */
-export async function findProjectRoot(
+export async function findUpDir(
   fs: Filesystem,
   start: string,
+  entries: string[],
   stopAt: string,
 ): Promise<string | undefined> {
   let dir = start;
   for (;;) {
-    if (await fs.exists(join(dir, "package.json"))) return dir;
+    for (const entry of entries) if (await fs.exists(join(dir, entry))) return dir;
     if (dir === stopAt) return undefined;
     const parent = dirname(dir);
     if (parent === dir) return undefined;
@@ -64,21 +65,16 @@ export async function findProjectRoot(
   }
 }
 
-async function findUp(
+/**
+ * The project root for `start`: the nearest directory with a package.json
+ * or a .git, whichever comes first (mvp.md §6, F-40).
+ */
+export function findProjectRoot(
   fs: Filesystem,
   start: string,
-  file: string,
   stopAt: string,
 ): Promise<string | undefined> {
-  let dir = start;
-  for (;;) {
-    const candidate = join(dir, file);
-    if (await fs.exists(candidate)) return candidate;
-    if (dir === stopAt) return undefined;
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
+  return findUpDir(fs, start, ["package.json", ".git"], stopAt);
 }
 
 /** Directories from `start` up to `end`, both included; only `start` if `end` is not above it. */
@@ -295,7 +291,8 @@ export async function scanProject(
       pnpmLock = ownPnpmLock;
       pnpmEntries = pnpmLockEntries(await fs.readText(ownPnpmLock), ".");
     } else if (!npmLock && root !== stopAt) {
-      const above = await findUp(fs, dirname(root), "pnpm-lock.yaml", stopAt);
+      const aboveDir = await findUpDir(fs, dirname(root), ["pnpm-lock.yaml"], stopAt);
+      const above = aboveDir && join(aboveDir, "pnpm-lock.yaml");
       if (above) {
         const importer = relative(dirname(above), root).split(sep).join("/");
         pnpmEntries = pnpmLockEntries(await fs.readText(above), importer);

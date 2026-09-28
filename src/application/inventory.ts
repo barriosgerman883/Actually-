@@ -1,4 +1,4 @@
-import { dirname, join, sep } from "node:path";
+import { join, sep } from "node:path";
 import { claimFrom } from "../core/confidence.js";
 import type { Config } from "../core/config.js";
 import { UsageError } from "../core/errors.js";
@@ -32,7 +32,7 @@ import {
 } from "../providers/npm-registry/registry-config.js";
 import { resolveNpmLatest } from "../providers/npm-registry/resolver.js";
 import { scanPnpmGlobal, type PnpmGlobalScan } from "../providers/pnpm/global.js";
-import { findProjectRoot, scanProject } from "../providers/project/project.js";
+import { findProjectRoot, findUpDir, scanProject } from "../providers/project/project.js";
 import type { WorkspaceCache } from "../providers/project/workspace.js";
 import type { NetContext } from "../providers/shared/cached-get.js";
 import { listExecutables, type Executable } from "../scanners/bin-scanner.js";
@@ -59,22 +59,6 @@ const PNPM_OWN_BINS = new Set(["pnpm", "pnpx", "pn", "pnx"]);
 
 function isInside(path: string, dir: string): boolean {
   return path === dir || path.startsWith(dir.endsWith(sep) ? dir : dir + sep);
-}
-
-async function findUpDir(
-  fs: Filesystem,
-  start: string,
-  entry: string,
-  stopAt: string,
-): Promise<string | undefined> {
-  let dir = start;
-  for (;;) {
-    if (await fs.exists(join(dir, entry))) return dir;
-    if (dir === stopAt) return undefined;
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
 }
 
 /**
@@ -185,8 +169,7 @@ export async function buildInventory(
 
   if (!options.globalOnly) {
     const roots: string[] = [];
-    const current =
-      (await findProjectRoot(fs, deps.cwd, home)) ?? (await findUpDir(fs, deps.cwd, ".git", home));
+    const current = await findProjectRoot(fs, deps.cwd, home);
     if (current) roots.push(current);
     else if (options.projectOnly) throw new UsageError("no project found in the current directory");
     for (const root of scannedRoots) {
@@ -430,7 +413,7 @@ async function projectRecords(
     : applyYarnEnvironment(userRegistry, deps.env.get("YARN_NPM_REGISTRY_SERVER"));
   for (const file of scan.registryFiles) registry = applyRegistryFile(registry, file);
 
-  const gitRoot = await findUpDir(fs, root, ".git", deps.env.homeDir);
+  const gitRoot = await findUpDir(fs, root, [".git"], deps.env.homeDir);
   const repo = gitRoot ? await readRepository(fs, gitRoot, diagnostics) : undefined;
   const packageManager: Claim<string> = scan.packageManager
     ? claimFrom(scan.packageManager.value, scan.packageManager.evidence)

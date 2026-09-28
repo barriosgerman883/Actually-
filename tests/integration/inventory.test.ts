@@ -454,6 +454,28 @@ describe("projects and Git repositories", () => {
   });
 });
 
+describe("current project root (mvp.md §6)", () => {
+  it("stops at the nearest .git before a package.json further up (F-40)", async () => {
+    const fs = memoryFs({
+      "/home/me/work/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      "/home/me/work/py/.git/HEAD": "ref: refs/heads/main\n",
+    });
+    const inv = await buildInventory(
+      {
+        fs,
+        runner: fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) }),
+        env: fakeEnv(HOME),
+        net: netContext(fakeHttp({})),
+        config: config(),
+        cwd: "/home/me/work/py/src",
+      },
+      { projectOnly: true },
+    );
+    expect(inv.projects.map((p) => p.root)).toEqual(["/home/me/work/py"]);
+    expect(inv.tools).toEqual([]);
+  });
+});
+
 describe("installed by (architecture.md §6)", () => {
   it("is only as confident as the package manager it names (F-35)", async () => {
     const fs = memoryFs({

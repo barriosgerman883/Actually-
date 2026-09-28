@@ -238,7 +238,7 @@ El scanner buscará indicadores como:
 - `go.mod`;
 - `mise.toml`.
 
-En el MVP, una raíz de proyecto es un directorio con `package.json` o `.git`, y la búsqueda no desciende dentro de ella. Los lockfiles se leen dentro de cada proyecto. Los demás indicadores quedan para los providers de la Fase 2.
+En el MVP, una raíz de proyecto es un directorio con `package.json` o `.git`, y la búsqueda no desciende dentro de ella. El proyecto actual es el directorio más cercano hacia arriba, hasta home, que tenga cualquiera de los dos. Los lockfiles se leen dentro de cada proyecto. Los demás indicadores quedan para los providers de la Fase 2.
 
 ---
 
