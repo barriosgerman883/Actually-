@@ -92,6 +92,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
 | F-55 | alta | corrección | En Windows, `pnpm` nunca se puede ejecutar y `status --global` reporta vacío sin avisar | abierto |
+| F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1129,6 +1130,29 @@ El layout de ese pnpm 10.33.0 real (`global/5/node_modules`) es el mismo que ya 
 Propuesta, investigada pero no implementada: cuando el binario resuelto por PATH sea un `.cmd`, no ejecutarlo — leerlo como texto. Los shims que genera `cmd-shim` (la misma librería que usa pnpm) son de una sola línea y siguen uno de dos patrones conocidos: apuntan directo a un `.exe` real, o a `node` más la ruta de un `.js`. Verificado leyendo shims reales: la instalación standalone de pnpm en Windows despacha a un `@pnpm/exe/pnpm.exe` nativo; la que gestiona Corepack despacha a `node ... corepack/dist/pnpm.js`. En cualquiera de los dos casos, `execFile` se llama sobre lo que el shim señala, nunca sobre el `.cmd`, así que no hace falta `shell: true` ni tocar esa regla de arquitectura. Si el shim no calza con ninguno de los dos patrones, el resultado queda como "no determinado", igual que hoy con "no encontrado". No verificado: qué forma tienen los shims de nvm-windows, Volta, Scoop o Winget.
 
 Por separado, y aunque no es el foco de este hallazgo: `scanPnpmGlobal` debería distinguir "no se encontró el binario" de "se encontró pero no se pudo ejecutar", en vez de tratarlos igual. Hoy un fallo real de `execFile` que sí caiga en `ENOENT` (por ejemplo, PATH mal armado) también queda mudo, no solo el caso de Windows.
+
+### F-56 · En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** corrección
+- **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts:42` (`isExecutableFile`), consumido por `src/scanners/bin-scanner.ts` (`listExecutables`)
+- **Detectado:** 2026-09-28, hipótesis de Claude Code; confirmado por la persona responsable en una VM Windows 11 real
+- **Verificación:** reproducido
+
+`isExecutableFile` hace `if (process.platform === "win32") return true;` antes de llegar al chequeo de `X_OK` (que en Windows no distingue nada). No es un descuido silencioso: el código sabe que está en Windows y decide, a propósito, que todo archivo cuenta. El resultado es que `listExecutables` deja de filtrar nada dentro de los directorios que sí revisa.
+
+Reproducción, en la misma VM Windows 11: un archivo de texto plano en `~/.local/bin` (no un binario, ni un `.exe`, ni un `.cmd`) aparece en `status --global --json` como una herramienta desconocida completa, con su propio id:
+
+```json
+{ "id": "global:unknown:prueba-falsa", "name": "prueba-falsa", "status": "unknown", ... }
+```
+
+`architecture.md §3.3` explica por qué `PathScanner` no recorre todo PATH: "listaría miles de binarios del sistema como herramientas desconocidas". Esta falla reintroduce ese mismo ruido, pero dentro de los pocos directorios que sí se revisan: cualquier `README`, `.gitkeep` o archivo de configuración que conviva ahí con binarios reales pasa a listarse igual que ellos.
+
+El efecto se agranda una vez que se corrija F-55: hoy, sin pnpm funcionando, `pnpm.binDir` nunca se completa en Windows, así que solo se escanean `~/.local/bin` y `[scan] bin_paths`, que en una instalación típica de Windows no suelen existir. Corregido F-55, se sumaría también el directorio global de bins de pnpm a este mismo problema.
+
+Propuesta: en Windows, en vez de `return true`, resolver el nombre contra `PATHEXT` (o una lista por defecto `.EXE;.CMD;.BAT;.COM;.PS1` si la variable no está seteada), comparando la extensión sin distinguir mayúsculas. Un archivo sin extensión reconocida no cuenta como ejecutable. Test en `tests/unit` con un doble de `Filesystem` que simule `platform: "win32"` y un directorio con un `.exe`, un `.cmd` y un `.txt` mezclados.
 
 ### Verificaciones
 
