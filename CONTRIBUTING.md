@@ -8,6 +8,8 @@ pnpm build
 node dist/cli/index.js status
 ```
 
+Development is supported on Linux and macOS. On Windows, use WSL: the test doubles use POSIX paths and the hostile-repository tests run `sh`, so the checks, and therefore the git hooks, do not pass on native Windows. `.gitattributes` keeps every file LF in any clone.
+
 ## Checks
 
 | Command                                                 | Runs                                                                     |
