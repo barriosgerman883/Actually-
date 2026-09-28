@@ -106,7 +106,7 @@ export async function readRepository(
 
   repo.remotes = parseRemotes((await readOptional(fs, join(commonDir, "config"))) ?? "");
   const preferred = repo.remotes.find((r) => r.name === "origin") ?? repo.remotes[0];
-  const github = preferred ? parseGithubUrl(preferred.url) : undefined;
+  const github = preferred ? parseGithubUrl(preferred.url, { npmShorthand: false }) : undefined;
   if (preferred && github) {
     repo.github = {
       repo: github,

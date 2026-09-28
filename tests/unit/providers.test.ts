@@ -334,6 +334,22 @@ describe("GitHub", () => {
       expect(parseGithubUrl(u)).toEqual({ owner: "o", repo: "r" });
     }
     expect(parseGithubUrl("https://gitlab.com/o/r")).toBeUndefined();
+    expect(parseGithubUrl("../upstream")).toBeUndefined();
+    expect(parseGithubUrl("https://github.com/o/..")).toBeUndefined();
+  });
+  it("reads a Git remote that looks like the npm shorthand as a local path (F-44)", async () => {
+    for (const url of ["backups/tool", "github:o/r", "../upstream"]) {
+      expect(parseGithubUrl(url, { npmShorthand: false })).toBeUndefined();
+      const fs = memoryFs({
+        "/r/.git/HEAD": `${"a".repeat(40)}\n`,
+        "/r/.git/config": `[remote "origin"]\n\turl = ${url}\n`,
+      });
+      expect((await readRepository(fs, "/r"))?.github).toBeUndefined();
+    }
+    expect(parseGithubUrl("git@github.com:o/r.git", { npmShorthand: false })).toEqual({
+      owner: "o",
+      repo: "r",
+    });
     expect(parseGithubUrl("https://github.com.evil.com/o/r")).toBeUndefined();
   });
 

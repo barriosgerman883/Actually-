@@ -6,6 +6,8 @@ Resolve the latest version of repositories used as tools.
 
 ## Detection strategy
 
+A Git remote counts as GitHub only as a URL or `git@github.com:owner/repo`. The npm shorthands `owner/repo` and `github:owner/repo` apply to the npm `repository` field only: in a remote, `backups/tool` or `../upstream` is a local path and is never sent. `.` and `..` are never an owner or a repository.
+
 1. The latest release (`/releases/latest`), which never includes drafts or releases marked as prereleases. A release whose tag is a prerelease anyway (`v3.0.0-beta.1`) gets `low` confidence.
 2. Otherwise the highest non-prerelease semver tag.
 3. Otherwise unknown. `HEAD` of the default branch is never treated as a version.
