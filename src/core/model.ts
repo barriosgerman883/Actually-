@@ -105,7 +105,3 @@ export interface Inventory {
 }
 
 export const notApplicable = { state: "not-applicable" } as const;
-
-export function unknown<T = never>(reason: string, evidence: Evidence[] = []): Claim<T> {
-  return { state: "unknown", reason, evidence };
-}

@@ -29,11 +29,11 @@ Installed versions come from pnpm. Latest versions come from the npm registry pr
 
 ## Commands executed
 
-`pnpm --version`, `pnpm root --global`, `pnpm bin --global`, `pnpm list --global --json --depth=0` and `pnpm config list --json`. All of them run in an empty directory owned by actually, never inside a project, with `npm_config_update_notifier=false` so pnpm does not contact the network by itself, and with corepack auto-pinning and download prompts disabled.
+`pnpm --version`, `pnpm root --global`, `pnpm bin --global`, `pnpm list --global --json --depth=0` and `pnpm config list --json`. All of them run in an empty directory owned by actually, never inside a project, with `npm_config_update_notifier=false` so pnpm does not contact the network by itself, and with corepack auto-pinning, download prompts and downloads disabled (`COREPACK_ENABLE_NETWORK=0`).
 
 ## Files inspected
 
-The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`.
+The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `package-lock.json`, the workspace markers (`pnpm-workspace.yaml` and the `workspaces` field of each `package.json` up to home), `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, and the presence of `yarn.lock`, `bun.lock` and `bun.lockb`.
 
 ## Network requests
 
@@ -42,7 +42,7 @@ None. See npm-registry.md.
 ## Failure modes
 
 - pnpm cannot run (not installed, not in `PATH`, or a `.cmd` shim on Windows): no pnpm records, and a warning diagnostic saying global packages were not checked. The effective registry is unknown too, so a second warning says no package was queried. A silent gap would look like "nothing found".
-- Any other failure of `pnpm --version` or `pnpm list`: an error diagnostic.
+- Any other failure of `pnpm --version` or `pnpm list`: an error diagnostic. actually runs pnpm with `COREPACK_ENABLE_NETWORK=0`, so a Corepack shim that has not downloaded its pnpm yet fails, and the diagnostic says to run `pnpm --version` once outside any project.
 - `pnpm bin --global` prints nothing when `PNPM_HOME` is not configured: executables are not attributed and no bin evidence is added.
 - Unparseable `pnpm list` output: an error diagnostic, and the scan continues with the other sources.
 
@@ -53,5 +53,7 @@ pnpm is never run inside a project, because a project's `.npmrc` or `packageMana
 ## Known limitations
 
 - How pnpm itself was installed is not determined.
+- Only the global packages of the pnpm that runs outside any project are seen: pnpm always runs from an empty directory (architecture.md §7), and each pnpm major keeps its global packages in its own place. What `pnpm add -g` installed inside a project whose `packageManager` pins another major is not listed. When that project is checked in the same run, a warning names both versions.
 - Windows is not supported: pnpm is a `.cmd` shim there, which cannot be run without a shell.
 - Yarn and Bun lockfiles are detected but not read.
+- `pnpm-lock.yaml` is read in the formats of lockfile v5 (pnpm 7, peers as `_suffix`), v6 (pnpm 8) and v9 (pnpm 9 and later, peers as `(suffix)`). An older or unknown format leaves `resolved` unknown instead of guessing.

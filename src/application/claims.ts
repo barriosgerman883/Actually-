@@ -2,10 +2,6 @@ import { claimFrom } from "../core/confidence.js";
 import type { Claim, Evidence, ToolSource } from "../core/model.js";
 import { githubWebUrl, parseGithubUrl } from "../providers/github/url.js";
 
-export function known<T>(value: T, evidence: Evidence): Claim<T> {
-  return claimFrom(value, [evidence]);
-}
-
 /**
  * Source from an npm `repository` field. It is an inference: the field is
  * written by the publisher and nothing verifies it. A matching repository

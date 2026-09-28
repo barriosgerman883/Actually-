@@ -22,6 +22,7 @@ export function fileCache(dir: string): ResponseCache {
         if (parsed.key !== key || typeof parsed.fetchedAt !== "number") return undefined;
         return {
           fetchedAt: parsed.fetchedAt,
+          status: typeof parsed.status === "number" ? parsed.status : undefined,
           etag: typeof parsed.etag === "string" ? parsed.etag : undefined,
           lastModified: typeof parsed.lastModified === "string" ? parsed.lastModified : undefined,
           body: parsed.body,

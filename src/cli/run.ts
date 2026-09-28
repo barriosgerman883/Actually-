@@ -172,7 +172,12 @@ export async function run(argv: string[], io: Io, createRuntime: RuntimeFactory)
   } catch (error) {
     if (error instanceof UsageError) {
       if (wantsJson) io.stdout(failJson(error.message));
-      io.stderr(`actually: ${sanitize(error.message)}\nRun \`actually --help\` for usage.\n`);
+      // Each line is sanitized on its own, so the newlines between the
+      // choices stay newlines (F-51).
+      const choices = error.choices.map((c) => `  ${sanitize(c)}\n`).join("");
+      io.stderr(
+        `actually: ${sanitize(error.summary)}\n${choices}Run \`actually --help\` for usage.\n`,
+      );
       return EXIT.usage;
     }
     const message =

@@ -1,8 +1,14 @@
 import semver from "semver";
 import { claimFrom } from "../../core/confidence.js";
 import type { Claim, Evidence } from "../../core/model.js";
-import { cachedGet, staleEvidenceText, type NetContext } from "../shared/cached-get.js";
+import {
+  cachedGet,
+  cachedEvidenceText,
+  staleEvidenceText,
+  type NetContext,
+} from "../shared/cached-get.js";
 import type { OriginDecision } from "./origin.js";
+import { repositoryField } from "../shared/repository-field.js";
 
 export interface NpmLatest {
   latest: Claim<string>;
@@ -18,19 +24,6 @@ export function latestUrl(name: string): string | undefined {
     ? `@${encodeURIComponent(name.slice(1, name.indexOf("/")))}%2F${encodeURIComponent(name.slice(name.indexOf("/") + 1))}`
     : encodeURIComponent(name);
   return `https://registry.npmjs.org/${encoded}/latest`;
-}
-
-function repositoryOf(body: Record<string, unknown>): string | undefined {
-  const repo = body.repository;
-  if (typeof repo === "string") return repo;
-  if (
-    typeof repo === "object" &&
-    repo !== null &&
-    typeof (repo as { url?: unknown }).url === "string"
-  ) {
-    return (repo as { url: string }).url;
-  }
-  return undefined;
 }
 
 /**
@@ -57,7 +50,7 @@ export async function resolveNpmLatest(
   if (result.kind === "error") {
     return { latest: { state: "unknown", reason: result.error.message, evidence: [] } };
   }
-  if (result.kind !== "stale" && result.status === 404) {
+  if (result.status === 404) {
     return {
       latest: {
         state: "unknown",
@@ -66,7 +59,7 @@ export async function resolveNpmLatest(
       },
     };
   }
-  if (result.kind !== "stale" && result.status !== 200) {
+  if (result.status !== 200) {
     return {
       latest: { state: "unknown", reason: `registry answered ${result.status}`, evidence: [] },
     };
@@ -99,7 +92,7 @@ export async function resolveNpmLatest(
     evidence.push({
       kind: "fact",
       source: "cache",
-      description: `cached response from ${new Date(result.fetchedAt).toISOString()}`,
+      description: cachedEvidenceText(result.fetchedAt),
     });
   }
   return {
@@ -107,6 +100,6 @@ export async function resolveNpmLatest(
       contradicted: prerelease,
       cap: result.kind === "stale" ? "medium" : undefined,
     }),
-    repository: body ? repositoryOf(body) : undefined,
+    repository: body ? repositoryField(body) : undefined,
   };
 }

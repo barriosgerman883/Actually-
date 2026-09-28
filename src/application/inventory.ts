@@ -1,4 +1,5 @@
-import { dirname, join, sep } from "node:path";
+import { join, sep } from "node:path";
+import semver from "semver";
 import { claimFrom } from "../core/confidence.js";
 import type { Config } from "../core/config.js";
 import { UsageError } from "../core/errors.js";
@@ -14,6 +15,7 @@ import {
   type ToolSource,
 } from "../core/model.js";
 import type { CommandRunner, Environment, Filesystem } from "../core/ports.js";
+import { redactSpec } from "../core/redact.js";
 import { buildRecord } from "../core/record.js";
 import {
   installedFromTags,
@@ -31,7 +33,7 @@ import {
 } from "../providers/npm-registry/registry-config.js";
 import { resolveNpmLatest } from "../providers/npm-registry/resolver.js";
 import { scanPnpmGlobal, type PnpmGlobalScan } from "../providers/pnpm/global.js";
-import { findProjectRoot, scanProject } from "../providers/project/project.js";
+import { findProjectRoot, findUpDir, scanProject } from "../providers/project/project.js";
 import type { WorkspaceCache } from "../providers/project/workspace.js";
 import type { NetContext } from "../providers/shared/cached-get.js";
 import { listExecutables, type Executable } from "../scanners/bin-scanner.js";
@@ -58,22 +60,6 @@ const PNPM_OWN_BINS = new Set(["pnpm", "pnpx", "pn", "pnx"]);
 
 function isInside(path: string, dir: string): boolean {
   return path === dir || path.startsWith(dir.endsWith(sep) ? dir : dir + sep);
-}
-
-async function findUpDir(
-  fs: Filesystem,
-  start: string,
-  entry: string,
-  stopAt: string,
-): Promise<string | undefined> {
-  let dir = start;
-  for (;;) {
-    if (await fs.exists(join(dir, entry))) return dir;
-    if (dir === stopAt) return undefined;
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
 }
 
 /**
@@ -131,8 +117,11 @@ export async function buildInventory(
     ]);
   }
 
+  // The pnpm that runs outside projects, whose global packages are listed.
+  let neutralPnpm: string | undefined;
   if (!options.projectOnly) {
     const pnpm = await scanPnpmGlobal(runner, fs);
+    neutralPnpm = pnpm.version;
     diagnostics.push(...pnpm.diagnostics);
 
     // Executables in the allowed directories (architecture.md §3.3).
@@ -145,7 +134,13 @@ export async function buildInventory(
     const binsInPnpmDir = new Set(
       executables.filter((e) => e.dir === pnpm.binDir).map((e) => e.name),
     );
-    tools.push(...(await pnpmRecords(pnpm, userRegistry, deps, binsInPnpmDir)));
+    // pnpm describes itself in one record: a pnpm executable elsewhere is
+    // evidence for that record, not a second tool with the same id (F-37).
+    const pnpmSelf = pnpm.installed && !pnpm.packages.some((p) => p.name === "pnpm");
+    const pnpmElsewhere = pnpmSelf
+      ? executables.filter((e) => e.name === "pnpm" && e.dir !== pnpm.binDir)
+      : [];
+    tools.push(...(await pnpmRecords(pnpm, userRegistry, deps, binsInPnpmDir, pnpmElsewhere)));
     const owned = new Set(pnpm.packages.flatMap((p) => p.bins));
     const unknownExecutables: Executable[] = [];
     // Executables resolve to real paths, so the roots are compared resolved too.
@@ -163,7 +158,7 @@ export async function buildInventory(
       )
         continue;
       const repo = repoCandidates.find((c) => isInside(exe.realPath, c.real))?.root;
-      if (repo && (await fs.exists(join(repo, ".git")))) {
+      if (repo && (await fs.exists(join(repo, ".git")).catch(() => false))) {
         const list = repoToolEvidence.get(repo) ?? [];
         list.push({
           kind: "inference",
@@ -173,6 +168,7 @@ export async function buildInventory(
         repoToolEvidence.set(repo, list);
         continue;
       }
+      if (pnpmElsewhere.includes(exe)) continue;
       unknownExecutables.push(exe);
     }
     for (const exe of unknownExecutables) tools.push(unknownExecutableRecord(exe));
@@ -184,8 +180,7 @@ export async function buildInventory(
 
   if (!options.globalOnly) {
     const roots: string[] = [];
-    const current =
-      (await findProjectRoot(fs, deps.cwd, home)) ?? (await findUpDir(fs, deps.cwd, ".git", home));
+    const current = await findProjectRoot(fs, deps.cwd, home);
     if (current) roots.push(current);
     else if (options.projectOnly) throw new UsageError("no project found in the current directory");
     for (const root of scannedRoots) {
@@ -200,10 +195,26 @@ export async function buildInventory(
         deps,
         diagnostics,
         workspaces,
+        neutralPnpm,
       );
       projects.push(summary);
       tools.push(...records);
     }
+  }
+
+  // Ids reference one tool each (design.md §14). A repeated id is a bug:
+  // say so instead of letting `status <id>` pick one silently (F-37).
+  const seen = new Set<string>();
+  for (const tool of tools) {
+    if (seen.has(tool.id)) {
+      diagnostics.push({
+        severity: "error",
+        source: "actually",
+        message: `two tools share the id ${tool.id}; please report this`,
+        toolId: tool.id,
+      });
+    }
+    seen.add(tool.id);
   }
 
   return { tools, projects, diagnostics };
@@ -214,6 +225,7 @@ async function pnpmRecords(
   registry: RegistryConfig,
   deps: InventoryDeps,
   binsInPnpmDir: Set<string>,
+  pnpmElsewhere: Executable[],
 ): Promise<ToolRecord[]> {
   if (!pnpm.installed) return [];
   const { config, net } = deps;
@@ -232,7 +244,11 @@ async function pnpmRecords(
         const installation: Claim<Installation> = {
           state: "unknown",
           reason: "how pnpm itself was installed is not determined",
-          evidence: [],
+          evidence: pnpmElsewhere.map((exe) => ({
+            kind: "fact",
+            source: exe.path,
+            description: `executable found in ${exe.dir}`,
+          })),
         };
         return buildRecord({
           name: "pnpm",
@@ -290,7 +306,7 @@ async function pnpmRecords(
               ? claimFrom(pkg.installedVersion, pkg.evidence)
               : {
                   state: "unknown",
-                  reason: `pnpm reports a non-registry version (${pkg.spec ?? "unknown"})`,
+                  reason: `pnpm reports a non-registry version (${pkg.spec ? redactSpec(pkg.spec) : "unknown"})`,
                   evidence: pkg.evidence,
                 },
             latest: latest.latest,
@@ -356,12 +372,13 @@ async function repoToolRecord(
   github: GithubRunState,
   diagnostics: Diagnostic[],
 ): Promise<ToolRecord> {
-  const repo = await readRepository(deps.fs, root);
+  const repo = await readRepository(deps.fs, root, diagnostics);
   const name = root.split(sep).filter(Boolean).pop() ?? root;
   if (!repo) {
     const record = buildRecord({
       name,
       scope: "global",
+      location: root,
       versions: {
         requested: notApplicable,
         resolved: notApplicable,
@@ -397,6 +414,7 @@ async function repoToolRecord(
   const record = buildRecord({
     name,
     scope: "global",
+    location: root,
     versions: { requested: notApplicable, resolved: notApplicable, installed, latest },
     installation,
     source: repositorySource(repo),
@@ -420,17 +438,29 @@ async function projectRecords(
   deps: InventoryDeps,
   diagnostics: Diagnostic[],
   workspaces: WorkspaceCache,
+  neutralPnpm?: string,
 ): Promise<{ summary: ProjectSummary; records: ToolRecord[] }> {
   const { fs, config, net } = deps;
   const scan = await scanProject(fs, root, deps.env.homeDir, workspaces);
   diagnostics.push(...scan.diagnostics);
+  // Each pnpm major keeps global packages in its own place, and pnpm only
+  // ever runs outside projects (§7): what the project's pnpm installed
+  // globally is not listed. Say so instead of looking silently empty (F-57).
+  const pinned = scan.packageManager?.value === "pnpm" ? scan.packageManager.version : undefined;
+  if (pinned && neutralPnpm && semver.major(pinned) !== semver.major(neutralPnpm)) {
+    diagnostics.push({
+      severity: "warning",
+      source: "pnpm",
+      message: `${root} pins pnpm ${pinned}, but pnpm ${neutralPnpm} runs outside projects: global packages installed with pnpm ${pinned} are not listed`,
+    });
+  }
   let registry: RegistryConfig = scan.registryUnknown
     ? { state: "unknown", reason: scan.registryUnknown }
     : applyYarnEnvironment(userRegistry, deps.env.get("YARN_NPM_REGISTRY_SERVER"));
   for (const file of scan.registryFiles) registry = applyRegistryFile(registry, file);
 
-  const gitRoot = await findUpDir(fs, root, ".git", deps.env.homeDir);
-  const repo = gitRoot ? await readRepository(fs, gitRoot) : undefined;
+  const gitRoot = await findUpDir(fs, root, [".git"], deps.env.homeDir);
+  const repo = gitRoot ? await readRepository(fs, gitRoot, diagnostics) : undefined;
   const packageManager: Claim<string> = scan.packageManager
     ? claimFrom(scan.packageManager.value, scan.packageManager.evidence)
     : scan.manifestPath
@@ -451,10 +481,13 @@ async function projectRecords(
       const latest = await resolveNpmLatest(dep.name, origin, net);
       const installation: Claim<Installation> =
         dep.installed && packageManager.state === "known"
-          ? claimFrom({ provider: packageManager.value, path: dep.installed.path }, [
-              dep.installed.evidence,
-              ...(scan.packageManager?.evidence ?? []),
-            ])
+          ? // The fact is the installed version; who installed it is only as
+            // sure as the package manager (architecture.md §6, F-35).
+            claimFrom(
+              { provider: packageManager.value, path: dep.installed.path },
+              [dep.installed.evidence, ...(scan.packageManager?.evidence ?? [])],
+              { cap: packageManager.confidence },
+            )
           : dep.installed
             ? {
                 state: "unknown",
@@ -467,11 +500,11 @@ async function projectRecords(
         scope: "project",
         projectRoot: root,
         versions: {
-          requested: claimFrom(dep.requested, [
+          requested: claimFrom(redactSpec(dep.requested), [
             {
               kind: "fact",
               source: scan.manifestPath ?? root,
-              description: `${dep.section} declares "${dep.requested}"`,
+              description: `${dep.section} declares "${redactSpec(dep.requested)}"`,
             },
           ]),
           resolved: dep.resolved

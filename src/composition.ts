@@ -1,7 +1,7 @@
 import { buildInventory, type InventoryOptions } from "./application/inventory.js";
 import type { Config } from "./core/config.js";
 import type { Inventory } from "./core/model.js";
-import type { Environment } from "./core/ports.js";
+import type { CommandRunner, Environment, HttpClient } from "./core/ports.js";
 import { disabledCache, fileCache } from "./infrastructure/cache/file-cache.js";
 import { nodeCommandRunner } from "./infrastructure/command-runner/node-command-runner.js";
 import { loadConfig } from "./infrastructure/config/toml-config.js";
@@ -46,21 +46,38 @@ This notice is shown once.
 `;
 
 /**
+ * What the runtime talks to outside the process. Tests replace them to
+ * check the rules that live here, such as the first-run notice (F-49).
+ */
+export interface RuntimeDeps {
+  env: Environment;
+  runner?: CommandRunner;
+  httpClient: (options: { githubToken?: string; signal?: AbortSignal }) => HttpClient;
+}
+
+const nodeDeps = (): RuntimeDeps => ({
+  env: nodeEnvironment(),
+  httpClient: (o) => undiciHttpClient({ userAgent: `actually/${VERSION}`, ...o }),
+});
+
+/**
  * Composition root: the only module that wires infrastructure into the
  * application. The CLI imports this, never infrastructure directly.
  */
-export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
-  const env = nodeEnvironment();
+export async function createRuntime(
+  options: RuntimeOptions,
+  deps: RuntimeDeps = nodeDeps(),
+): Promise<Runtime> {
+  const { env } = deps;
   const dirs = appDirs(env);
-  const fs = nodeFilesystem();
+  const fs = nodeFilesystem({ pathext: env.get("PATHEXT") });
   const { config, warnings } = await loadConfig(dirs.configFile, fs, env);
   const state = fileLocalState(dirs.state);
-  const runner = nodeCommandRunner({ neutralDir: () => state.neutralDir() });
+  const runner = deps.runner ?? nodeCommandRunner({ neutralDir: () => state.neutralDir() });
 
   const online = config.network.enabled && !options.offline;
   const http = online
-    ? undiciHttpClient({
-        userAgent: `actually/${VERSION}`,
+    ? deps.httpClient({
         signal: options.signal,
         githubToken: config.network.githubToken
           ? (env.get("GITHUB_TOKEN") ?? env.get("GH_TOKEN"))
@@ -68,7 +85,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       })
     : undefined;
 
-  // The notice goes out before the first request leaves the machine.
+  // The notice goes out before the first request leaves the machine. If
+  // the marker cannot be written, the next run shows it again.
   let noticeShown: Promise<void> | undefined;
   const showNoticeOnce = () =>
     (noticeShown ??= (async () => {

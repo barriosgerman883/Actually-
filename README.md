@@ -96,7 +96,7 @@ color = "auto"                      # "auto", "always" or "never"; NO_COLOR is r
 
 ## JSON and exit codes
 
-`--json` prints a versioned document (`schemaVersion: 1`) on stdout and nothing else. Notices and diagnostics go to stderr. `explain --json` includes the evidence.
+`--json` prints a versioned document (`schemaVersion: 1`) on stdout and nothing else, diagnostics included. The first-run notice goes to stderr. `explain --json` includes the evidence.
 
 | Code | Meaning                                                    |
 | ---- | ---------------------------------------------------------- |
@@ -110,6 +110,7 @@ color = "auto"                      # "auto", "always" or "never"; NO_COLOR is r
 - Node.js 22.19 or later, pnpm, and Git 2.32 or later for repository tools.
 - Linux and macOS. Windows is not supported yet.
 - Yarn and Bun lockfiles are detected but not read yet.
+- Global packages are those of the pnpm that runs outside any project. A project whose `packageManager` pins another pnpm major keeps its own global packages elsewhere, and those are not listed; a warning says so when that project is checked.
 
 ## Found something wrong?
 

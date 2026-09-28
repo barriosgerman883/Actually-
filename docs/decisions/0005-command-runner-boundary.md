@@ -8,7 +8,7 @@ Running `git` or `pnpm` inside an untrusted repository can execute code the repo
 
 ## Decision
 
-`src/infrastructure/command-runner` is the only code that spawns processes. Callers pick an id from a closed list of seven exact commands and cannot pass a binary, arguments or environment. pnpm always runs in an empty directory owned by actually. git runs with system and global config disabled, `core.fsmonitor=false`, no pager, no prompts and no optional locks. Nothing runs through a shell.
+`src/infrastructure/command-runner` is the only code that spawns processes. Callers pick an id from a closed list of seven exact commands and cannot pass a binary, arguments or environment. pnpm always runs in an empty directory owned by actually. git runs with system and global config disabled, `core.fsmonitor=false`, no pager, no prompts, no optional locks, no lazy fetch of missing objects (`GIT_NO_LAZY_FETCH=1`) and no transport protocols (empty `GIT_ALLOW_PROTOCOL`). Nothing runs through a shell.
 
 ## Consequences
 

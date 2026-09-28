@@ -22,9 +22,8 @@ export interface ProjectDependency {
 }
 
 export interface ProjectScan {
-  root: string;
   manifestPath?: string;
-  packageManager?: { value: string; evidence: Evidence[] };
+  packageManager?: { value: string; evidence: Evidence[]; version?: string };
   dependencies: ProjectDependency[];
   /** Every registry file that could apply, from the outermost directory to the project. */
   registryFiles: RegistryFile[];
@@ -46,17 +45,21 @@ async function readJson(
 }
 
 /**
- * Finds the nearest directory with a package.json, walking up from `start`
+ * The nearest directory that has any of `entries`, walking up from `start`
  * but never above `stopAt` (the home directory).
  */
-export async function findProjectRoot(
+export async function findUpDir(
   fs: Filesystem,
   start: string,
+  entries: string[],
   stopAt: string,
 ): Promise<string | undefined> {
   let dir = start;
   for (;;) {
-    if (await fs.exists(join(dir, "package.json"))) return dir;
+    for (const entry of entries) {
+      // An entry that cannot be checked is not taken as the marker.
+      if (await fs.exists(join(dir, entry)).catch(() => false)) return dir;
+    }
     if (dir === stopAt) return undefined;
     const parent = dirname(dir);
     if (parent === dir) return undefined;
@@ -64,21 +67,16 @@ export async function findProjectRoot(
   }
 }
 
-async function findUp(
+/**
+ * The project root for `start`: the nearest directory with a package.json
+ * or a .git, whichever comes first (mvp.md §6, F-40).
+ */
+export function findProjectRoot(
   fs: Filesystem,
   start: string,
-  file: string,
   stopAt: string,
 ): Promise<string | undefined> {
-  let dir = start;
-  for (;;) {
-    const candidate = join(dir, file);
-    if (await fs.exists(candidate)) return candidate;
-    if (dir === stopAt) return undefined;
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
+  return findUpDir(fs, start, ["package.json", ".git"], stopAt);
 }
 
 /** Directories from `start` up to `end`, both included; only `start` if `end` is not above it. */
@@ -93,8 +91,12 @@ function dirsUpTo(start: string, end: string): string[] {
   return dirs;
 }
 
-function stripPeerSuffix(version: string): string {
-  const i = version.indexOf("(");
+/**
+ * The version without its peer suffix: `1.2.3(react@18.0.0)` since lockfile
+ * v6, and `1.2.3_react@18.0.0` in v5, the lockfile of pnpm 7 (F-47).
+ */
+function stripPeerSuffix(version: string, v5: boolean): string {
+  const i = v5 ? version.search(/[(_]/) : version.indexOf("(");
   return i >= 0 ? version.slice(0, i) : version;
 }
 
@@ -112,8 +114,8 @@ type LockEntries = Map<string, LockEntry>;
 
 const LOCAL_PREFIXES = ["link:", "file:", "workspace:"];
 
-function pnpmEntry(raw: string): LockEntry {
-  const value = stripPeerSuffix(raw);
+function pnpmEntry(raw: string, v5: boolean): LockEntry {
+  const value = stripPeerSuffix(raw, v5);
   if (semver.valid(value)) return { kind: "registry", version: value };
   const prefix = LOCAL_PREFIXES.find((p) => value.startsWith(p));
   return prefix ? { kind: "local", label: prefix } : { kind: "other" };
@@ -145,6 +147,7 @@ function pnpmLockEntries(text: string, importer: string): LockEntries | undefine
   const doc = parseYaml(text) as Record<string, unknown> | null;
   const out: LockEntries = new Map();
   if (!doc || typeof doc !== "object") return importer === "." ? out : undefined;
+  const v5 = /^5(\.|$)/.test(String(doc.lockfileVersion ?? ""));
   const importers = doc.importers as Record<string, Record<string, unknown>> | undefined;
   const scope = importers ? importers[importer] : importer === "." ? doc : undefined;
   if (!scope) return importers && importer === "." ? out : undefined;
@@ -160,7 +163,7 @@ function pnpmLockEntries(text: string, importer: string): LockEntries | undefine
               typeof (value as { version?: unknown }).version === "string"
             ? (value as { version: string }).version
             : undefined;
-      if (raw) out.set(name, pnpmEntry(raw));
+      if (raw) out.set(name, pnpmEntry(raw, v5));
     }
   }
   return out;
@@ -206,9 +209,15 @@ export async function scanProject(
   stopAt: string,
   workspaces: WorkspaceCache = new Map(),
 ): Promise<ProjectScan> {
-  const scan: ProjectScan = { root, dependencies: [], registryFiles: [], diagnostics: [] };
+  const scan: ProjectScan = { dependencies: [], registryFiles: [], diagnostics: [] };
   const manifestPath = join(root, "package.json");
-  if (!(await fs.exists(manifestPath))) return scan;
+  let hasManifest: boolean;
+  try {
+    hasManifest = await fs.exists(manifestPath);
+  } catch {
+    hasManifest = true; // Reading it below reports that it cannot be read.
+  }
+  if (!hasManifest) return scan;
   scan.manifestPath = manifestPath;
 
   let manifest: Record<string, unknown> | undefined;
@@ -225,10 +234,11 @@ export async function scanProject(
   if (!manifest) return scan;
 
   if (typeof manifest.packageManager === "string") {
-    const pm = manifest.packageManager.split("@")[0];
+    const [pm, pinned] = manifest.packageManager.split("@");
     if (pm) {
       scan.packageManager = {
         value: pm,
+        version: semver.valid(pinned?.split("+")[0] ?? "") ?? undefined,
         evidence: [
           {
             kind: "fact",
@@ -245,7 +255,10 @@ export async function scanProject(
     if (typeof entries !== "object" || entries === null) continue;
     for (const [name, spec] of Object.entries(entries as Record<string, unknown>)) {
       if (typeof spec !== "string") continue;
-      if (scan.dependencies.some((d) => d.name === name)) continue;
+      // npm lets optionalDependencies replace the same entry in dependencies (F-33).
+      const earlier = scan.dependencies.findIndex((d) => d.name === name);
+      if (earlier >= 0 && section !== "optionalDependencies") continue;
+      if (earlier >= 0) scan.dependencies.splice(earlier, 1);
       scan.dependencies.push({ name, requested: spec, section });
     }
   }
@@ -282,17 +295,18 @@ export async function scanProject(
     };
   };
   const ownPnpmLock = join(root, "pnpm-lock.yaml");
-  const npmLock = (await fs.exists(join(root, "package-lock.json")))
-    ? join(root, "package-lock.json")
-    : undefined;
   try {
+    const npmLock = (await fs.exists(join(root, "package-lock.json")))
+      ? join(root, "package-lock.json")
+      : undefined;
     let pnpmLock: string | undefined;
     let pnpmEntries: LockEntries | undefined;
     if (await fs.exists(ownPnpmLock)) {
       pnpmLock = ownPnpmLock;
       pnpmEntries = pnpmLockEntries(await fs.readText(ownPnpmLock), ".");
     } else if (!npmLock && root !== stopAt) {
-      const above = await findUp(fs, dirname(root), "pnpm-lock.yaml", stopAt);
+      const aboveDir = await findUpDir(fs, dirname(root), ["pnpm-lock.yaml"], stopAt);
+      const above = aboveDir && join(aboveDir, "pnpm-lock.yaml");
       if (above) {
         const importer = relative(dirname(above), root).split(sep).join("/");
         pnpmEntries = pnpmLockEntries(await fs.readText(above), importer);
@@ -422,8 +436,10 @@ export async function scanProject(
     for (const [name, format] of registryFiles) {
       if (format === "npmrc" && dir === stopAt && dir !== root) continue;
       const path = join(dir, name);
-      if (!(await fs.exists(path))) continue;
       try {
+        // One that exists but cannot be checked or read leaves the registry
+        // unknown; it is never skipped (F-04, F-46).
+        if (!(await fs.exists(path))) continue;
         scan.registryFiles.push({ path, text: await fs.readText(path), format });
       } catch {
         scan.registryUnknown ??= `${path} could not be read`;

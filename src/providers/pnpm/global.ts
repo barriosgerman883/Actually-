@@ -2,6 +2,7 @@ import { dirname, join, sep } from "node:path";
 import semver from "semver";
 import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { CommandRunner, Filesystem } from "../../core/ports.js";
+import { repositoryField } from "../shared/repository-field.js";
 
 export interface PnpmGlobalPackage {
   name: string;
@@ -45,19 +46,6 @@ function binNames(manifest: Record<string, unknown>, packageName: string): strin
   return [];
 }
 
-function repositoryOf(manifest: Record<string, unknown>): string | undefined {
-  const repo = manifest.repository;
-  if (typeof repo === "string") return repo;
-  if (
-    typeof repo === "object" &&
-    repo !== null &&
-    typeof (repo as { url?: unknown }).url === "string"
-  ) {
-    return (repo as { url: string }).url;
-  }
-  return undefined;
-}
-
 async function readJson(
   fs: Filesystem,
   path: string,
@@ -96,6 +84,13 @@ function specManifests(rootDir: string, packagePath: unknown): string[] {
  * specManifests), which the npm-registry origin rule needs. pnpm is never
  * run inside a project.
  */
+/** actually never lets Corepack download pnpm (F-39): say how to do it by hand. */
+function withCorepackHint(message: string): string {
+  return /network access disabled/i.test(message)
+    ? `${message} (Corepack has not downloaded this pnpm version yet; run pnpm --version once outside any project)`
+    : message;
+}
+
 export async function scanPnpmGlobal(
   runner: CommandRunner,
   fs: Filesystem,
@@ -119,7 +114,7 @@ export async function scanPnpmGlobal(
             source: "pnpm",
             message: `${version.message}: global packages were not checked`,
           }
-        : { severity: "error", source: "pnpm", message: version.message },
+        : { severity: "error", source: "pnpm", message: withCorepackHint(version.message) },
     );
     return scan;
   }
@@ -206,7 +201,7 @@ export async function scanPnpmGlobal(
       const manifest = await readJson(fs, join(dep.path, "package.json"));
       if (manifest) {
         pkg.bins = binNames(manifest, name);
-        pkg.repository = repositoryOf(manifest);
+        pkg.repository = repositoryField(manifest);
       }
     }
     scan.packages.push(pkg);

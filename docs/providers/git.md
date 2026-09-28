@@ -24,7 +24,7 @@ Without a semver tag on `HEAD`, the version is unknown. The evidence records the
 
 ## Commands executed
 
-Only those two, with a hardened environment: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` set to the null device, `-c core.fsmonitor=false`, `GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, and no `GIT_*` variable from the caller.
+Only those two, with a hardened environment: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` set to the null device, `-c core.fsmonitor=false`, `GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `GIT_NO_LAZY_FETCH=1` and an empty `GIT_ALLOW_PROTOCOL`, so a repository that declares itself a partial clone cannot make git fetch through its own transport settings, and no `GIT_*` variable from the caller.
 
 ## Files inspected
 
@@ -36,7 +36,7 @@ None. See github.md.
 
 ## Failure modes
 
-A declared tool that is not a repository becomes an error record with a diagnostic. git refusing a repository (`safe.directory`) leaves the version unknown.
+A declared tool that is not a repository becomes an error record with a diagnostic. A `.git` file that cannot be read skips that repository with a warning; the rest of the run continues. git failing on a repository, for example refusing it (`safe.directory`) or timing out, in either command, makes the tool an error record with a diagnostic. Only git saying it found no tag leaves the version unknown without an error.
 
 ## Security considerations
 

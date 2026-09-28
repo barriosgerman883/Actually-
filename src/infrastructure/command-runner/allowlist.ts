@@ -53,13 +53,16 @@ function gitHardeningEnv(): Record<string, string> {
 /**
  * Environment overrides for every pnpm invocation: no update check (it
  * would contact the network outside the HTTP client), and no corepack
- * auto-pinning or download prompts.
+ * auto-pinning, download prompts or downloads. A pnpm shim of Corepack
+ * that has not downloaded pnpm yet fails instead of reaching the network,
+ * also with --offline (architecture.md §7, F-39).
  */
 function pnpmQuietEnv(): Record<string, string> {
   return {
     npm_config_update_notifier: "false",
     COREPACK_ENABLE_AUTO_PIN: "0",
     COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+    COREPACK_ENABLE_NETWORK: "0",
   };
 }
 

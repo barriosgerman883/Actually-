@@ -1,8 +1,9 @@
 import { isAbsolute, join, resolve } from "node:path";
 import semver from "semver";
-import type { Evidence } from "../../core/model.js";
+import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { CommandRunner, Filesystem } from "../../core/ports.js";
 import { parseGithubUrl, type GithubRepo } from "../github/url.js";
+import { tagVersion } from "../shared/tag-version.js";
 
 export interface GitRemote {
   name: string;
@@ -12,18 +13,37 @@ export interface GitRemote {
 export interface GitRepository {
   root: string;
   gitDir: string;
-  branch?: string;
   commit?: string;
   remotes: GitRemote[];
-  github?: { repo: GithubRepo; remote: string; evidence: Evidence };
+  github?: { repo: GithubRepo; evidence: Evidence };
 }
 
-async function resolveGitDir(fs: Filesystem, root: string): Promise<string | undefined> {
+async function resolveGitDir(
+  fs: Filesystem,
+  root: string,
+  diagnostics: Diagnostic[],
+): Promise<string | undefined> {
   const dotGit = join(root, ".git");
   if (await fs.isDirectory(dotGit)) return dotGit;
-  if (!(await fs.exists(dotGit))) return undefined;
-  // Worktrees and submodules: ".git" is a file with "gitdir: <path>".
-  const match = /^gitdir:\s*(.+)\s*$/m.exec(await fs.readText(dotGit));
+  let present: boolean;
+  try {
+    present = await fs.exists(dotGit);
+  } catch {
+    present = true; // It is there but cannot be checked: reading it reports why.
+  }
+  if (!present) return undefined;
+  // Worktrees and submodules: ".git" is a file with "gitdir: <path>". One
+  // that cannot be read skips this repository, not the run (RA-009, F-38).
+  const text = await readOptional(fs, dotGit);
+  if (text === undefined) {
+    diagnostics.push({
+      severity: "warning",
+      source: "git",
+      message: `${dotGit} could not be read`,
+    });
+    return undefined;
+  }
+  const match = /^gitdir:\s*(.+)\s*$/m.exec(text);
   if (!match?.[1]) return undefined;
   const target = match[1].trim();
   return isAbsolute(target) ? target : resolve(root, target);
@@ -65,8 +85,9 @@ export function parseRemotes(configText: string): GitRemote[] {
 export async function readRepository(
   fs: Filesystem,
   root: string,
+  diagnostics: Diagnostic[] = [],
 ): Promise<GitRepository | undefined> {
-  const gitDir = await resolveGitDir(fs, root);
+  const gitDir = await resolveGitDir(fs, root, diagnostics);
   if (!gitDir) return undefined;
   const commonDirText = await readOptional(fs, join(gitDir, "commondir"));
   const commonDir = commonDirText ? resolve(gitDir, commonDirText.trim()) : gitDir;
@@ -75,7 +96,6 @@ export async function readRepository(
   const head = (await readOptional(fs, join(gitDir, "HEAD")))?.trim();
   if (head?.startsWith("ref:")) {
     const ref = head.slice(4).trim();
-    if (ref.startsWith("refs/heads/")) repo.branch = ref.slice("refs/heads/".length);
     const loose = (await readOptional(fs, join(commonDir, ref)))?.trim();
     if (loose && /^[0-9a-f]{40,64}$/.test(loose)) {
       repo.commit = loose;
@@ -91,11 +111,10 @@ export async function readRepository(
 
   repo.remotes = parseRemotes((await readOptional(fs, join(commonDir, "config"))) ?? "");
   const preferred = repo.remotes.find((r) => r.name === "origin") ?? repo.remotes[0];
-  const github = preferred ? parseGithubUrl(preferred.url) : undefined;
+  const github = preferred ? parseGithubUrl(preferred.url, { npmShorthand: false }) : undefined;
   if (preferred && github) {
     repo.github = {
       repo: github,
-      remote: preferred.name,
       evidence: {
         kind: "fact",
         source: join(commonDir, "config"),
@@ -110,11 +129,6 @@ export interface TagInfo {
   version?: { value: string; evidence: Evidence };
   unknownEvidence: Evidence[];
   failure?: string;
-}
-
-function asVersion(tag: string): string | undefined {
-  const cleaned = tag.trim().replace(/^v/, "");
-  return semver.valid(cleaned) ?? undefined;
 }
 
 /**
@@ -134,7 +148,7 @@ export async function installedFromTags(
   }
   const versions = tags.stdout
     .split(/\r?\n/)
-    .map((t) => ({ tag: t.trim(), version: asVersion(t) }))
+    .map((t) => ({ tag: t.trim(), version: tagVersion(t) }))
     .filter((t): t is { tag: string; version: string } => t.version !== undefined)
     .sort((a, b) => semver.rcompare(a.version, b.version));
   const best = versions[0];
@@ -175,6 +189,8 @@ export async function installedFromTags(
       source: "git describe --tags --long HEAD",
       description: noNames ? "no reachable tag" : describe.message,
     });
+    // Any other failure is a failed provider: an error, not just evidence (F-43).
+    if (!noNames) info.failure = describe.message;
   }
   return info;
 }

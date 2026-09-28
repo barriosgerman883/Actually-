@@ -57,42 +57,44 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-18 | media | seguridad | `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee | resuelto: código corregido en `54ec142` |
 | F-19 | media | seguridad | `prettier --write` y `eslint --fix` pueden escribir los archivos de los frenos | resuelto: código corregido en `940c5ed` |
 | F-20 | alta | seguridad | Bash puede escribir los archivos de los frenos por rutas que el guard no ve | abierto |
-| F-21 | alta | seguridad | Un symlink a `.claude/` saltea el guard de edición | abierto |
-| F-22 | alta | seguridad | Las reglas que solo cambia la persona responsable no están protegidas | abierto |
+| F-21 | alta | seguridad | Un symlink a `.claude/` saltea el guard de edición | resuelto: código corregido en `fd26adb` |
+| F-22 | alta | seguridad | Las reglas que solo cambia la persona responsable no están protegidas | resuelto: código corregido en `fd26adb` |
 | F-23 | media | seguridad | Formas de saltear los hooks de git que el guard no detecta | abierto |
 | F-24 | media | seguridad | Una opción con valor antes del subcomando esconde `publish` | abierto |
 | F-25 | media | privacidad | Secretos legibles con variables, globs y búsquedas recursivas | abierto |
-| F-26 | alta | seguridad | Comandos destructivos dentro de subshells, grupos o `if` pasan el guard | abierto |
+| F-26 | alta | seguridad | Comandos destructivos dentro de subshells, grupos o `if` pasan el guard | resuelto: código corregido en `fd26adb` |
 | F-27 | media | robustez | Formas de debilitar o borrar tests que el guard no detecta | abierto |
 | F-28 | baja | robustez | Falsos positivos del guard de Bash con backticks y con `.npmrc` | abierto |
 | F-29 | baja | robustez | El guard de edición revisa archivos fuera del repositorio | abierto |
 | F-30 | baja | seguridad | Los hooks fallan abiertos ante una entrada inválida | abierto |
 | F-31 | alta | privacidad | Credenciales dentro de la URL del registry llegan a la evidencia y a `explain` | resuelto: código corregido en `55d8461` |
 | F-32 | alta | privacidad | En workspaces se consultan en el registry público paquetes que resuelven a uno local | resuelto: código corregido en `93a1807` |
-| F-33 | media | privacidad | Specs locales tratados como de registry: tarballs `.tgz` y `optionalDependencies` | abierto |
-| F-34 | media | privacidad | El `.npmrc` del proyecto se interpreta distinto que en npm y pnpm | abierto |
-| F-35 | media | evidencia | "installed by" con confianza `high` cuando el package manager solo se infiere | abierto |
-| F-36 | media | evidencia | Una release de GitHub con tag prerelease queda con confianza `high` | abierto |
-| F-37 | media | corrección | Dos herramientas distintas reciben el mismo id | abierto |
-| F-38 | media | robustez | Un archivo `.git` ilegible aborta toda la ejecución | abierto |
-| F-39 | media | privacidad | `--offline` no impide que Corepack descargue pnpm por la red | abierto |
-| F-40 | baja | corrección | Un `package.json` de un directorio superior le gana a un `.git` más cercano | abierto |
-| F-41 | baja | robustez | Sin releases en GitHub, los tags en caché no se usan offline y `/releases/latest` se repite | abierto |
-| F-42 | baja | desvío de docs | El límite de GitHub alcanzado en `/tags` no emite diagnóstico | abierto |
-| F-43 | baja | desvío de docs | Un fallo de `git describe` no produce `error` ni diagnóstico | abierto |
-| F-44 | baja | privacidad | Un remote relativo se interpreta como repositorio de GitHub | abierto |
-| F-45 | baja | seguridad | `sanitize` no escapa controles bidi ni de ancho cero | abierto |
-| F-46 | baja | robustez | `Filesystem` lee sin límite ni chequeo de tipo, y `exists` trata `EACCES` como ausencia | abierto |
-| F-47 | baja | corrección | Los sufijos de peers de un lockfile pnpm v5 dejan `resolved` desconocido | abierto |
-| F-48 | baja | robustez | El repositorio no se puede verificar en Windows | abierto |
-| F-49 | baja | robustez | Ni el composition root ni el aviso de primera ejecución tienen tests | abierto |
+| F-33 | media | privacidad | Specs locales tratados como de registry: tarballs `.tgz` y `optionalDependencies` | resuelto: código corregido en `f115ba6` |
+| F-34 | media | privacidad | El `.npmrc` del proyecto se interpreta distinto que en npm y pnpm | resuelto: código corregido en `de11f8c` |
+| F-35 | media | evidencia | "installed by" con confianza `high` cuando el package manager solo se infiere | resuelto: código corregido en `c794dab` |
+| F-36 | media | evidencia | Una release de GitHub con tag prerelease queda con confianza `high` | resuelto: código corregido en `96af22d` |
+| F-37 | media | corrección | Dos herramientas distintas reciben el mismo id | resuelto: código corregido en `6555ce0` |
+| F-38 | media | robustez | Un archivo `.git` ilegible aborta toda la ejecución | resuelto: código corregido en `d888c76` |
+| F-39 | media | privacidad | `--offline` no impide que Corepack descargue pnpm por la red | resuelto: código corregido en `2f99aab` |
+| F-40 | baja | corrección | Un `package.json` de un directorio superior le gana a un `.git` más cercano | resuelto: código corregido en `2a401e8` |
+| F-41 | baja | robustez | Sin releases en GitHub, los tags en caché no se usan offline y `/releases/latest` se repite | resuelto: código corregido en `0331589` |
+| F-42 | baja | desvío de docs | El límite de GitHub alcanzado en `/tags` no emite diagnóstico | resuelto: código corregido en `12b6f9c` |
+| F-43 | baja | desvío de docs | Un fallo de `git describe` no produce `error` ni diagnóstico | resuelto: código corregido en `1ef608b` |
+| F-44 | baja | privacidad | Un remote relativo se interpreta como repositorio de GitHub | resuelto: código corregido en `5fc1072` |
+| F-45 | baja | seguridad | `sanitize` no escapa controles bidi ni de ancho cero | resuelto: código corregido en `4485852` |
+| F-46 | baja | robustez | `Filesystem` lee sin límite ni chequeo de tipo, y `exists` trata `EACCES` como ausencia | resuelto: código corregido en `ab32ec6` |
+| F-47 | baja | corrección | Los sufijos de peers de un lockfile pnpm v5 dejan `resolved` desconocido | resuelto: código corregido en `1abd7d2` |
+| F-48 | baja | robustez | El repositorio no se puede verificar en Windows | resuelto: código corregido en `1838d63` |
+| F-49 | baja | robustez | Ni el composition root ni el aviso de primera ejecución tienen tests | resuelto: código corregido en `ef0d1e5` |
 | F-50 | alta | corrección | Con pnpm 12, ningún paquete global recibe su `latest` | resuelto: código corregido en `793c369` |
-| F-51 | baja | corrección | El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea | abierto |
+| F-51 | baja | corrección | El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea | resuelto: código corregido en `c7330ae` |
 | F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `f10a354` |
-| F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
+| F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | resuelto: código corregido en `3eeeab0` |
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
 | F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | resuelto: código corregido en `7a5bfa9` |
-| F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | abierto |
+| F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | resuelto: código corregido en `b6743b4` |
+| F-57 | baja | evidencia | Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa | resuelto: código corregido en `13b88a5` |
+| F-58 | baja | desvío de docs | CLAUDE.md quedó desactualizado en tres puntos | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -517,9 +519,11 @@ Propuesta:
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28. La persona responsable pidió corregirlo desde una sesión en la nube; los frenos no se editan ni con autorización (mvp.md §9), así que el cambio se preparó como un parche fuera del repositorio, verificado con `tests/security/agent-guard.test.ts` sobre copias de los hooks (219 casos), y la persona responsable lo aplicó a mano en `7d080f2`. Antes, en `b2b2d68`: `.claude/` en `.prettierignore` y en los `ignores` de ESLint. Sigue `abierto` por lo que quedó afuera. En `7d080f2`: `npx`, `pnpx` y `bunx` evalúan el comando interno; un glob que expande a un freno (`.claude/set*.json`, `.clau?e/hooks/`) cuenta como nombrarlo; una variable con `.claude` en su valor se deniega; una redirección a un destino con variable, glob o sustitución pide confirmación; `cp`, `mv`, `rsync`, `ln`, `cd`, `pushd` y `tar -C` hacia `.claude/` se deniegan, igual que `git checkout` y `git restore` sobre `.claude`; `git apply`, `git am`, `patch` y extraer un `tar` piden confirmación; un heredoc a `node`, `python`, `perl`, `ruby`, `deno`, `bun` o `php` pide confirmación, y se deniega si menciona `.claude`. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: evaluar el comando interno de `pnpm exec` y `pnpm dlx`, y pedir confirmación cuando algo que no es `curl` o `wget` se canaliza a un shell (`base64 -d | sh`).
 
+**Segunda corrección parcial, aplicada en `fd26adb`.** 2026-09-28, también como parche que aplicó la persona responsable. `pnpm exec`, `pnpm dlx`, `npm exec`, `yarn exec` y `yarn dlx` evalúan el comando interno, y el texto de `npx -c`, `--call` y `--shell-mode` se revisa como un comando más; el texto canalizado a un shell o a un intérprete que lee de stdin pide confirmación, y se deniega si nombra `.claude`. Con esto, lo que el guard puede ver está cubierto. Sigue `abierto` por la primera propuesta, que un hook de texto no puede cumplir: un intérprete que ejecuta un archivo (`node x.mjs`) puede escribir `.claude/` sin nombrarlo, y eso solo lo cierra una protección fuera del agente, como `.claude/` sin permiso de escritura para su usuario o un check de CI o `CODEOWNERS` que exija la aprobación de la persona responsable.
+
 ### F-21 · Un symlink a `.claude/` saltea el guard de edición
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `fd26adb`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-edit.mjs` (`evaluate`), `.claude/hooks/guard-bash.mjs`
@@ -537,9 +541,11 @@ Propuesta: resolver con `realpath` la ruta, o la del directorio padre si el arch
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28, junto con F-20; sigue `abierto` por lo que quedó afuera. En `7d080f2`: el guard de edición deniega todo `.claude/` (agentes, comandos, skills incluidos), y el guard de Bash deniega `ln` con `.claude` en el origen o en el destino, con lo que el symlink no se puede crear desde Bash. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: resolver la ruta con `realpath` antes de comparar, y proteger `~/.claude/settings*.json` y `~/.claude/hooks/`. Un symlink creado por otra vía sigue salteando el guard de edición.
 
+**Corregido en `fd26adb`.** 2026-09-28, como parche que aplicó la persona responsable. El guard de edición resuelve los symlinks de la ruta, o de su directorio existente más cercano si el archivo es nuevo, y exige que pasen tanto la ruta escrita como la resuelta; deniega también `~/.claude/settings*.json` y `~/.claude/hooks/`, con la ruta del home escrita o resuelta. `tests/security/agent-guard.test.ts` lo verifica con symlinks reales a `.claude/` y a un archivo dentro, y con un home temporal.
+
 ### F-22 · Las reglas que solo cambia la persona responsable no están protegidas
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `fd26adb`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-edit.mjs` (`DENY_PATHS`)
@@ -556,6 +562,8 @@ Hoy estas reglas se cumplen solo porque las instrucciones lo piden.
 Propuesta: denegar la edición de `CLAUDE.md` y `AGENTS.md`; denegar o pedir confirmación para los cambios en `docs/mvp.md` y `docs/review/findings.md` que toquen esas secciones; pedir confirmación para `package.json` (campos `simple-git-hooks` y `scripts`), `vitest.config.ts`, `eslint.config.js` y `.prettierignore`. La nueva regla también tendría que quedar escrita en CLAUDE.md y en mvp.md §9; eso lo hace la persona responsable.
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28, junto con F-20; sigue `abierto` por lo que quedó afuera. En `7d080f2`: el guard de edición deniega `CLAUDE.md` y `AGENTS.md`, y pide confirmación para `vitest.config.ts`, `eslint.config.js` y `.prettierignore`; el mismo commit escribe la regla en CLAUDE.md, AGENTS.md y mvp.md §9. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: pedir confirmación cuando una edición cambia `scripts` o `simple-git-hooks` en `package.json`, o toca la sección "Agentes" de `docs/mvp.md` o "Cómo se usa" de este archivo.
+
+**Corregido en `fd26adb`.** 2026-09-28, como parche que aplicó la persona responsable. El guard de edición calcula el texto que deja la edición y pide confirmación si cambian `scripts` o `simple-git-hooks` de `package.json` (o si alguno de los dos no parsea), la sección "Agentes" de `docs/mvp.md` o "Cómo se usa" de este archivo; el resto de esos archivos se edita sin confirmación. CLAUDE.md y mvp.md §9 describen la regla.
 
 ### F-23 · Formas de saltear los hooks de git que el guard no detecta
 
@@ -607,7 +615,7 @@ Propuesta: denegar la expansión de variables cuyo nombre sugiere un secreto (`T
 
 ### F-26 · Comandos destructivos dentro de subshells, grupos o `if` pasan el guard
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `fd26adb`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `.claude/hooks/guard-bash.mjs` (`parse`, `substitutions`, `checkCommand`)
@@ -625,6 +633,8 @@ El parser toma la primera palabra como comando, así que `(rm`, `{`, `then` o `d
 Propuesta: quitar del parser los tokens de agrupamiento y las palabras reservadas (`(`, `)`, `{`, `}`, `then`, `do`, `else`, `elif`, `!`); balancear paréntesis en `substitutions`; al pasar el límite de profundidad, denegar en vez de permitir; tratar `busybox` y `toybox` como envoltorios; pedir confirmación para `sh`, `bash` o `source` sobre un archivo descargado en el mismo comando.
 
 **Corrección parcial, aplicada en `7d080f2`.** 2026-09-28, junto con F-20; sigue `abierto` por lo que quedó afuera. En `7d080f2`: `(` y `)` sin comillas separan comandos, `{` y `}` solos también, y `if`, `then`, `else`, `elif`, `while`, `until`, `do`, `fi`, `done` y `!` al inicio de un comando se saltan, así que `(rm -rf ~)`, `{ rm -rf ~; }` e `if …; then rm -rf ~; fi` se deniegan; `substitutions` balancea paréntesis, con lo que `$( (rm -rf ~) )` se deniega; más de cuatro niveles de `$( )` se deniegan en vez de permitirse; `busybox` y `toybox` son envoltorios. Quedó afuera, porque el clasificador de la sesión bloqueó esa edición: denegar más de cuatro niveles de `bash -c` (hoy se permiten), y denegar `sh`, `bash`, `source` o un intérprete sobre un archivo que `curl -o` o `wget -O` descargó en el mismo comando.
+
+**Corregido en `fd26adb`.** 2026-09-28, como parche que aplicó la persona responsable. Más de cuatro niveles de `bash -c` o `eval` se deniegan, igual que `$( )`. Los archivos que `curl` (`-o`, `--output`, `-O`) o `wget` (`-O`, `--output-document`, o el nombre de la URL) guardan quedan registrados para el resto de la línea, incluidos los `bash -c` anidados, y ejecutarlos con un shell, `source`, `.`, un intérprete o por su ruta (`./i.sh`) se deniega.
 
 ### F-27 · Formas de debilitar o borrar tests que el guard no detecta
 
@@ -767,7 +777,7 @@ Pérdida funcional acotada: con un lockfile v5 (pnpm 7), una dependencia con suf
 
 ### F-33 · Specs locales tratados como de registry: tarballs `.tgz` y `optionalDependencies`
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `f115ba6`
 - **Severidad:** media
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/npm-registry/origin.ts:26-33`, `src/providers/project/project.ts:178-186`
@@ -783,9 +793,11 @@ En los dos casos se envía el nombre de un paquete local. Si alguien publicó es
 
 Propuesta: excluir en `isRegistrySpec` los specs que npm-package-arg trata como archivo; aplicar la precedencia de npm entre secciones, `optionalDependencies` por encima de `dependencies`. Tests con los dos casos.
 
+**Corregido en `f115ba6`.** 2026-09-28, a pedido de la persona responsable. `isRegistrySpec` rechaza los specs terminados en `.tgz`, `.tar.gz` o `.tar`, y `optionalDependencies` pisa la entrada de `dependencies`, como en npm. Documentado en architecture.md §8 y npm-registry.md. Tests en `tests/unit/providers.test.ts` y `tests/integration/inventory.test.ts`.
+
 ### F-34 · El `.npmrc` del proyecto se interpreta distinto que en npm y pnpm
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `de11f8c`
 - **Severidad:** media
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/npm-registry/registry-config.ts:77-85`, `src/application/inventory.ts:405-408`
@@ -799,9 +811,11 @@ architecture.md §8, condición 2: el registry predeterminado efectivo tiene que
 
 Propuesta: interpretar las claves como lo hace ini, sacando las comillas; ante cualquier línea que mencione `registry` y no se pueda interpretar, registry indeterminado. Si el entorno define `npm_config_registry` o `npm_config_@scope:registry`, que no lo pise el `.npmrc` del proyecto.
 
+**Corregido en `de11f8c`.** 2026-09-28, a pedido de la persona responsable. Las claves del `.npmrc` se leen como en ini, también entre comillas, y una línea de registry que npm no leería igual (sin `=`, con espacios en el scope, en mayúsculas) deja el registry indeterminado. La precedencia ya estaba cubierta por la regla de F-32: `npm_config_registry` llega por la config de pnpm, y un `.npmrc` público del proyecto nunca deshace un valor privado; el test de F-32 lo verifica. Documentado en architecture.md §8 y npm-registry.md.
+
 ### F-35 · "installed by" con confianza `high` cuando el package manager solo se infiere
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `c794dab`
 - **Severidad:** media
 - **Tipo:** evidencia
 - **Ubicación:** `src/application/inventory.ts:428-433`
@@ -814,9 +828,11 @@ architecture.md §6: `high` exige que un `fact` afirme el valor. Ese `fact` afir
 
 Propuesta: limitar la confianza de `installation` a la del package manager (`cap`), o dejar como evidencia del instalador solo la del package manager.
 
+**Corregido en `c794dab`.** 2026-09-28, a pedido de la persona responsable. `installation` de una dependencia de proyecto tiene como máximo la confianza del package manager que nombra. La regla está en architecture.md §6. Test en `tests/integration/inventory.test.ts`.
+
 ### F-36 · Una release de GitHub con tag prerelease queda con confianza `high`
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `96af22d`
 - **Severidad:** media
 - **Tipo:** evidencia
 - **Ubicación:** `src/providers/github/resolver.ts:80-97`
@@ -829,9 +845,11 @@ architecture.md §5, "Qué significa `latest`": si la versión declarada tiene s
 
 Propuesta: igual que en npm, `contradicted` cuando `semver.prerelease(v) !== null`, con la inferencia en la evidencia.
 
+**Corregido en `96af22d`.** 2026-09-28, a pedido de la persona responsable. Una release cuyo tag es una prerelease queda `low`, con la inferencia en la evidencia, como en el resolver de npm. Documentado en architecture.md §6 y github.md.
+
 ### F-37 · Dos herramientas distintas reciben el mismo id
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `6555ce0`
 - **Severidad:** media
 - **Tipo:** corrección
 - **Ubicación:** `src/core/record.ts:17-25`, `src/application/inventory.ts:203-235`, `:339`, `src/application/lookup.ts:10`
@@ -847,9 +865,11 @@ design.md §14: el id sirve "para comparar y referenciar" y "distingue [...] las
 
 Propuesta: sumar la ubicación al id de los repositorios herramienta, como en `project:`; unir el ejecutable `pnpm` al registro de pnpm en vez de crear otro; y verificar en `buildInventory` que no haya ids repetidos. Actualizar el formato en architecture.md §5.
 
+**Corregido en `6555ce0`.** 2026-09-28, a pedido de la persona responsable. Los repositorios herramienta tienen id `global:git:<ruta>`; un ejecutable `pnpm` fuera del directorio de binarios de pnpm es evidencia del registro de pnpm, no otro registro; y `buildInventory` emite un `error` si dos herramientas comparten id. Los ejecutables desconocidos ya no podían repetirse: `listExecutables` deja el primero de cada nombre. Documentado en architecture.md §5 y design.md §14. Tests en `tests/unit/core.test.ts` y `tests/integration/inventory.test.ts`.
+
 ### F-38 · Un archivo `.git` ilegible aborta toda la ejecución
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `d888c76`
 - **Severidad:** media
 - **Tipo:** robustez
 - **Ubicación:** `src/providers/git/repository.ts:26`
@@ -862,9 +882,11 @@ RA-009: los fallos de un provider no derriban el scan. architecture.md §13 clas
 
 Propuesta: leerlo con `readOptional` y, si falla, emitir un diagnóstico para ese repositorio y seguir.
 
+**Corregido en `d888c76`.** 2026-09-28, a pedido de la persona responsable. Un `.git` que no se puede leer saltea ese repositorio con un `warning` y la ejecución sigue. Documentado en git.md. Test en `tests/unit/providers.test.ts`.
+
 ### F-39 · `--offline` no impide que Corepack descargue pnpm por la red
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `2f99aab`
 - **Severidad:** media
 - **Tipo:** privacidad
 - **Ubicación:** `src/infrastructure/command-runner/allowlist.ts:58-64`, `src/application/inventory.ts:94`
@@ -877,9 +899,11 @@ architecture.md §8: "`--offline` evita toda consulta en esa ejecución". §7 ag
 
 Propuesta: agregar `COREPACK_ENABLE_NETWORK=0` al entorno de pnpm, siempre o al menos sin red; considerar `COREPACK_DEFAULT_TO_LATEST=0`; documentarlo en §7.
 
+**Corregido en `2f99aab`.** 2026-09-28, a pedido de la persona responsable. pnpm corre siempre con `COREPACK_ENABLE_NETWORK=0`, como decidió la persona responsable. Si Corepack todavía no descargó ese pnpm, pnpm falla, y el diagnóstico dice que hay que correr `pnpm --version` una vez fuera de un proyecto. Verificado con el Corepack real de la sesión: con la variable, se niega a llegar al registry. Documentado en architecture.md §7 y pnpm.md.
+
 ### F-40 · Un `package.json` de un directorio superior le gana a un `.git` más cercano
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `2a401e8`
 - **Severidad:** baja
 - **Tipo:** corrección
 - **Ubicación:** `src/application/inventory.ts:176-177`
@@ -892,9 +916,11 @@ mvp.md §6: una raíz de proyecto es un directorio con `package.json` o `.git`.
 
 Propuesta: una sola búsqueda hacia arriba que se detenga en el primer directorio con cualquiera de los dos.
 
+**Corregido en `2a401e8`.** 2026-09-28, a pedido de la persona responsable. El proyecto actual es el directorio más cercano hacia arriba con `package.json` o `.git`. Una sola función, `findUpDir`, reemplaza las tres copias del mismo recorrido. Documentado en mvp.md §6.
+
 ### F-41 · Sin releases en GitHub, los tags en caché no se usan offline y `/releases/latest` se repite
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `0331589`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `src/providers/github/resolver.ts:65-68`, `src/providers/shared/cached-get.ts:73`
@@ -910,9 +936,11 @@ architecture.md §8: sin red se usa la caché si tiene la entrada. §14 justific
 
 Propuesta: guardar también el 404 de `/releases/latest` con el mismo TTL, o seguir a los tags en caché cuando falta la respuesta de releases, dejando dicho en la evidencia que no se sabe si hay releases.
 
+**Corregido en `0331589`.** 2026-09-28, a pedido de la persona responsable. La caché guarda también el 404 de `/releases/latest`, con el mismo TTL. Sin red y sin respuesta de releases en caché, se usan los tags en caché, y la evidencia dice que no se sabe si hay releases. Documentado en architecture.md §14.
+
 ### F-42 · El límite de GitHub alcanzado en `/tags` no emite diagnóstico
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `12b6f9c`
 - **Severidad:** baja
 - **Tipo:** desvío de docs
 - **Ubicación:** `src/providers/github/resolver.ts:109-112`
@@ -925,9 +953,11 @@ architecture.md §13 usa exactamente ese caso como ejemplo de `warning`.
 
 Propuesta: una sola función que marque el límite y emita el diagnóstico, usada en los dos lugares.
 
+**Corregido en `12b6f9c`.** 2026-09-28, a pedido de la persona responsable. Una sola función marca el límite de GitHub y emite el `warning`, en releases y en tags.
+
 ### F-43 · Un fallo de `git describe` no produce `error` ni diagnóstico
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `1ef608b`
 - **Severidad:** baja
 - **Tipo:** desvío de docs
 - **Ubicación:** `src/providers/git/repository.ts:169-178`
@@ -940,9 +970,11 @@ architecture.md §13: un provider que falla emite `error` y sus herramientas que
 
 Propuesta: fuera de "No names found", un fallo de `describe` completa `failure`, como el de `tags`.
 
+**Corregido en `1ef608b`.** 2026-09-28, a pedido de la persona responsable. Fuera de "No names found", un fallo de `git describe` completa `failure`: la herramienta queda en `error`, con diagnóstico. Documentado en git.md.
+
 ### F-44 · Un remote relativo se interpreta como repositorio de GitHub
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `5fc1072`
 - **Severidad:** baja
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/github/url.ts:15`, `src/providers/git/repository.ts:94`
@@ -955,9 +987,11 @@ architecture.md §8: nunca se envían rutas.
 
 Propuesta: un parser para remotes de Git que no acepte la abreviatura, y rechazar `.` y `..` como owner o repo.
 
+**Corregido en `5fc1072`.** 2026-09-28, a pedido de la persona responsable. Los remotes de Git se leen sin las abreviaturas de npm (`owner/repo`, `github:owner/repo`), y `.` o `..` nunca son owner ni repositorio. Documentado en github.md.
+
 ### F-45 · `sanitize` no escapa controles bidi ni de ancho cero
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `4485852`
 - **Severidad:** baja
 - **Tipo:** seguridad
 - **Ubicación:** `src/cli/output/sanitize.ts:2-4`
@@ -968,9 +1002,11 @@ Propuesta: un parser para remotes de Git que no acepte la abreviatura, y rechaza
 
 Propuesta: escapar también esos rangos, con casos en `tests/security`.
 
+**Corregido en `4485852`.** 2026-09-28, a pedido de la persona responsable. `sanitize` escapa como `\u{NNNN}` los controles bidi, los caracteres de ancho cero, los separadores de línea y párrafo y el BOM. Documentado en el modelo de amenazas. Test en `tests/security/security.test.ts`.
+
 ### F-46 · `Filesystem` lee sin límite ni chequeo de tipo, y `exists` trata `EACCES` como ausencia
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `ab32ec6`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts:8-16`
@@ -984,9 +1020,11 @@ design.md §13: los defaults tienen que ser conservadores y un archivo que no se
 
 Propuesta: en `readText`, `stat` previo, solo archivos regulares y un tope de tamaño; en `exists`, `false` solo para `ENOENT` y `ENOTDIR`, y cualquier otro error se propaga para que cada llamador decida.
 
+**Corregido en `ab32ec6`.** 2026-09-28, a pedido de la persona responsable. `exists` da `false` solo con `ENOENT` o `ENOTDIR`, y otros errores se propagan: la configuración que no se puede comprobar es fatal, y un `.npmrc`, `.yarnrc` o marcador de workspace que no se puede comprobar deja el registry indeterminado. `readText` acepta solo archivos regulares de hasta 64 MiB. Documentado en architecture.md §9 y design.md §13. Tests con archivos reales en `tests/unit/filesystem.test.ts`: un FIFO, un symlink en bucle y un archivo disperso de 64 MiB.
+
 ### F-47 · Los sufijos de peers de un lockfile pnpm v5 dejan `resolved` desconocido
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `1abd7d2`
 - **Severidad:** baja
 - **Tipo:** corrección
 - **Ubicación:** `src/providers/project/project.ts:78-81`
@@ -997,9 +1035,11 @@ En los lockfiles v5 (pnpm 7), los peers van con `_`: `a: 1.2.3_react@18.0.0`. `s
 
 Propuesta: cortar en `_` cuando `lockfileVersion` es 5.x, o declarar en docs/providers/pnpm.md que v5 no se soporta.
 
+**Corregido en `1abd7d2`.** 2026-09-28, a pedido de la persona responsable. Con `lockfileVersion` 5.x se corta también el sufijo `_` de los peers. pnpm.md lista qué versiones de lockfile se leen.
+
 ### F-48 · El repositorio no se puede verificar en Windows
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `1838d63`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** falta `.gitattributes`; `tests/helpers/fakes.ts`; `package.json` (`simple-git-hooks`)
@@ -1015,9 +1055,11 @@ El hook `pre-commit` corre `format:check`, y `pre-push` corre `pnpm check`: en W
 
 Propuesta: `.gitattributes` con `* text=auto eol=lf`, que es barato y no ambiguo. Para los tests, decidir si se soporta desarrollar en Windows (dobles con `path.posix` o rutas armadas con `join`) o se documenta WSL como requisito en CONTRIBUTING.
 
+**Corregido en `1838d63`.** 2026-09-28, a pedido de la persona responsable. Según la decisión de la persona responsable: `.gitattributes` con `* text=auto eol=lf`, y CONTRIBUTING.md pide WSL para desarrollar en Windows.
+
 ### F-49 · Ni el composition root ni el aviso de primera ejecución tienen tests
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `ef0d1e5`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `src/composition.ts:71-93`, `tests/integration/cli.test.ts:41-53`
@@ -1027,6 +1069,8 @@ Propuesta: `.gitattributes` con `* text=auto eol=lf`, que es barato y no ambiguo
 Las reglas del aviso de design.md §12 viven en `createRuntime`: antes del primer request, una sola vez, marcador en el estado local, nunca con `--offline`, y repetirlo si el marcador no se puede escribir. El test de la CLI reemplaza el runtime por un doble que llama a `notice` a mano, así que ninguna de esas reglas está cubierta. Tampoco hay un test que ejecute el binario compilado: mvp-acceptance.md lo verificó a mano.
 
 Propuesta: tests de `createRuntime` con directorios temporales (`XDG_*_HOME`) y un `HttpClient` doble, y un smoke test de `dist/cli/index.js --json` en CI.
+
+**Corregido en `ef0d1e5`.** 2026-09-28, a pedido de la persona responsable. `createRuntime` recibe el entorno, el CommandRunner y el cliente HTTP como dependencias opcionales. `tests/integration/runtime.test.ts` prueba las reglas de design.md §12 con directorios de estado reales: antes del primer request, una sola vez, nunca offline, y otra vez si el marcador no se puede escribir. La CI corre la CLI compilada, offline y con directorios vacíos.
 
 ### F-50 · Con pnpm 12, ningún paquete global recibe su `latest`
 
@@ -1047,7 +1091,7 @@ Propuesta: tomar el spec del `package.json` del directorio que contiene el `node
 
 ### F-51 · El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `c7330ae`
 - **Severidad:** baja
 - **Tipo:** corrección
 - **Ubicación:** `src/cli/run.ts:175`, `src/application/lookup.ts:15-18`
@@ -1057,6 +1101,8 @@ Propuesta: tomar el spec del `package.json` del directorio que contiene el `node
 `findTool` arma el mensaje de ambigüedad con saltos de línea, y `run` le aplica `sanitize` entero, que escapa `\n`. La salida real fue `actually: "is-number" matches 2 tools. Pass one of these ids:\x0a  global:pnpm:is-number\x0a  project:/home/node/projects/app:is-number`. Es un efecto de la corrección de F-05. design.md §9 pide listar los ids para elegir uno.
 
 Propuesta: sanear cada id y cada dato, no el mensaje armado; o partir el mensaje en líneas y sanear cada una. Test del mensaje de ambigüedad en `tests/integration/cli.test.ts`.
+
+**Corregido en `c7330ae`.** 2026-09-28, a pedido de la persona responsable. `UsageError` lleva los ids como opciones aparte, y `run` sanea cada línea por separado. Test sobre stderr en `tests/integration/cli.test.ts`.
 
 ### F-52 · Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público
 
@@ -1083,7 +1129,7 @@ Propuesta: sumar `npmRegistryServer` y `npmScopes.<scope>.npmRegistryServer` de 
 
 ### F-53 · Credenciales dentro de un spec que es una URL llegan a `explain`
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `3eeeab0`
 - **Severidad:** media
 - **Tipo:** privacidad
 - **Ubicación:** `src/application/inventory.ts:460` (claim `requested`), `src/providers/npm-registry/origin.ts:84` (`declared as`), `src/application/inventory.ts:283` (global con versión que no es de registry)
@@ -1101,6 +1147,8 @@ Por ejemplo, `"a": "https://user:TOKEN@files.corp.example/a-1.0.0.tgz"` en `pack
 Reproducción: con los dobles de tests, un proyecto con ese spec. `renderExplain` contiene el token.
 
 Propuesta: cuando un spec o una versión parsea como URL, mostrar solo el esquema y el host (`https://files.corp.example/…`). El path también puede llevar un token, como en F-31. La decisión de origen no cambia: un spec URL ya no se consulta. Test en `tests/security` sobre `explain` y `toolJson`.
+
+**Corregido en `3eeeab0`.** 2026-09-28, a pedido de la persona responsable. `redactSpec` deja solo el esquema y el host de un spec o versión que es una URL, en `requested`, en la evidencia y en los motivos. Documentado en architecture.md §8. Tests en `tests/unit/core.test.ts` y `tests/security/security.test.ts`.
 
 ### F-54 · El guard de Bash bloquea leer `core.hooksPath`
 
@@ -1143,7 +1191,7 @@ Hacer que pnpm funcione de verdad en Windows es un trabajo aparte, más grande, 
 
 ### F-56 · En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `b6743b4`
 - **Severidad:** media
 - **Tipo:** corrección
 - **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts:42` (`isExecutableFile`), consumido por `src/scanners/bin-scanner.ts` (`listExecutables`)
@@ -1163,6 +1211,44 @@ Reproducción, en la misma VM Windows 11: un archivo de texto plano en `~/.local
 El efecto se agranda una vez que se corrija F-55: hoy, sin pnpm funcionando, `pnpm.binDir` nunca se completa en Windows, así que solo se escanean `~/.local/bin` y `[scan] bin_paths`, que en una instalación típica de Windows no suelen existir. Corregido F-55, se sumaría también el directorio global de bins de pnpm a este mismo problema.
 
 Propuesta: en Windows, en vez de `return true`, resolver el nombre contra `PATHEXT` (o una lista por defecto `.EXE;.CMD;.BAT;.COM;.PS1` si la variable no está seteada), comparando la extensión sin distinguir mayúsculas. Un archivo sin extensión reconocida no cuenta como ejecutable. Test en `tests/unit` con un doble de `Filesystem` que simule `platform: "win32"` y un directorio con un `.exe`, un `.cmd` y un `.txt` mezclados.
+
+**Corregido en `b6743b4`.** 2026-09-28, a pedido de la persona responsable. En Windows, un ejecutable es un archivo cuya extensión está en `PATHEXT`, o en `.COM;.EXE;.BAT;.CMD;.PS1` si no está definida. La plataforma y `PATHEXT` se inyectan en `nodeFilesystem`. Documentado en architecture.md §3.3. Test en `tests/unit/filesystem.test.ts`.
+
+### F-57 · Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa
+
+- **Estado:** resuelto: código corregido en `13b88a5`
+- **Severidad:** baja
+- **Tipo:** evidencia
+- **Ubicación:** `src/providers/pnpm/global.ts` (`scanPnpmGlobal`); `docs/providers/pnpm.md` ("Known limitations")
+- **Detectado:** 2026-09-28, prueba de la persona responsable en un GitHub Codespace
+- **Verificación:** reproducido
+
+`actually` lanza pnpm siempre desde el directorio neutral (architecture.md §7). Ahí corepack no ve ningún `packageManager` y usa el pnpm del sistema. Dentro de un proyecto que fija otra versión, corepack usa la del proyecto, y cada versión mayor guarda los paquetes globales en otro lugar.
+
+Reproducción, en el Codespace, con `PNPM_HOME` y `XDG_*_HOME` en directorios temporales: `pnpm add -g cowsay` dentro de este repositorio corrió con pnpm 10.33.0, fijado por su `packageManager`, e instaló en `$PNPM_HOME/global/5`. Después, `actually status --global` usó pnpm 12.6.0, el del sistema. No listó `cowsay` ni como paquete ni como ejecutable, no emitió ningún diagnóstico, y `actually explain cowsay` respondió que no existe ninguna herramienta con ese nombre.
+
+La conducta sigue la regla de §7, que evita ejecutar el pnpm de un proyecto. El problema es que el límite no está escrito en ningún doc y que la salida no deja ver por qué falta un paquete que la persona acaba de instalar.
+
+Propuesta: sumarlo a "Known limitations" de `docs/providers/pnpm.md` y a "Requirements and limits" del README: `actually` solo ve los globales del pnpm que corre fuera de los proyectos. Opcionalmente, cuando el `packageManager` del proyecto analizado fija un pnpm de otra versión mayor que la del directorio neutral, emitir un diagnóstico `warning` que lo diga. Los dos datos ya se leen (`packageManager` del `package.json` y `pnpm --version`), así que no hace falta ejecutar nada nuevo.
+
+**Corregido en `13b88a5`.** 2026-09-28, a pedido de la persona responsable. Cuando el `packageManager` del proyecto fija pnpm con otra versión mayor que la del pnpm que corre fuera de los proyectos, se emite un `warning` que nombra las dos. El límite está en el README y en pnpm.md.
+
+### F-58 · CLAUDE.md quedó desactualizado en tres puntos
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** desvío de docs
+- **Ubicación:** `CLAUDE.md`, "Where decisions live", "Agent guardrails" y "Architecture invariants"
+- **Detectado:** 2026-09-28, Claude Code, durante la poda de docs
+- **Verificación:** por lectura
+
+- **Registry queries.** Dice que las fuentes de config son "pnpm's config and each `.npmrc` up to home". Desde F-52 también cuentan cada `.yarnrc` y `.yarnrc.yml` hasta home y la variable `YARN_NPM_REGISTRY_SERVER` (architecture.md §8).
+- **Where decisions live.** Ubica los directorios de caché en architecture.md §3.5. Ahí están solo los del estado local; los de la caché están en §14, "Dónde".
+- **Agent guardrails.** La lista de lo que hace el guard de edición omite que pide confirmación para `.github/workflows/` y que también rechaza `.todo(`, `@ts-nocheck`, `xit` y `fit`.
+
+CLAUDE.md está protegido: lo cambia solo la persona responsable.
+
+Propuesta: en "Registry queries", "every config source that could apply (pnpm's config, each `.npmrc`, `.yarnrc` and `.yarnrc.yml` up to home, and `YARN_NPM_REGISTRY_SERVER`)"; en la tabla, "Cache and LocalState directories | `docs/architecture.md` §3.5 (state), §14 (cache)"; en "Agent guardrails", sumar el ask de `.github/workflows/` y los patrones que faltan.
 
 ### Verificaciones
 

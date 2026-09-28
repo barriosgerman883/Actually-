@@ -6,6 +6,7 @@ import { MockAgent } from "undici";
 import { buildInventory } from "../../src/application/inventory.js";
 import { renderDiagnostics, renderExplain, renderStatus } from "../../src/cli/output/human.js";
 import { toolJson } from "../../src/cli/output/json.js";
+import { sanitize } from "../../src/cli/output/sanitize.js";
 import { createStyle } from "../../src/cli/output/style.js";
 import { claimFrom } from "../../src/core/confidence.js";
 import { notApplicable } from "../../src/core/model.js";
@@ -29,6 +30,7 @@ import {
   memoryFs,
   netContext,
   ok,
+  PNPM_CONFIG_PUBLIC,
 } from "../helpers/fakes.js";
 
 const ctx = {
@@ -69,7 +71,12 @@ describe("CommandRunner allowlist (architecture.md §7)", () => {
 
   it("keeps pnpm from reaching the network or pinning versions on its own", () => {
     expect(buildInvocation({ command: "pnpm.list.global" }, ctx)).toMatchObject({
-      env: { npm_config_update_notifier: "false", COREPACK_ENABLE_AUTO_PIN: "0", LC_ALL: "C" },
+      env: {
+        npm_config_update_notifier: "false",
+        COREPACK_ENABLE_AUTO_PIN: "0",
+        COREPACK_ENABLE_NETWORK: "0",
+        LC_ALL: "C",
+      },
     });
   });
 
@@ -249,6 +256,57 @@ describe("pnpm config output may contain secrets", () => {
       /SECRET|corp\.example/,
     );
     expect(parsed).toMatchObject({ state: "known", defaultPublic: false });
+  });
+
+  it("never shows the credentials of a spec that is a URL (F-53)", async () => {
+    const home = "/home/me";
+    const root = `${home}/p`;
+    const pnpmHome = `${home}/.local/share/pnpm`;
+    const inventory = await buildInventory(
+      {
+        fs: memoryFs({
+          [`${root}/package.json`]: JSON.stringify({
+            dependencies: {
+              a: "https://user:SECRET-1@files.corp.example/SECRET-2/a-1.0.0.tgz?t=SECRET-3",
+              b: "git+https://SECRET-4@github.com/o/b.git#SECRET-5",
+            },
+          }),
+        }),
+        runner: fakeRunner({
+          "pnpm.version": ok("10.0.0\n"),
+          "pnpm.root.global": ok(`${pnpmHome}/global/5/node_modules\n`),
+          "pnpm.bin.global": ok(`${pnpmHome}\n`),
+          "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+          "pnpm.list.global": ok(
+            JSON.stringify([
+              {
+                path: `${pnpmHome}/global/5`,
+                dependencies: {
+                  g: { version: "https://u:SECRET-6@files.corp.example/g.tgz", path: "/x/g" },
+                },
+              },
+            ]),
+          ),
+        }),
+        env: fakeEnv(home),
+        net: netContext(fakeHttp({})),
+        config: config(),
+        cwd: root,
+      },
+      {},
+    );
+    const names = inventory.tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["a", "b", "g"]));
+    const outputs = [
+      JSON.stringify(inventory),
+      ...inventory.tools.map((tool) =>
+        renderExplain(tool, { home, verbose: true, style: createStyle(false) }),
+      ),
+      ...inventory.tools.map((tool) => JSON.stringify(toolJson(tool, true))),
+    ];
+    for (const text of outputs) expect(text).not.toMatch(/SECRET|user:/);
+    const a = inventory.tools.find((t) => t.name === "a");
+    expect(a?.versions.requested).toMatchObject({ value: "https://files.corp.example/…" });
   });
 
   it("never shows a registry URL in explain or JSON output (F-31)", async () => {
@@ -500,6 +558,35 @@ describe("untrusted text never reaches the terminal as control sequences (F-05)"
     }
     expect(status).toContain("\\x1b]0;pwned\\x07x");
     expect(diagnostics).toContain("\\x0afake line");
+  });
+
+  it("escapes bidi and zero-width characters that reorder or hide text (F-45)", () => {
+    const tricky = "v1.0.0\u202e0.0.2v\u2066x\u200b\ufeff\u2028y";
+    expect(sanitize(tricky)).toBe("v1.0.0\\u{202e}0.0.2v\\u{2066}x\\u{200b}\\u{feff}\\u{2028}y");
+    const explain = renderExplain({ ...tool, name: tricky }, opts);
+    expect(
+      [...explain].some((c) => /[\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/.test(c)),
+    ).toBe(false);
+    expect(sanitize("café ñandú 日本")).toBe("café ñandú 日本");
+  });
+
+  it.each([
+    [0x00, 0x1f],
+    [0x7f, 0x9f],
+    [0x200b, 0x200f],
+    [0x2028, 0x202e],
+    [0x2060, 0x2064],
+    [0x2066, 0x2069],
+  ])("escapes both ends of the range %s-%s and nothing just outside it", (from, to) => {
+    for (const code of [from, to]) {
+      expect(sanitize(String.fromCodePoint(code))).not.toBe(String.fromCodePoint(code));
+    }
+    for (const code of [from - 1, to + 1]) {
+      // Just outside: plain characters, except where another range starts.
+      const inAnother = [0x1f, 0x7f, 0x2065].includes(code) || code === 0x2027;
+      if (!inAnother && code >= 0x20)
+        expect(sanitize(String.fromCodePoint(code))).toBe(String.fromCodePoint(code));
+    }
   });
 
   it("keeps colors, which the output adds itself", () => {

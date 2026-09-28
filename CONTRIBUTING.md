@@ -8,6 +8,8 @@ pnpm build
 node dist/cli/index.js status
 ```
 
+Development is supported on Linux and macOS. On Windows, use WSL: the test doubles use POSIX paths and the hostile-repository tests run `sh`, so the checks, and therefore the git hooks, do not pass on native Windows. `.gitattributes` keeps every file LF in any clone.
+
 ## Checks
 
 | Command                                                 | Runs                                                                     |
@@ -16,10 +18,10 @@ node dist/cli/index.js status
 | `pnpm test:unit`                                        | domain rules, providers with fakes, config and output                    |
 | `pnpm test:integration`                                 | inventory with fake infrastructure, CLI exit codes and JSON              |
 | `pnpm test:security`                                    | allowlist, hardened git against a hostile repository, tokens, HTTP hosts |
-| `pnpm test:architecture`                                | layer boundaries (RA-001…RA-010)                                         |
+| `pnpm test:architecture`                                | layer boundaries (RA-001…RA-006, RA-010)                                 |
 | `pnpm vitest run tests/unit/core.test.ts -t "mayBreak"` | a single test                                                            |
 
-CI runs the same checks plus `pnpm audit --prod`, and blocks merges when any of them fails.
+CI runs the same checks, then `pnpm build`, a smoke run of the compiled CLI (`status --offline --json` and an invalid flag) and `pnpm audit --prod`, and blocks merges when any of them fails.
 
 ## Architecture in one paragraph
 
@@ -38,4 +40,4 @@ CI runs the same checks plus `pnpm audit --prod`, and blocks merges when any of 
 A provider is not merged without (docs/mvp.md §10):
 
 1. tests;
-2. a page in `docs/providers/` following the template there, covering detection strategy, evidence, commands executed, files inspected, network requests, failure modes, security considerations and known limitations.
+2. a page in `docs/providers/` following the template in `docs/design.md` §17, covering detection strategy, evidence, commands executed, files inspected, network requests, failure modes, security considerations and known limitations.

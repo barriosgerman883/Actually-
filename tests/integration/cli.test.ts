@@ -80,7 +80,7 @@ describe("cli", () => {
     ).toBe(EXIT.ok);
   });
 
-  it("keeps stdout clean JSON and sends the notice and diagnostics to stderr", async () => {
+  it("keeps stdout clean JSON, with the diagnostics inside it, and the notice on stderr", async () => {
     const h = harness(inventory, { notice: true });
     expect(await h.go(["status", "--json"])).toBe(EXIT.ok);
     const doc = JSON.parse(h.out.join(""));
@@ -97,6 +97,12 @@ describe("cli", () => {
     expect(doc.tools).toEqual([]);
     expect(doc.diagnostics[0].message).toContain("global:pnpm:a");
     expect(await harness(inventory).go(["explain", "global:pnpm:a"])).toBe(EXIT.ok);
+    // The ids go one per line in the human output, not as escaped \x0a (F-51).
+    const human = harness(inventory);
+    expect(await human.go(["explain", "a"])).toBe(EXIT.usage);
+    const err = human.err.join("");
+    expect(err).not.toContain("\\x0a");
+    expect(err).toMatch(/Pass one of these ids:\n {2}global:pnpm:a\n {2}\S+:a\n/);
   });
 
   it("explain --json includes evidence; status <tool> --json does not", async () => {

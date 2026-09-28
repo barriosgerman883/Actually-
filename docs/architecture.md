@@ -94,12 +94,7 @@ No debe:
 - hacer requests;
 - conocer detalles de providers.
 
-Ejemplo:
-
-```ts
-const result = await application.status(options);
-formatter.render(result);
-```
+En el código, `src/cli/run.ts` parsea los argumentos, pide el inventario al runtime que arma `src/composition.ts` y lo pasa a los formatters de `src/cli/output/` (`human.ts` o `json.ts`).
 
 ---
 
@@ -134,37 +129,20 @@ Debe ser portable y altamente testeable.
 
 ## 3.3 Scanners
 
-Un scanner encuentra señales.
+Un scanner encuentra señales; la interpretación pertenece a un provider. Están en `src/scanners/`:
 
-Ejemplos:
+- `findProjects` (`project-finder.ts`) recorre `scan.paths` y devuelve cada directorio con `package.json` o `.git`, sin descender dentro de él;
+- `listExecutables` (`bin-scanner.ts`) lista los ejecutables de los directorios permitidos.
 
-```text
-ProjectScanner
-FilesystemScanner
-PathScanner
-GitRepositoryScanner
-```
+Un repositorio encontrado por `findProjects` es un proyecto salvo evidencia positiva de que es una herramienta. La regla está en mvp.md §5.3.
 
-Un scanner no determina necesariamente el significado completo de una señal.
-
-Ejemplo:
-
-```text
-FilesystemScanner
-
-found:
-~/projects/foo/pnpm-lock.yaml
-```
-
-La interpretación pertenece a un provider o detector especializado.
-
-Un repositorio encontrado por `GitRepositoryScanner` es un proyecto salvo evidencia positiva de que es una herramienta. La regla está en mvp.md §5.3.
-
-`PathScanner` no recorre todo PATH, porque listaría miles de binarios del sistema como herramientas desconocidas. En el MVP revisa solo:
+`listExecutables` no recorre todo PATH, porque listaría miles de binarios del sistema como herramientas desconocidas. En el MVP revisa solo:
 
 - el directorio global de binarios de pnpm, el que informa `pnpm bin --global` (refleja `PNPM_HOME`);
 - `~/.local/bin`;
 - los directorios declarados en `[scan] bin_paths` (design.md §13).
+
+Un ejecutable es un archivo regular con permiso de ejecución. En Windows, donde ese permiso no distingue nada, es un archivo cuya extensión está en `PATHEXT` (`.COM;.EXE;.BAT;.CMD;.PS1` si la variable no está definida), sin distinguir mayúsculas.
 
 Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando llegue su provider en la Fase 2.
 
@@ -172,17 +150,9 @@ Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando 
 
 ## 3.4 Providers
 
-Los providers traducen señales externas al modelo de dominio.
+Los providers traducen señales externas al modelo de dominio. Están en `src/providers/`: `pnpm/` (`scanPnpmGlobal`), `project/` (`scanProject`, workspaces y lockfiles), `git/` (`readRepository`, `installedFromTags`), `npm-registry/` y `github/` (resolvers de `latest`), y `shared/` (el GET con caché). `src/application/inventory.ts` los combina en un `Inventory`.
 
-Ejemplos:
-
-```text
-PnpmProvider
-GitProvider
-GitHubProvider
-```
-
-Tipos posibles:
+Por lo que determinan, cumplen uno de estos papeles:
 
 ### Installation Provider
 Determina quién administra una instalación.
@@ -333,7 +303,12 @@ export interface ToolRecord {
    * (design.md §14).
    * Formato actual:
    *   global:<provider>:<nombre>   (provider "unknown" si no se conoce)
+   *   global:<provider>:<ruta>     (repositorio de Git usado como herramienta:
+   *                                 dos pueden tener el mismo nombre)
    *   project:<raíz absoluta>:<nombre>
+   * Dos herramientas nunca comparten un id. Un ejecutable `pnpm` fuera del
+   * directorio de binarios de pnpm es evidencia del registro de pnpm, no
+   * otra herramienta.
    */
   id: string;
   name: string;
@@ -453,10 +428,11 @@ Si no hay evidencia suficiente ni para `low`, el claim queda `unknown` con un `r
 
 Ajustes a esas reglas:
 
-- una prerelease bajo el dist-tag `latest` contradice "estable": `low`;
+- una prerelease bajo el dist-tag `latest`, o una release de GitHub cuyo tag es una prerelease, contradice "estable": `low`;
 - una respuesta vencida de la caché, usada porque no hay red: como máximo `medium`;
 - un tag de GitHub usado porque no hay releases: como máximo `medium`, porque un tag no es una release declarada;
-- el provider de actualización nunca tiene más confianza que la instalación de la que se deriva.
+- el provider de actualización nunca tiene más confianza que la instalación de la que se deriva;
+- quién instaló una dependencia de proyecto nunca tiene más confianza que el package manager que nombra: el `fact` de `node_modules` afirma la versión instalada, no el instalador.
 
 La confianza resumida de un `ToolRecord` es la mínima entre `versions.installed` (o `resolved`), `versions.latest` e `installation`, contando solo los que están en estado `known`.
 
@@ -523,7 +499,7 @@ La lista original incluía `node --version`. Ningún provider del MVP lo usa, as
 - `pnpm` nunca se lanza dentro de un proyecto detectado. Un proyecto puede definir un `.npmrc` o el campo `packageManager`, que activa corepack y puede descargar y ejecutar otra versión de pnpm.
 - Las dependencias de un proyecto se leen de `package.json` y del lockfile a través de Filesystem, sin ejecutar nada.
 - pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
-- A ese entorno se le agregan `npm_config_update_notifier=false`, para que pnpm no consulte la red por su cuenta buscando actualizaciones, y `COREPACK_ENABLE_AUTO_PIN=0` y `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, para que corepack no escriba `packageManager` ni espere una respuesta.
+- A ese entorno se le agregan `npm_config_update_notifier=false`, para que pnpm no consulte la red por su cuenta buscando actualizaciones, `COREPACK_ENABLE_AUTO_PIN=0` y `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, para que corepack no escriba `packageManager` ni espere una respuesta, y `COREPACK_ENABLE_NETWORK=0`, para que corepack nunca descargue pnpm: esa descarga saldría a la red fuera del cliente HTTP, del aviso de design.md §12 y de `--offline`. Si pnpm es un shim de corepack que todavía no descargó esa versión, pnpm falla, y el diagnóstico dice que hay que correr `pnpm --version` una vez fuera de un proyecto.
 - La salida de `pnpm.config.list` puede contener tokens. Solo se extraen las claves de registry (§8) y el resto nunca se guarda ni se registra.
 
 ### Git
@@ -576,12 +552,13 @@ Responsabilidades:
 - timeout y tamaño máximo de respuesta (5 MB);
 - user-agent;
 - retries limitados;
-- rate-limit handling;
 - JSON validation;
 - requests condicionales para revalidar la caché;
 - concurrencia limitada;
 - enviar el token de GitHub solo a `api.github.com` (§14);
 - cancellation.
+
+El límite de requests de GitHub no lo maneja `HttpClient`: lo detecta el resolver de GitHub, que deja de consultar en esa ejecución y emite un `warning` (§14).
 
 Ejemplos de hosts permitidos inicialmente:
 
@@ -607,7 +584,7 @@ La consecuencia, dicha tal cual: esos servicios pueden inferir qué herramientas
 
 La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta en `registry.npmjs.org` solo si se cumplen las cuatro condiciones:
 
-1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git ni URLs.
+1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git, URLs ni specs terminados en `.tgz`, `.tar.gz` o `.tar`, que npm trata como archivos locales. Si un paquete figura en `dependencies` y en `optionalDependencies`, vale el spec de `optionalDependencies`, como en npm.
 2. Nada lo resuelve a algo local. En un workspace, un rango semver puede resolver a otro paquete del mismo repositorio, y su nombre es un nombre de proyecto. No se consulta:
    - un paquete con el nombre de cualquier paquete del workspace;
    - un paquete que el lockfile resuelve a algo que no es una versión de registry: `link:`, `file:`, `workspace:`, `link: true` de npm, una ruta, un repositorio git o una URL.
@@ -622,8 +599,9 @@ Cómo se determina el registry efectivo:
 
 - Se le pregunta a pnpm con `pnpm config list --json`, desde el directorio neutral (§7). La respuesta refleja todas las fuentes que pnpm lee: variables de entorno, `~/.npmrc`, el rc global de pnpm y el npmrc global. Leer esos archivos a mano arriesgaba omitir una fuente y filtrar nombres.
 - **La salida puede incluir tokens de autenticación.** Solo se extraen `registry` y las claves `@scope:registry`. El resto se descarta sin registrarse en logs, evidencia ni diagnósticos. De esas claves solo se conserva si cada una es el registry público, también cuando vienen de un `.npmrc`: una URL de registry puede llevar una credencial en el usuario, en la query o en el path, así que ninguna parte de ella se guarda ni se muestra. La evidencia dice "is the public registry" o "is not the public registry", y su fuente dice qué archivo lo configuró.
+- **Un spec que es una URL también puede llevar una credencial**, por ejemplo `https://user:TOKEN@files.corp.example/a.tgz` en `package.json`, o la versión que pnpm informa para un global instalado desde un tarball. En `requested`, en la evidencia y en los motivos se muestra solo el esquema y el host (`https://files.corp.example/…`). Un spec así nunca se consulta.
 - Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
-- En los proyectos, donde pnpm nunca se lanza, se suman como archivos todos los `.npmrc` desde el directorio del proyecto hasta home, sin incluir `~/.npmrc`, que ya está en la config de pnpm. Leerlos no ejecuta nada. Cuál aplica depende del gestor: npm usa el de la raíz del workspace, pnpm el de la raíz y el del proyecto, yarn classic los de todos los ancestros. Por eso se leen todos, y un registry cuenta como público solo si ninguno dice otra cosa. Un valor público nunca deshace uno privado de otra fuente. El costo: si la config de usuario apunta a un mirror y un proyecto vuelve al registry público, ese proyecto no se consulta. Si un `.npmrc` existe pero no se puede leer, o si fija un registry con `${VAR}`, el registry queda indeterminado.
+- En los proyectos, donde pnpm nunca se lanza, se suman como archivos todos los `.npmrc` desde el directorio del proyecto hasta home, sin incluir `~/.npmrc`, que ya está en la config de pnpm. Leerlos no ejecuta nada. Cuál aplica depende del gestor: npm usa el de la raíz del workspace, pnpm el de la raíz y el del proyecto, yarn classic los de todos los ancestros. Por eso se leen todos, y un registry cuenta como público solo si ninguno dice otra cosa. Un valor público nunca deshace uno privado de otra fuente. El costo: si la config de usuario apunta a un mirror y un proyecto vuelve al registry público, ese proyecto no se consulta. Las claves se leen como en ini, también entre comillas (`"@corp:registry"=…`). Si un `.npmrc` existe pero no se puede leer, si fija un registry con `${VAR}` o si tiene una línea de registry con una forma que npm no lee igual (sin `=`, con espacios en el scope o en mayúsculas), el registry queda indeterminado. Las variables `npm_config_registry` y `npm_config_@scope:registry` llegan por la config de pnpm, y un `.npmrc` público del proyecto no las deshace.
 - Yarn no lee lo mismo que pnpm, así que sus fuentes se suman con la misma regla. Yarn berry (2 en adelante) ignora `.npmrc`: su registry sale de `npmRegistryServer` y de `npmScopes.<scope>.npmRegistryServer` en cada `.yarnrc.yml` desde el proyecto hasta home, esta vez incluido `~/.yarnrc.yml`, y de la variable `YARN_NPM_REGISTRY_SERVER`. Yarn classic lee además `registry` y `"@scope:registry"` de cada `.yarnrc`. Un `.yarnrc.yml` que no se puede leer o interpretar, o un valor que no es una URL o usa `${VAR}`, deja el registry indeterminado. Solo `https://registry.npmjs.org/` cuenta como público: un `npmRegistryServer` que apunte a `registry.yarnpkg.com` no se consulta, aunque sea un espejo.
 
 Cómo se reconoce un workspace y sus paquetes:
@@ -659,12 +637,16 @@ Ejemplo:
 
 ```ts
 interface Filesystem {
-  exists(path: string): Promise<boolean>;
-  readText(path: string): Promise<string>;
+  exists(path: string): Promise<boolean>;      // false solo si no existe; otro error se propaga
+  readText(path: string): Promise<string>;     // solo archivos regulares, hasta 64 MiB
   readDir(path: string): Promise<DirEntry[]>;
   realpath(path: string): Promise<string>;
+  isDirectory(path: string): Promise<boolean>;
+  isExecutableFile(path: string): Promise<boolean>;
 }
 ```
+
+`exists` no confunde "no existe" con "no se pudo comprobar": un error de permisos se propaga y cada llamador decide. La configuración que no se puede comprobar es fatal, y un `.npmrc`, `.yarnrc` o marcador de workspace que no se puede comprobar deja el registry indeterminado. `readText` rechaza un FIFO o un dispositivo, que dejarían la ejecución colgada, y un archivo de más de 64 MiB.
 
 Esto permite:
 
@@ -816,8 +798,9 @@ La caché es parte del MVP. Guarda solo respuestas de red y es descartable. El e
 ### Qué guarda
 
 - Solo metadata pública: la versión con el dist-tag `latest`, tags, releases y el campo `repository` de npm.
-- La clave es el host más el recurso consultado, por ejemplo `registry.npmjs.org/gstack/latest`.
+- La clave es la URL completa consultada, por ejemplo `https://registry.npmjs.org/gstack/latest`. El nombre del archivo es su hash sha256, y la entrada guarda la URL para descartar colisiones.
 - Cada entrada guarda la fecha de obtención y los validadores que haya devuelto el servidor (`ETag` o `Last-Modified`).
+- Se guardan las respuestas 200 y, además, el 404 de `/releases/latest` de GitHub, que dice que un repositorio no tiene releases. Así esa consulta no se repite dentro del TTL ni hace falta red para saberlo.
 - Nunca guarda tokens, rutas locales, nombres de proyectos ni resultados del inventario local.
 
 ### Dónde
@@ -844,7 +827,8 @@ Borrar ese directorio es siempre seguro.
 - Con `[network] github_token = true`, si `GITHUB_TOKEN` o `GH_TOKEN` están definidos, se envían solo a `api.github.com` y solo para ampliar el límite de requests. No se guardan en la caché, la configuración ni los logs.
 - Sin token, el límite es de 60 requests por hora. Las revalidaciones que reciben un 304 no consumen cuota, así que con la caché alcanza para un uso normal.
 - Tener un token no convierte el acceso a repositorios privados en una funcionalidad soportada del MVP.
-- Si GitHub responde que el límite se agotó, no se hacen más requests a GitHub en esa ejecución. Los datos pendientes quedan `unknown` con ese motivo.
+- Si GitHub responde que el límite se agotó, en releases o en tags, no se hacen más requests a GitHub en esa ejecución, se emite un `warning` y los datos pendientes quedan `unknown` con ese motivo.
+- Sin red y sin respuesta de releases en caché, se usan los tags en caché si los hay. La evidencia dice que no se sabe si el repositorio tiene releases.
 
 ### npm registry
 
@@ -855,25 +839,16 @@ Borrar ese directorio es siempre seguro.
 
 ## 15. Extensibilidad
 
-Un nuevo provider debe implementar un contrato estable.
+En el MVP no hay una interfaz común `Provider`: cada provider es un módulo de `src/providers/` con funciones que reciben los puertos que necesitan (`Filesystem`, `CommandRunner`, `NetContext`) y devuelven datos con su evidencia. `src/application/inventory.ts` decide cuándo se llama a cada uno y arma los `ToolRecord`.
 
-Ejemplo conceptual:
+Un provider nuevo necesita:
 
-```ts
-export interface Provider {
-  readonly id: string;
+- su módulo en `src/providers/`, que solo usa puertos (RA-001 a RA-006);
+- su lugar en `buildInventory`;
+- si ejecuta un comando, una entrada nueva en el allowlist, con un ADR (§7);
+- tests y su página en `docs/providers/` (design.md §17).
 
-  detect(
-    context: DetectionContext
-  ): Promise<DetectionResult[]>;
-
-  resolveLatestVersion?(
-    target: VersionTarget
-  ): Promise<VersionResult | null>;
-}
-```
-
-No todos los providers necesitan implementar todas las capacidades.
+Una interfaz común se define cuando haya suficientes providers para saber qué comparten.
 
 ---
 
