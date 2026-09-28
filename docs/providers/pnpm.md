@@ -33,7 +33,7 @@ Installed versions come from pnpm. Latest versions come from the npm registry pr
 
 ## Files inspected
 
-The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`.
+The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`.
 
 ## Network requests
 

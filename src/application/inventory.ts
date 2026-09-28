@@ -24,7 +24,8 @@ import { resolveGithubLatest, type GithubRunState } from "../providers/github/re
 import { githubWebUrl } from "../providers/github/url.js";
 import { decideOrigin } from "../providers/npm-registry/origin.js";
 import {
-  applyNpmrc,
+  applyRegistryFile,
+  applyYarnEnvironment,
   parsePnpmConfig,
   type RegistryConfig,
 } from "../providers/npm-registry/registry-config.js";
@@ -425,8 +426,8 @@ async function projectRecords(
   diagnostics.push(...scan.diagnostics);
   let registry: RegistryConfig = scan.registryUnknown
     ? { state: "unknown", reason: scan.registryUnknown }
-    : userRegistry;
-  for (const npmrc of scan.npmrcs) registry = applyNpmrc(registry, npmrc.text, npmrc.path);
+    : applyYarnEnvironment(userRegistry, deps.env.get("YARN_NPM_REGISTRY_SERVER"));
+  for (const file of scan.registryFiles) registry = applyRegistryFile(registry, file);
 
   const gitRoot = await findUpDir(fs, root, ".git", deps.env.homeDir);
   const repo = gitRoot ? await readRepository(fs, gitRoot) : undefined;

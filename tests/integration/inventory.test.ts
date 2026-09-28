@@ -458,13 +458,17 @@ describe("project registry (architecture.md §8)", () => {
   const runner = () => fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) });
   const deps = { "https://registry.npmjs.org/a/latest": json({ version: "1.0.0" }) };
 
-  async function projectInventory(files: Record<string, string>, cwd: string) {
+  async function projectInventory(
+    files: Record<string, string>,
+    cwd: string,
+    vars: Record<string, string> = {},
+  ) {
     const http = fakeHttp(deps);
     const inv = await buildInventory(
       {
         fs: memoryFs(files),
         runner: runner(),
-        env: fakeEnv(HOME),
+        env: fakeEnv(HOME, vars),
         net: netContext(http),
         config: config(),
         cwd,
@@ -721,6 +725,71 @@ describe("project registry (architecture.md §8)", () => {
       state: "unknown",
       reason: `origin could not be determined: ${HOME}/p/.npmrc could not be read`,
     });
+  });
+
+  it("does not query when a .yarnrc.yml sets a private registry, up to home (F-52)", async () => {
+    const manifest = JSON.stringify({
+      packageManager: "yarn@4.5.0",
+      dependencies: { a: "^1.0.0" },
+    });
+    const project = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: manifest,
+        [`${HOME}/p/.yarnrc.yml`]: "npmRegistryServer: https://npm.corp.example\n",
+      },
+      `${HOME}/p`,
+    );
+    expect(project.http.calls).toEqual([]);
+    expect(project.inv.tools[0]?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: "private default registry configured",
+    });
+    const home = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: manifest,
+        [`${HOME}/.yarnrc.yml`]: "npmRegistryServer: https://npm.corp.example\n",
+      },
+      `${HOME}/p`,
+    );
+    expect(home.http.calls).toEqual([]);
+    const scoped = await projectInventory(
+      {
+        [`${HOME}/ws/.yarnrc.yml`]:
+          "npmScopes:\n  corp:\n    npmRegistryServer: https://npm.corp.example\n",
+        [`${HOME}/ws/p/package.json`]: JSON.stringify({
+          dependencies: { a: "^1.0.0", "@corp/b": "^1.0.0" },
+        }),
+      },
+      `${HOME}/ws/p`,
+    );
+    expect(scoped.http.calls.map((c) => c.url)).toEqual(["https://registry.npmjs.org/a/latest"]);
+    expect(scoped.inv.tools.find((t) => t.name === "@corp/b")?.versions.latest).toMatchObject({
+      reason: "scope @corp is mapped to a private registry",
+    });
+  });
+
+  it("does not query when a yarn classic .yarnrc, an unreadable .yarnrc.yml or YARN_NPM_REGISTRY_SERVER points elsewhere (F-52)", async () => {
+    const manifest = JSON.stringify({ dependencies: { a: "^1.0.0" } });
+    const classic = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: manifest,
+        [`${HOME}/p/.yarnrc`]: 'registry "https://npm.corp.example"\n',
+      },
+      `${HOME}/p`,
+    );
+    expect(classic.http.calls).toEqual([]);
+    const unreadable = await projectInventory(
+      { [`${HOME}/p/package.json`]: manifest, [`${HOME}/p/.yarnrc.yml/x`]: "" },
+      `${HOME}/p`,
+    );
+    expect(unreadable.http.calls).toEqual([]);
+    expect(unreadable.inv.tools[0]?.versions.latest).toMatchObject({
+      reason: `origin could not be determined: ${HOME}/p/.yarnrc.yml could not be read`,
+    });
+    const env = await projectInventory({ [`${HOME}/p/package.json`]: manifest }, `${HOME}/p`, {
+      YARN_NPM_REGISTRY_SERVER: "https://npm.corp.example",
+    });
+    expect(env.http.calls).toEqual([]);
   });
 
   it("still queries the public registry for a plain project", async () => {

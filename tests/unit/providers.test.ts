@@ -8,7 +8,13 @@ import {
 import { resolveGithubLatest } from "../../src/providers/github/resolver.js";
 import { parseGithubUrl } from "../../src/providers/github/url.js";
 import { decideOrigin, isRegistrySpec } from "../../src/providers/npm-registry/origin.js";
-import { applyNpmrc, parsePnpmConfig } from "../../src/providers/npm-registry/registry-config.js";
+import {
+  applyNpmrc,
+  applyYarnEnvironment,
+  applyYarnrc,
+  applyYarnrcYml,
+  parsePnpmConfig,
+} from "../../src/providers/npm-registry/registry-config.js";
 import { latestUrl, resolveNpmLatest } from "../../src/providers/npm-registry/resolver.js";
 import { scanPnpmGlobal } from "../../src/providers/pnpm/global.js";
 import { scanProject } from "../../src/providers/project/project.js";
@@ -128,6 +134,69 @@ describe("origin rule (architecture.md §8)", () => {
     expect(applyNpmrc(publicRegistry, "registry=${REG}\n", "/p/.npmrc")).toMatchObject({
       state: "unknown",
     });
+  });
+  it("reads npmRegistryServer and npmScopes from .yarnrc.yml (F-52)", () => {
+    const query = (cfg: ReturnType<typeof applyNpmrc>, name = "semver") =>
+      decideOrigin({ name, spec: "^1", registry: cfg }).query;
+    const file = "/p/.yarnrc.yml";
+    expect(query(applyYarnrcYml(publicRegistry, "nodeLinker: node-modules\n", file))).toBe(true);
+    expect(query(applyYarnrcYml(publicRegistry, "", file))).toBe(true);
+    const priv = applyYarnrcYml(publicRegistry, 'npmRegistryServer: "https://npm.corp/"\n', file);
+    expect(query(priv)).toBe(false);
+    expect(priv).toMatchObject({
+      evidence: [{}, { source: file, description: "npmRegistryServer is not the public registry" }],
+    });
+    const scoped = applyYarnrcYml(
+      publicRegistry,
+      "npmScopes:\n  acme:\n    npmRegistryServer: https://npm.acme/\n    npmAlwaysAuth: true\n",
+      file,
+    );
+    expect(query(scoped)).toBe(true);
+    expect(query(scoped, "@acme/x")).toBe(false);
+    expect(
+      query(
+        applyYarnrcYml(publicRegistry, "npmRegistryServer: https://registry.npmjs.org\n", file),
+      ),
+    ).toBe(true);
+  });
+  it("leaves the registry unknown when .yarnrc.yml cannot be interpreted (F-52)", () => {
+    const file = "/p/.yarnrc.yml";
+    expect(applyYarnrcYml(publicRegistry, "npmRegistryServer: ${REG}\n", file)).toMatchObject({
+      state: "unknown",
+      reason: `${file} sets npmRegistryServer through an environment variable`,
+    });
+    expect(applyYarnrcYml(publicRegistry, "npmRegistryServer: [1]\n", file)).toMatchObject({
+      state: "unknown",
+    });
+    expect(applyYarnrcYml(publicRegistry, "npmScopes: 3\n", file)).toMatchObject({
+      state: "unknown",
+    });
+    expect(applyYarnrcYml(publicRegistry, "a: [\n", file)).toMatchObject({
+      state: "unknown",
+      reason: `${file} could not be parsed`,
+    });
+    expect(applyYarnrcYml(publicRegistry, "- a\n", file)).toMatchObject({ state: "unknown" });
+  });
+  it("reads registry lines from a yarn classic .yarnrc (F-52)", () => {
+    const file = "/p/.yarnrc";
+    const cfg = applyYarnrc(
+      publicRegistry,
+      '# comment\nyarn-path ".yarn/releases/yarn-1.22.js"\nregistry "https://npm.corp/"\n"@acme:registry" https://npm.acme/\n',
+      file,
+    );
+    expect(decideOrigin({ name: "semver", spec: "^1", registry: cfg }).query).toBe(false);
+    expect(cfg).toMatchObject({ scopes: new Map([["@acme", false]]) });
+    const pub = applyYarnrc(publicRegistry, "registry https://registry.npmjs.org/\n", file);
+    expect(decideOrigin({ name: "semver", spec: "^1", registry: pub }).query).toBe(true);
+    expect(applyYarnrc(publicRegistry, 'registry "${REG}"\n', file)).toMatchObject({
+      state: "unknown",
+    });
+  });
+  it("counts YARN_NPM_REGISTRY_SERVER as one more source (F-52)", () => {
+    expect(applyYarnEnvironment(publicRegistry, undefined)).toBe(publicRegistry);
+    const priv = applyYarnEnvironment(publicRegistry, "https://npm.corp/");
+    expect(decideOrigin({ name: "semver", spec: "^1", registry: priv }).query).toBe(false);
+    expect(priv).toMatchObject({ evidence: [{}, { source: "YARN_NPM_REGISTRY_SERVER" }] });
   });
 });
 

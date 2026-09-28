@@ -1,6 +1,14 @@
+import { parse as parseYaml } from "yaml";
 import type { Evidence } from "../../core/model.js";
 
 const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
+
+/** A file that can set the registry of a project (architecture.md §8). */
+export interface RegistryFile {
+  path: string;
+  text: string;
+  format: "npmrc" | "yarnrc" | "yarnrc.yml";
+}
 
 /**
  * Only whether each registry is the public one is kept. A registry URL can
@@ -107,4 +115,125 @@ export function applyNpmrc(base: RegistryConfig, text: string, file: string): Re
     evidence.push({ kind: "fact", source: file, description: describeRegistry(key, isPublic) });
   }
   return { state: "known", defaultPublic, scopes, evidence };
+}
+
+/** One registry setting from a source other than pnpm: a file or an environment variable. */
+function applySetting(
+  base: RegistryConfig,
+  setting: { key: string; value: unknown; source: string; scope?: string },
+): RegistryConfig {
+  if (base.state === "unknown") return base;
+  const { key, value, source, scope } = setting;
+  if (typeof value !== "string") {
+    return { state: "unknown", reason: `${source} sets ${key} to something that is not a URL` };
+  }
+  if (value.includes("${")) {
+    return { state: "unknown", reason: `${source} sets ${key} through an environment variable` };
+  }
+  const isPublic = isPublicRegistry(value);
+  const scopes = new Map(base.scopes);
+  if (scope) scopes.set(scope, (scopes.get(scope) ?? true) && isPublic);
+  return {
+    state: "known",
+    defaultPublic: scope ? base.defaultPublic : base.defaultPublic && isPublic,
+    scopes,
+    evidence: [
+      ...base.evidence,
+      { kind: "fact", source, description: describeRegistry(key, isPublic) },
+    ],
+  };
+}
+
+/**
+ * Adds a yarn berry `.yarnrc.yml`: `npmRegistryServer` and
+ * `npmScopes.<scope>.npmRegistryServer`. yarn berry does not read .npmrc,
+ * so these are the only files that set its registry. A file that cannot be
+ * parsed leaves the registry unknown (F-52).
+ */
+export function applyYarnrcYml(base: RegistryConfig, text: string, file: string): RegistryConfig {
+  if (base.state === "unknown") return base;
+  let doc: unknown;
+  try {
+    doc = parseYaml(text);
+  } catch {
+    return { state: "unknown", reason: `${file} could not be parsed` };
+  }
+  if (doc === null || doc === undefined) return base;
+  if (typeof doc !== "object" || Array.isArray(doc)) {
+    return { state: "unknown", reason: `${file} could not be parsed` };
+  }
+  const record = doc as Record<string, unknown>;
+  let config: RegistryConfig = base;
+  if ("npmRegistryServer" in record) {
+    config = applySetting(config, {
+      key: "npmRegistryServer",
+      value: record.npmRegistryServer,
+      source: file,
+    });
+  }
+  const npmScopes = record.npmScopes;
+  if (npmScopes !== undefined) {
+    if (typeof npmScopes !== "object" || npmScopes === null || Array.isArray(npmScopes)) {
+      return { state: "unknown", reason: `${file} has an npmScopes entry that cannot be read` };
+    }
+    for (const [name, settings] of Object.entries(npmScopes as Record<string, unknown>)) {
+      if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
+        return { state: "unknown", reason: `${file} has an npmScopes entry that cannot be read` };
+      }
+      const value = (settings as Record<string, unknown>).npmRegistryServer;
+      if (value === undefined) continue;
+      config = applySetting(config, {
+        key: `npmScopes.${name}.npmRegistryServer`,
+        value,
+        source: file,
+        scope: `@${name}`,
+      });
+    }
+  }
+  return config;
+}
+
+/**
+ * Adds a yarn classic `.yarnrc`: lines `registry "url"` and
+ * `"@scope:registry" "url"`, with optional quotes (F-52).
+ */
+export function applyYarnrc(base: RegistryConfig, text: string, file: string): RegistryConfig {
+  let config: RegistryConfig = base;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const match = /^"?([^"\s]+)"?\s+"?([^"\s]*)"?$/.exec(line);
+    if (!match) continue;
+    const [, key = "", value = ""] = match;
+    if (key === "registry") {
+      config = applySetting(config, { key, value, source: file });
+    } else if (/^@[^:]+:registry$/.test(key)) {
+      config = applySetting(config, { key, value, source: file, scope: key.slice(0, -9) });
+    }
+  }
+  return config;
+}
+
+export function applyRegistryFile(base: RegistryConfig, file: RegistryFile): RegistryConfig {
+  switch (file.format) {
+    case "npmrc":
+      return applyNpmrc(base, file.text, file.path);
+    case "yarnrc":
+      return applyYarnrc(base, file.text, file.path);
+    case "yarnrc.yml":
+      return applyYarnrcYml(base, file.text, file.path);
+  }
+}
+
+/** `YARN_NPM_REGISTRY_SERVER`, which yarn berry reads before its files. */
+export function applyYarnEnvironment(
+  base: RegistryConfig,
+  value: string | undefined,
+): RegistryConfig {
+  if (value === undefined) return base;
+  return applySetting(base, {
+    key: "npmRegistryServer",
+    value,
+    source: "YARN_NPM_REGISTRY_SERVER",
+  });
 }
