@@ -47,7 +47,7 @@ None. See npm-registry.md.
 
 ## Security considerations
 
-pnpm is never run inside a project, because a project's `.npmrc` or `packageManager` field could run code through corepack. `pnpm config list --json` can print auth tokens: only `registry` and `@scope:registry` keys are extracted, and the rest is discarded without being logged.
+pnpm is never run inside a project, because a project's `.npmrc` or `packageManager` field could run code through corepack. `pnpm config list --json` can print auth tokens: only `registry` and `@scope:registry` keys are extracted, and the rest is discarded without being logged. Of those keys, only whether each one is the public registry is kept, because a registry URL can carry a credential (architecture.md §8).
 
 ## Known limitations
 

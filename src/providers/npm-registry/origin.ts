@@ -1,6 +1,6 @@
 import semver from "semver";
 import type { Evidence } from "../../core/model.js";
-import { isPublicRegistry, type RegistryConfig } from "./registry-config.js";
+import type { RegistryConfig } from "./registry-config.js";
 
 export type OriginDecision =
   { query: true; evidence: Evidence[] } | { query: false; reason: string; evidence: Evidence[] };
@@ -91,12 +91,11 @@ export function decideOrigin(input: {
     };
   }
   evidence.push(...input.registry.evidence);
-  if (!isPublicRegistry(input.registry.defaultRegistry)) {
+  if (!input.registry.defaultPublic) {
     return { query: false, reason: "private default registry configured", evidence };
   }
   const scope = scopeOf(input.name);
-  const scopeRegistry = scope ? input.registry.scopes.get(scope) : undefined;
-  if (scopeRegistry && !isPublicRegistry(scopeRegistry)) {
+  if (scope && input.registry.scopes.get(scope) === false) {
     return { query: false, reason: `scope ${scope} is mapped to a private registry`, evidence };
   }
   if (input.resolvedTarball !== undefined) {

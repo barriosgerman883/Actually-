@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockAgent } from "undici";
+import { buildInventory } from "../../src/application/inventory.js";
 import { renderDiagnostics, renderExplain, renderStatus } from "../../src/cli/output/human.js";
+import { toolJson } from "../../src/cli/output/json.js";
 import { createStyle } from "../../src/cli/output/style.js";
 import { claimFrom } from "../../src/core/confidence.js";
 import { notApplicable } from "../../src/core/model.js";
@@ -19,6 +21,15 @@ import { nodeCommandRunner } from "../../src/infrastructure/command-runner/node-
 import { undiciHttpClient } from "../../src/infrastructure/http/undici-http-client.js";
 import { fileLocalState } from "../../src/infrastructure/local-state/file-local-state.js";
 import { parsePnpmConfig } from "../../src/providers/npm-registry/registry-config.js";
+import {
+  config,
+  fakeEnv,
+  fakeHttp,
+  fakeRunner,
+  memoryFs,
+  netContext,
+  ok,
+} from "../helpers/fakes.js";
 
 const ctx = {
   neutralDir: "/tmp/neutral",
@@ -223,10 +234,66 @@ describe("pnpm config output may contain secrets", () => {
     expect(JSON.stringify(parsed, (_k, v) => (v instanceof Map ? [...v] : v))).not.toMatch(
       /SECRET/,
     );
-    expect(parsed).toMatchObject({
-      state: "known",
-      defaultRegistry: "https://registry.npmjs.org/",
-    });
+    expect(parsed).toMatchObject({ state: "known", defaultPublic: true });
+  });
+
+  // A registry value can carry a credential in its user info, its query or its
+  // path (a token as a path segment). None of it may be kept (F-31).
+  const privateRegistry = "https://user:SECRET-4@npm.corp.example/SECRET-6/?token=SECRET-5";
+
+  it("keeps no part of a registry URL, which can carry credentials (F-31)", () => {
+    const parsed = parsePnpmConfig(
+      JSON.stringify({ registry: privateRegistry, "@corp:registry": privateRegistry }),
+    );
+    expect(JSON.stringify(parsed, (_k, v) => (v instanceof Map ? [...v] : v))).not.toMatch(
+      /SECRET|corp\.example/,
+    );
+    expect(parsed).toMatchObject({ state: "known", defaultPublic: false });
+  });
+
+  it("never shows a registry URL in explain or JSON output (F-31)", async () => {
+    const home = "/home/me";
+    const root = `${home}/p`;
+    const scenarios = [
+      { pnpmConfig: { registry: privateRegistry }, npmrc: undefined },
+      {
+        pnpmConfig: { registry: "https://registry.npmjs.org/" },
+        npmrc: `registry=${privateRegistry}\n@corp:registry="${privateRegistry}"\n`,
+      },
+    ];
+    for (const { pnpmConfig, npmrc } of scenarios) {
+      const inventory = await buildInventory(
+        {
+          fs: memoryFs({
+            [`${root}/package.json`]: JSON.stringify({
+              dependencies: { a: "^1.0.0", "@corp/b": "^1.0.0" },
+            }),
+            ...(npmrc ? { [`${root}/.npmrc`]: npmrc } : {}),
+          }),
+          runner: fakeRunner({ "pnpm.config.list": ok(JSON.stringify(pnpmConfig)) }),
+          env: fakeEnv(home),
+          net: netContext(fakeHttp({})),
+          config: config(),
+          cwd: root,
+        },
+        { projectOnly: true },
+      );
+      expect(inventory.tools).toHaveLength(2);
+      const outputs = [
+        JSON.stringify(inventory),
+        ...inventory.tools.map((tool) =>
+          renderExplain(tool, { home, verbose: true, style: createStyle(false) }),
+        ),
+        ...inventory.tools.map((tool) => JSON.stringify(toolJson(tool, true))),
+      ];
+      for (const text of outputs) expect(text).not.toMatch(/SECRET|corp\.example/);
+      expect(inventory.tools[0]?.versions.latest).toMatchObject({
+        state: "unknown",
+        evidence: expect.arrayContaining([
+          expect.objectContaining({ description: expect.stringContaining("not the public") }),
+        ]),
+      });
+    }
   });
 });
 
