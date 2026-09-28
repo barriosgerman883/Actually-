@@ -31,6 +31,7 @@ import {
 import { resolveNpmLatest } from "../providers/npm-registry/resolver.js";
 import { scanPnpmGlobal, type PnpmGlobalScan } from "../providers/pnpm/global.js";
 import { findProjectRoot, scanProject } from "../providers/project/project.js";
+import type { WorkspaceCache } from "../providers/project/workspace.js";
 import type { NetContext } from "../providers/shared/cached-get.js";
 import { listExecutables, type Executable } from "../scanners/bin-scanner.js";
 import { findProjects } from "../scanners/project-finder.js";
@@ -180,8 +181,16 @@ export async function buildInventory(
     for (const root of scannedRoots) {
       if (!roots.includes(root) && !repoToolEvidence.has(root)) roots.push(root);
     }
+    // Projects of the same workspace share one walk of its packages.
+    const workspaces: WorkspaceCache = new Map();
     for (const root of roots) {
-      const { summary, records } = await projectRecords(root, userRegistry, deps, diagnostics);
+      const { summary, records } = await projectRecords(
+        root,
+        userRegistry,
+        deps,
+        diagnostics,
+        workspaces,
+      );
       projects.push(summary);
       tools.push(...records);
     }
@@ -243,7 +252,9 @@ async function pnpmRecords(
           specSource: pkg.specSource,
           registry,
           exclude: config.network.exclude,
-          resolvedTarball: pkg.resolved,
+          tarball: pkg.resolved
+            ? { url: pkg.resolved, source: "pnpm list --global --json" }
+            : undefined,
         });
         const latest = await resolveNpmLatest(pkg.name, origin, net);
         const installEvidence: Evidence[] = [...pkg.evidence];
@@ -398,9 +409,10 @@ async function projectRecords(
   userRegistry: RegistryConfig,
   deps: InventoryDeps,
   diagnostics: Diagnostic[],
+  workspaces: WorkspaceCache,
 ): Promise<{ summary: ProjectSummary; records: ToolRecord[] }> {
   const { fs, config, net } = deps;
-  const scan = await scanProject(fs, root, deps.env.homeDir);
+  const scan = await scanProject(fs, root, deps.env.homeDir, workspaces);
   diagnostics.push(...scan.diagnostics);
   let registry: RegistryConfig = scan.registryUnknown
     ? { state: "unknown", reason: scan.registryUnknown }
@@ -423,6 +435,8 @@ async function projectRecords(
         specSource: scan.manifestPath,
         registry,
         exclude: config.network.exclude,
+        local: dep.local,
+        tarball: dep.tarball,
       });
       const latest = await resolveNpmLatest(dep.name, origin, net);
       const installation: Claim<Installation> =

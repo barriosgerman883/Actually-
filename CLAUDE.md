@@ -78,12 +78,13 @@ These rules span several documents. Code must follow them from the first commit.
 - **git.** git runs only for tags and distance to the last tag, with a hardened environment. `HEAD`, refs and remotes are read from files.
 - **Claims.** Every inferred value is a `Claim<T>` in one of three states: `known`, `unknown` with a reason, or `not-applicable`. Each claim has its own confidence and its own evidence, typed as `fact` or `inference`. If a value cannot be supported, it is `unknown`. Never fill it in.
 - **Meaning of latest.** `latest` is what the source declares as the latest stable version. For npm, that is the `latest` dist-tag chosen by the publisher. It is not a stability guarantee.
-- **Registry queries.** A package is queried on `registry.npmjs.org` only if all three hold:
+- **Registry queries.** A package is queried on `registry.npmjs.org` only if all four hold:
   - its spec is a registry spec;
-  - the effective default registry is the public one;
-  - its scope is not mapped to another registry.
+  - neither its workspace nor its lockfile resolves it to something local;
+  - every config source that could apply (pnpm's config and each `.npmrc` up to home) makes the public registry the default;
+  - no source maps its scope to another registry.
 
-  If any of these cannot be determined, do not query, and leave `latest` as `unknown`.
+  If any of these cannot be determined, do not query, and leave `latest` as `unknown`. Registry URLs can carry credentials: only whether each one is the public registry is kept.
 - **GitHub token.** It is off by default, because it lets GitHub link queries to an account.
 - **stdout and stderr.** stdout carries only the result. The first-run notice and all other messages go to stderr, including with `--json`.
 - **JSON contract.** Every document has `schemaVersion`. Claims are never omitted, and `null` never stands for missing information. `diagnostics` is always present.

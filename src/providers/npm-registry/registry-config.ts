@@ -71,9 +71,12 @@ export function parsePnpmConfig(stdout: string): RegistryConfig {
 }
 
 /**
- * Applies a project's .npmrc on top of the user's effective config. Only
- * registry lines are read. A value that uses ${VAR} expansion cannot be
- * resolved safely, so the registry becomes unknown and nothing is queried.
+ * Adds a .npmrc that could apply to a project. A registry stays public only
+ * while every source agrees: a public value never undoes a private one from
+ * another source, because which file wins depends on the package manager
+ * (architecture.md §8). Only registry lines are read. A value that uses
+ * ${VAR} expansion cannot be resolved safely, so the registry becomes
+ * unknown and nothing is queried.
  */
 export function applyNpmrc(base: RegistryConfig, text: string, file: string): RegistryConfig {
   if (base.state === "unknown") return base;
@@ -97,9 +100,10 @@ export function applyNpmrc(base: RegistryConfig, text: string, file: string): Re
     }
     const isPublic = isPublicRegistry(value);
     if (key === "registry") {
-      defaultPublic = isPublic;
+      defaultPublic &&= isPublic;
     } else {
-      scopes.set(key.slice(0, key.indexOf(":")), isPublic);
+      const scope = key.slice(0, key.indexOf(":"));
+      scopes.set(scope, (scopes.get(scope) ?? true) && isPublic);
     }
     evidence.push({ kind: "fact", source: file, description: describeRegistry(key, isPublic) });
   }

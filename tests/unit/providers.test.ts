@@ -11,6 +11,7 @@ import { decideOrigin, isRegistrySpec } from "../../src/providers/npm-registry/o
 import { applyNpmrc, parsePnpmConfig } from "../../src/providers/npm-registry/registry-config.js";
 import { latestUrl, resolveNpmLatest } from "../../src/providers/npm-registry/resolver.js";
 import { scanProject } from "../../src/providers/project/project.js";
+import { findWorkspace } from "../../src/providers/project/workspace.js";
 import { cachedGet } from "../../src/providers/shared/cached-get.js";
 import {
   fakeHttp,
@@ -87,7 +88,7 @@ describe("origin rule (architecture.md §8)", () => {
         name: "x",
         spec: "^1",
         registry: publicRegistry,
-        resolvedTarball: "https://npm.corp/x/-/x-1.0.0.tgz",
+        tarball: { url: "https://npm.corp/x/-/x-1.0.0.tgz", source: "pnpm list --global --json" },
       }).query,
     ).toBe(false);
   });
@@ -104,6 +105,23 @@ describe("origin rule (architecture.md §8)", () => {
   it("applies a project .npmrc, including a private default registry", () => {
     const cfg = applyNpmrc(publicRegistry, "registry=https://mirror.corp/\n", "/p/.npmrc");
     expect(decideOrigin({ name: "semver", spec: "^7", registry: cfg }).query).toBe(false);
+  });
+  it("never lets a public setting undo a private one from another source (F-32)", () => {
+    const priv = parsePnpmConfig(
+      JSON.stringify({ registry: "https://mirror.corp/", "@acme:registry": "https://npm.acme/" }),
+    );
+    const cfg = applyNpmrc(
+      priv,
+      "registry=https://registry.npmjs.org/\n@acme:registry=https://registry.npmjs.org/\n",
+      "/p/.npmrc",
+    );
+    expect(decideOrigin({ name: "semver", spec: "^7", registry: cfg }).query).toBe(false);
+    const scoped = applyNpmrc(
+      applyNpmrc(publicRegistry, "@acme:registry=https://npm.acme/\n", "/ws/.npmrc"),
+      "@acme:registry=https://registry.npmjs.org/\n",
+      "/ws/app/.npmrc",
+    );
+    expect(decideOrigin({ name: "@acme/x", spec: "^1", registry: scoped }).query).toBe(false);
   });
   it("treats ${VAR} registries in .npmrc as undetermined", () => {
     expect(applyNpmrc(publicRegistry, "registry=${REG}\n", "/p/.npmrc")).toMatchObject({
@@ -337,6 +355,40 @@ describe("git repository files", () => {
       "/main/.git/config": "",
     });
     expect(await readRepository(fs, "/w")).toMatchObject({ commit: "b".repeat(40), remotes: [] });
+  });
+});
+
+describe("workspace packages (architecture.md §8, F-32)", () => {
+  const tree = {
+    "/ws/package.json": JSON.stringify({ name: "ws", workspaces: ["packages/*"] }),
+    "/ws/packages/a/package.json": JSON.stringify({ name: "@corp/a" }),
+    "/ws/packages/a/src/x/y/z/w/package.json": JSON.stringify({ name: "deep" }),
+    "/ws/node_modules/left-pad/package.json": JSON.stringify({ name: "left-pad" }),
+  };
+
+  it("walks only as deep as the patterns reach, and skips node_modules", async () => {
+    const scan = await findWorkspace(memoryFs(tree), "/ws/packages/a", "/", new Map(), 5);
+    expect(scan).toMatchObject({ state: "known", root: "/ws" });
+    const names = scan?.state === "known" ? [...scan.packages.keys()] : [];
+    expect(names.sort()).toEqual(["@corp/a", "ws"]);
+  });
+
+  it("walks everything below an unbounded pattern, up to a limit", async () => {
+    const unbounded = {
+      ...tree,
+      "/ws/package.json": JSON.stringify({ workspaces: ["packages/**"] }),
+    };
+    const scan = await findWorkspace(memoryFs(unbounded), "/ws/packages/a", "/", new Map(), 50);
+    const names = scan?.state === "known" ? [...scan.packages.keys()] : [];
+    expect(names.sort()).toEqual(["@corp/a", "deep"]);
+    expect(
+      await findWorkspace(memoryFs(unbounded), "/ws/packages/a", "/", new Map(), 5),
+    ).toMatchObject({ state: "unknown", reason: expect.stringContaining("too many directories") });
+  });
+
+  it("is undefined outside any workspace", async () => {
+    const fs = memoryFs({ "/p/package.json": JSON.stringify({ name: "p" }) });
+    expect(await findWorkspace(fs, "/p", "/")).toBeUndefined();
   });
 });
 

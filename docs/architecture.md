@@ -605,22 +605,37 @@ La consecuencia, dicha tal cual: esos servicios pueden inferir qué herramientas
 
 ### Qué paquetes se consultan
 
-La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta en `registry.npmjs.org` solo si se cumplen las tres condiciones:
+La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta en `registry.npmjs.org` solo si se cumplen las cuatro condiciones:
 
 1. Su spec es de registry: un rango semver o un dist-tag. No se consultan alias `npm:`, `workspace:`, `link:`, `file:`, repositorios git ni URLs.
-2. El registry predeterminado efectivo es `https://registry.npmjs.org/`. Si la persona configuró otro registry predeterminado, por ejemplo un mirror o un registry de su empresa, no se consulta ningún paquete en el registry público.
-3. Su scope no está asignado a otro registry.
+2. Nada lo resuelve a algo local. En un workspace, un rango semver puede resolver a otro paquete del mismo repositorio, y su nombre es un nombre de proyecto. No se consulta:
+   - un paquete con el nombre de cualquier paquete del workspace;
+   - un paquete que el lockfile resuelve a algo que no es una versión de registry: `link:`, `file:`, `workspace:`, `link: true` de npm, una ruta, un repositorio git o una URL.
+3. Todas las fuentes de configuración que podrían aplicar dejan como registry predeterminado `https://registry.npmjs.org/`. Si la persona configuró otro registry predeterminado en cualquiera de ellas, por ejemplo un mirror o un registry de su empresa, no se consulta ningún paquete en el registry público.
+4. Ninguna fuente asigna su scope a otro registry.
 
-Además, si pnpm informa el tarball desde el que instaló el paquete, ese tarball tiene que venir de `registry.npmjs.org`.
+Además, si pnpm o el lockfile informan el tarball del paquete, ese tarball tiene que venir de `registry.npmjs.org`.
 
-Si alguna de las tres no se puede determinar, el paquete no se consulta. `latest` queda en `unknown` con el motivo: "registry privado" o "no se pudo determinar el origen".
+Si alguna de las cuatro no se puede determinar, el paquete no se consulta. `latest` queda en `unknown` con el motivo: "registry privado" o "no se pudo determinar el origen".
 
 Cómo se determina el registry efectivo:
 
 - Se le pregunta a pnpm con `pnpm config list --json`, desde el directorio neutral (§7). La respuesta refleja todas las fuentes que pnpm lee: variables de entorno, `~/.npmrc`, el rc global de pnpm y el npmrc global. Leer esos archivos a mano arriesgaba omitir una fuente y filtrar nombres.
 - **La salida puede incluir tokens de autenticación.** Solo se extraen `registry` y las claves `@scope:registry`. El resto se descarta sin registrarse en logs, evidencia ni diagnósticos. De esas claves solo se conserva si cada una es el registry público, también cuando vienen de un `.npmrc`: una URL de registry puede llevar una credencial en el usuario, en la query o en el path, así que ninguna parte de ella se guarda ni se muestra. La evidencia dice "is the public registry" o "is not the public registry", y su fuente dice qué archivo lo configuró.
 - Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
-- En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada. Dentro de un workspace de pnpm (`pnpm-workspace.yaml` en un directorio superior), primero se aplica el `.npmrc` de la raíz del workspace y después el del proyecto. Si hay un `.npmrc` en un directorio intermedio, o si un `.npmrc` existe pero no se puede leer, el registry queda indeterminado.
+- En los proyectos, donde pnpm nunca se lanza, se suman como archivos todos los `.npmrc` desde el directorio del proyecto hasta home, sin incluir `~/.npmrc`, que ya está en la config de pnpm. Leerlos no ejecuta nada. Cuál aplica depende del gestor: npm usa el de la raíz del workspace, pnpm el de la raíz y el del proyecto, yarn classic los de todos los ancestros. Por eso se leen todos, y un registry cuenta como público solo si ninguno dice otra cosa. Un valor público nunca deshace uno privado de otra fuente. El costo: si la config de usuario apunta a un mirror y un proyecto vuelve al registry público, ese proyecto no se consulta. Si un `.npmrc` existe pero no se puede leer, o si fija un registry con `${VAR}`, el registry queda indeterminado.
+
+Cómo se reconoce un workspace y sus paquetes:
+
+- La raíz es el directorio más alto, entre el proyecto y home, con `pnpm-workspace.yaml` o con un `package.json` que tiene `workspaces`. Tomar el más alto cubre los workspaces anidados.
+- Los paquetes no se calculan emulando los globs de cada gestor. Se juntan los `name` de todos los `package.json` bajo la raíz, sin entrar en `node_modules` ni `.git`, hasta la profundidad que alcanzan los patrones declarados: `packages/*` llega a dos niveles. El resultado es un superconjunto de los paquetes del workspace.
+- Un patrón con `**` o `{` no tiene profundidad fija: se recorre todo, hasta 10.000 directorios.
+- El workspace queda indeterminado, y no se consulta nada en ese proyecto, si:
+  - se pasa ese límite;
+  - un patrón sale de la raíz (`..` o una ruta absoluta);
+  - un `package.json` o el `pnpm-workspace.yaml` no se pueden interpretar;
+  - hay un symlink a un directorio, que no se sigue.
+- El lockfile de un miembro de un workspace npm sin lockfile propio es el `package-lock.json` de la raíz, si lista al miembro. El paquete instalado se busca como lo hace Node: primero en el `node_modules` del proyecto y después en los de sus ancestros, hasta la raíz del workspace.
 
 El spec de cada paquete global de pnpm se lee del `package.json` que lo declara. Con pnpm 10, es el del directorio global, junto a la ruta que devuelve `pnpm root --global`. Con pnpm 12, cada paquete tiene su propio directorio directamente dentro de esa ruta, con su `package.json`. No se usa ningún otro `package.json`: podría ser el de un proyecto.
 

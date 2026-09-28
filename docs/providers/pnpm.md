@@ -21,7 +21,7 @@ Detect pnpm itself and the packages installed globally with pnpm, and read proje
 | source | the package's `repository` field; repository name matches package name | inference |
 | update provider | derived from installation, never more confident than it | inference |
 
-For project dependencies: `package.json` (requested), `pnpm-lock.yaml` (resolved, including workspace importers) and `node_modules/<name>/package.json` (installed). The package manager comes from the `packageManager` field (fact) or the lockfile present (inference).
+For project dependencies: `package.json` (requested), `pnpm-lock.yaml` (resolved, including workspace importers) or `package-lock.json` (the project's, or its npm workspace root's when it lists the project) and `node_modules/<name>/package.json` (installed, looked up from the project to its workspace root, as Node does). The package manager comes from the `packageManager` field (fact) or the lockfile present (inference).
 
 ## Version detection
 
