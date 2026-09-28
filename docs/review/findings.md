@@ -86,7 +86,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-47 | baja | corrección | Los sufijos de peers de un lockfile pnpm v5 dejan `resolved` desconocido | abierto |
 | F-48 | baja | robustez | El repositorio no se puede verificar en Windows | abierto |
 | F-49 | baja | robustez | Ni el composition root ni el aviso de primera ejecución tienen tests | abierto |
-| F-50 | alta | corrección | Con pnpm 12, ningún paquete global recibe su `latest` | abierto |
+| F-50 | alta | corrección | Con pnpm 12, ningún paquete global recibe su `latest` | resuelto: código corregido en `793c369` |
 | F-51 | baja | corrección | El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
@@ -990,7 +990,7 @@ Propuesta: tests de `createRuntime` con directorios temporales (`XDG_*_HOME`) y 
 
 ### F-50 · Con pnpm 12, ningún paquete global recibe su `latest`
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `793c369`
 - **Severidad:** alta
 - **Tipo:** corrección
 - **Ubicación:** `src/providers/pnpm/global.ts:141-145`
@@ -1002,6 +1002,8 @@ El spec de cada paquete global se lee de `dirname(pnpm root --global)/package.js
 Reproducción: imagen `node:22`, `corepack enable`, `pnpm add -g semver@7.5.0 is-number@6.0.0` con pnpm 12.6.0, y `actually status --global`.
 
 Propuesta: tomar el spec del `package.json` del directorio que contiene el `node_modules` de cada paquete, a partir del `path` que da `pnpm list`; sirve para los dos layouts. Tests con salidas reales de pnpm 10 y 12, y documentar en docs/providers/pnpm.md qué versiones de pnpm se soportan. En la CI, probar con pnpm 10 y 12.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable. El spec sale del `package.json` que declara cada paquete: el global de pnpm 10, junto a `pnpm root --global`, o el directorio propio del paquete directamente dentro de esa ruta con pnpm 12. Ningún otro `package.json` se usa, y la evidencia cita el que se usó. Documentado en architecture.md §8 y docs/providers/pnpm.md. Dos tests en `tests/integration/inventory.test.ts` con el layout real de pnpm 12.6.0; fallan sin el cambio. `pnpm check` en Linux: 291 tests. De punta a punta en Docker, con el paquete instalado con `pnpm add -g`: pnpm 12.6.0 y pnpm 10.33.0 informan `is-number` 6.0.0 → 7.0.0 y `semver` 7.5.0 → 7.8.5. Quedan sin hacer la prueba contra pnpm 10 y 12 en la CI y una lista explícita de versiones soportadas.
 
 ### F-51 · El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea
 
