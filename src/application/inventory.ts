@@ -104,10 +104,11 @@ export async function buildInventory(
 
   // Git repositories under scan.paths, and the ones declared as tools.
   const declaredTools = new Map(config.tools.git.map((t) => [t.path, t]));
-  const scannedRoots =
-    options.globalOnly || options.projectOnly
-      ? []
-      : await findProjects(fs, config.scan.paths, config.scan.depth);
+  // Also with --global: a repository under scan.paths can be a tool
+  // (docs/mvp.md §5.3). It is only scanned as a project without --global.
+  const scannedRoots = options.projectOnly
+    ? []
+    : await findProjects(fs, config.scan.paths, config.scan.depth);
   const repoToolEvidence = new Map<string, Evidence[]>();
   for (const path of declaredTools.keys()) {
     repoToolEvidence.set(path, [
@@ -136,7 +137,13 @@ export async function buildInventory(
     tools.push(...(await pnpmRecords(pnpm, userRegistry, deps, binsInPnpmDir)));
     const owned = new Set(pnpm.packages.flatMap((p) => p.bins));
     const unknownExecutables: Executable[] = [];
-    const repoCandidates = [...scannedRoots, ...declaredTools.keys()];
+    // Executables resolve to real paths, so the roots are compared resolved too.
+    const repoCandidates = await Promise.all(
+      [...scannedRoots, ...declaredTools.keys()].map(async (root) => ({
+        root,
+        real: await fs.realpath(root).catch(() => root),
+      })),
+    );
     for (const exe of executables) {
       if (
         pnpm.binDir &&
@@ -144,7 +151,7 @@ export async function buildInventory(
         (owned.has(exe.name) || PNPM_OWN_BINS.has(exe.name))
       )
         continue;
-      const repo = repoCandidates.find((root) => isInside(exe.realPath, root));
+      const repo = repoCandidates.find((c) => isInside(exe.realPath, c.real))?.root;
       if (repo && (await fs.exists(join(repo, ".git")))) {
         const list = repoToolEvidence.get(repo) ?? [];
         list.push({
@@ -331,12 +338,7 @@ async function repoToolRecord(
   const repo = await readRepository(deps.fs, root);
   const name = root.split(sep).filter(Boolean).pop() ?? root;
   if (!repo) {
-    diagnostics.push({
-      severity: "warning",
-      source: "git",
-      message: `${root} is declared as a tool but is not a Git repository`,
-    });
-    return buildRecord({
+    const record = buildRecord({
       name,
       scope: "global",
       versions: {
@@ -350,10 +352,16 @@ async function repoToolRecord(
       update: { state: "unknown", reason: "installation method is unknown", evidence: [] },
       failed: true,
     });
+    // A provider that fails emits an error for the tools it affects (§13).
+    diagnostics.push({
+      severity: "error",
+      source: "git",
+      message: `${root} is declared as a tool but is not a Git repository`,
+      toolId: record.id,
+    });
+    return record;
   }
   const tags = await installedFromTags(deps.runner, repo);
-  if (tags.failure)
-    diagnostics.push({ severity: "warning", source: "git", message: `${root}: ${tags.failure}` });
   const installed: Claim<string> = tags.version
     ? claimFrom(tags.version.value, [tags.version.evidence])
     : {
@@ -365,14 +373,24 @@ async function repoToolRecord(
     ? await resolveGithubLatest(repo.github.repo, deps.net, github)
     : { state: "unknown", reason: "no GitHub remote", evidence: [] };
   const installation = claimFrom<Installation>({ provider: "git", path: root }, installEvidence);
-  return buildRecord({
+  const record = buildRecord({
     name,
     scope: "global",
     versions: { requested: notApplicable, resolved: notApplicable, installed, latest },
     installation,
     source: repositorySource(repo),
     update: updateFrom(installation),
+    failed: tags.failure !== undefined,
   });
+  if (tags.failure) {
+    diagnostics.push({
+      severity: "error",
+      source: "git",
+      message: `${root}: ${tags.failure}`,
+      toolId: record.id,
+    });
+  }
+  return record;
 }
 
 async function projectRecords(
@@ -384,9 +402,10 @@ async function projectRecords(
   const { fs, config, net } = deps;
   const scan = await scanProject(fs, root, deps.env.homeDir);
   diagnostics.push(...scan.diagnostics);
-  const registry = scan.npmrc
-    ? applyNpmrc(userRegistry, scan.npmrc.text, scan.npmrc.path)
+  let registry: RegistryConfig = scan.registryUnknown
+    ? { state: "unknown", reason: scan.registryUnknown }
     : userRegistry;
+  for (const npmrc of scan.npmrcs) registry = applyNpmrc(registry, npmrc.text, npmrc.path);
 
   const gitRoot = await findUpDir(fs, root, ".git", deps.env.homeDir);
   const repo = gitRoot ? await readRepository(fs, gitRoot) : undefined;

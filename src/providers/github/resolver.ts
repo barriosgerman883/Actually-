@@ -76,6 +76,8 @@ export async function resolveGithubLatest(
     return { state: "unknown", reason: "GitHub rate limit reached", evidence: [] };
   }
   const releaseStatus = release.kind === "stale" ? 200 : release.status;
+  // What the releases endpoint said, for the evidence of the tag fallback.
+  let releaseNote = "no releases";
   if (releaseStatus === 200) {
     const tag = (release.body as { tag_name?: unknown } | undefined)?.tag_name;
     const v = typeof tag === "string" ? version(tag) : undefined;
@@ -93,6 +95,10 @@ export async function resolveGithubLatest(
         { cap: release.kind === "stale" ? "medium" : undefined },
       );
     }
+    releaseNote =
+      typeof tag === "string"
+        ? `latest release is tagged ${tag}, which is not semver`
+        : "latest release has no tag";
   } else if (releaseStatus !== 404) {
     return { state: "unknown", reason: `GitHub answered ${releaseStatus}`, evidence: [] };
   }
@@ -120,16 +126,17 @@ export async function resolveGithubLatest(
   if (!best) {
     return {
       state: "unknown",
-      reason: "no releases and no semver tags",
-      evidence: [
-        { kind: "fact", source: `GET ${base}/releases/latest`, description: "no releases" },
-      ],
+      reason:
+        releaseNote === "no releases"
+          ? "no releases and no semver tags"
+          : "no semver release and no semver tags",
+      evidence: [{ kind: "fact", source: `GET ${base}/releases/latest`, description: releaseNote }],
     };
   }
   return claimFrom(
     best.v,
     [
-      { kind: "fact", source: `GET ${base}/releases/latest`, description: "no releases" },
+      { kind: "fact", source: `GET ${base}/releases/latest`, description: releaseNote },
       {
         kind: "fact",
         source: `GET ${base}/tags`,

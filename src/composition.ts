@@ -20,6 +20,8 @@ export interface RuntimeOptions {
   cwd: string;
   /** Receives the first-run notice (always stderr, docs/design.md §12). */
   notice: (text: string) => void;
+  /** Cancels pending network requests, for example on Ctrl-C. */
+  signal?: AbortSignal;
 }
 
 export interface Runtime {
@@ -59,6 +61,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const http = online
     ? undiciHttpClient({
         userAgent: `actually/${VERSION}`,
+        signal: options.signal,
         githubToken: config.network.githubToken
           ? (env.get("GITHUB_TOKEN") ?? env.get("GH_TOKEN"))
           : undefined,

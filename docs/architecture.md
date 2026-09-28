@@ -512,7 +512,7 @@ Cada entrada es un comando completo y exacto. No se aceptan prefijos ni argument
 | `git.tags.head` | `git tag --points-at HEAD` | repositorio |
 | `git.describe.head` | `git describe --tags --long HEAD` | repositorio |
 
-El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe aunque la caché esté desactivada.
+El directorio neutral es un subdirectorio vacío dentro del estado local de `actually?` (§3.5). Nunca contiene `package.json` ni `.npmrc`, y existe aunque la caché esté desactivada. Si no se puede crear, o si no está vacío, pnpm no se lanza: no hay otro directorio de reemplazo, y los datos que dependen de pnpm quedan `unknown` con ese motivo.
 
 Agregar un comando requiere un ADR. Un test de arquitectura verifica que ningún módulo lanza procesos por fuera de esta tabla.
 
@@ -542,6 +542,8 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 | `GIT_PAGER=cat` | no abre paginadores |
 | `GIT_TERMINAL_PROMPT=0` | nunca pide credenciales |
 | `GIT_OPTIONAL_LOCKS=0` | no escribe locks opcionales dentro del repositorio |
+| `GIT_NO_LAZY_FETCH=1` | un repositorio que se declara clon parcial no puede hacer que git traiga objetos faltantes del remote |
+| `GIT_ALLOW_PROTOCOL` vacío | git no puede usar ningún transporte, así que la configuración de transporte del repositorio, como `core.sshCommand`, nunca se ejecuta |
 
 - Requiere Git 2.32 o posterior, la primera versión con `GIT_CONFIG_GLOBAL`.
 - `safe.directory` no se sobrescribe. Si Git rechaza un repositorio, los datos quedan `unknown` con ese motivo.
@@ -570,8 +572,8 @@ Todos los requests pasan por `HttpClient`.
 
 Responsabilidades:
 
-- allowlist obligatoria de hosts, solo con https;
-- timeout;
+- allowlist obligatoria de hosts, solo con https, que también vale para cada redirección;
+- timeout y tamaño máximo de respuesta (5 MB);
 - user-agent;
 - retries limitados;
 - rate-limit handling;
@@ -618,7 +620,7 @@ Cómo se determina el registry efectivo:
 - Se le pregunta a pnpm con `pnpm config list --json`, desde el directorio neutral (§7). La respuesta refleja todas las fuentes que pnpm lee: variables de entorno, `~/.npmrc`, el rc global de pnpm y el npmrc global. Leer esos archivos a mano arriesgaba omitir una fuente y filtrar nombres.
 - **La salida puede incluir tokens de autenticación.** Solo se extraen `registry` y las claves `@scope:registry`. El resto se descarta sin registrarse en logs, evidencia ni diagnósticos.
 - Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
-- En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada.
+- En los proyectos del MVP, donde pnpm nunca se lanza, se suma la lectura del `.npmrc` del proyecto como archivo. Leerlo no ejecuta nada. Dentro de un workspace de pnpm (`pnpm-workspace.yaml` en un directorio superior), primero se aplica el `.npmrc` de la raíz del workspace y después el del proyecto. Si hay un `.npmrc` en un directorio intermedio, o si un `.npmrc` existe pero no se puede leer, el registry queda indeterminado.
 
 El spec de cada paquete global de pnpm se lee del `package.json` del directorio global, que está junto a la ruta que devuelve `pnpm root --global`.
 

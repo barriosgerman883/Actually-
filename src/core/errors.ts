@@ -1,7 +1,8 @@
 /** A request that could not complete. Always recoverable (architecture.md §13). */
 export class NetworkError extends Error {
   constructor(
-    readonly kind: "offline" | "timeout" | "network" | "host-not-allowed" | "invalid-response",
+    readonly kind:
+      "offline" | "timeout" | "network" | "host-not-allowed" | "invalid-response" | "cancelled",
     message: string,
   ) {
     super(message);

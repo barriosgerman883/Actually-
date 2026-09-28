@@ -1,8 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockAgent } from "undici";
+import { renderDiagnostics, renderExplain, renderStatus } from "../../src/cli/output/human.js";
+import { createStyle } from "../../src/cli/output/style.js";
+import { claimFrom } from "../../src/core/confidence.js";
+import { notApplicable } from "../../src/core/model.js";
+import { buildRecord } from "../../src/core/record.js";
 import { afterAll, describe, expect, it } from "vitest";
 import { NetworkError } from "../../src/core/errors.js";
 import { ALLOWED_COMMANDS } from "../../src/core/ports.js";
@@ -12,6 +17,7 @@ import {
 } from "../../src/infrastructure/command-runner/allowlist.js";
 import { nodeCommandRunner } from "../../src/infrastructure/command-runner/node-command-runner.js";
 import { undiciHttpClient } from "../../src/infrastructure/http/undici-http-client.js";
+import { fileLocalState } from "../../src/infrastructure/local-state/file-local-state.js";
 import { parsePnpmConfig } from "../../src/providers/npm-registry/registry-config.js";
 
 const ctx = {
@@ -74,6 +80,8 @@ describe("CommandRunner allowlist (architecture.md §7)", () => {
         GIT_PAGER: "cat",
         GIT_TERMINAL_PROMPT: "0",
         GIT_OPTIONAL_LOCKS: "0",
+        GIT_NO_LAZY_FETCH: "1",
+        GIT_ALLOW_PROTOCOL: "",
         LC_ALL: "C",
       },
     });
@@ -129,6 +137,60 @@ describe("hardened git against a hostile repository", () => {
       env: inv.env,
       stdio: "ignore",
     });
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  // A partial clone whose tag points at a missing object: reading the tag
+  // makes git fetch it with the repository's own core.sshCommand (F-01).
+  function lazyFetchRepo(name: string, marker: string): string {
+    const repo = join(dir, name);
+    execFileSync("git", ["init", "-q", repo]);
+    execFileSync("git", [
+      "-C",
+      repo,
+      "-c",
+      "user.email=a@b",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "x",
+    ]);
+    for (const [key, value] of [
+      ["extensions.partialClone", "origin"],
+      ["remote.origin.url", "ssh://example.invalid/r.git"],
+      ["remote.origin.promisor", "true"],
+      ["core.sshCommand", `touch ${marker}; false`],
+    ] as const) {
+      execFileSync("git", ["-C", repo, "config", key, value]);
+    }
+    writeFileSync(join(repo, ".git", "refs", "tags", "v9.9.9"), `${"1".repeat(40)}\n`);
+    return repo;
+  }
+
+  it("control: an unhardened git describe on a hostile partial clone runs its sshCommand", () => {
+    const marker = join(dir, "lazy-control-pwned");
+    const repo = lazyFetchRepo("lazy-control", marker);
+    try {
+      execFileSync("git", ["describe", "--tags", "--long", "HEAD"], {
+        cwd: repo,
+        stdio: "ignore",
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+    } catch {
+      // git fails after the fetch attempt; the marker is what matters.
+    }
+    expect(existsSync(marker)).toBe(true);
+  });
+
+  it("the hardened environment never lazily fetches, so the sshCommand never runs", async () => {
+    const marker = join(dir, "lazy-hardened-pwned");
+    const repo = lazyFetchRepo("lazy-hardened", marker);
+    const runner = nodeCommandRunner({ neutralDir: async () => dir });
+    await runner.run({ command: "git.tags.head", repository: repo });
+    await runner.run({ command: "git.describe.head", repository: repo });
     expect(existsSync(marker)).toBe(false);
   });
 
@@ -218,10 +280,201 @@ describe("HttpClient (architecture.md §8)", () => {
     expect(ghAuth).toBe("Bearer gh-token");
   });
 
+  it("never follows a redirect to a host outside the allowlist (F-02)", async () => {
+    const { agent, client: http } = client();
+    let evilHit = false;
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/x/latest" })
+      .reply(302, "", { headers: { location: "https://evil.example/x" } });
+    agent
+      .get("https://evil.example")
+      .intercept({ path: "/x" })
+      .reply(() => {
+        evilHit = true;
+        return {
+          statusCode: 200,
+          data: { version: "6.6.6" },
+          responseOptions: { headers: { "content-type": "application/json" } },
+        };
+      });
+    await expect(http.getJson("https://registry.npmjs.org/x/latest")).rejects.toMatchObject({
+      kind: "host-not-allowed",
+    });
+    expect(evilHit).toBe(false);
+  });
+
+  it("follows redirects within an allowed host, sending the token only there", async () => {
+    const { agent, client: http } = client("gh-token");
+    let auth: unknown = "unset";
+    agent
+      .get("https://api.github.com")
+      .intercept({ path: "/repos/old/r/releases/latest" })
+      .reply(301, "", { headers: { location: "/repositories/1/releases/latest" } });
+    agent
+      .get("https://api.github.com")
+      .intercept({ path: "/repositories/1/releases/latest" })
+      .reply((opts) => {
+        auth = (opts.headers as Record<string, string>).authorization;
+        return {
+          statusCode: 200,
+          data: { tag_name: "v1.0.0" },
+          responseOptions: { headers: { "content-type": "application/json" } },
+        };
+      });
+    const res = await http.getJson("https://api.github.com/repos/old/r/releases/latest");
+    expect(res).toMatchObject({ status: 200, body: { tag_name: "v1.0.0" } });
+    expect(auth).toBe("Bearer gh-token");
+  });
+
+  it("does not follow redirects to http, even on an allowed host", async () => {
+    const { agent, client: http } = client();
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/z/latest" })
+      .reply(301, "", { headers: { location: "http://registry.npmjs.org/z/latest" } });
+    await expect(http.getJson("https://registry.npmjs.org/z/latest")).rejects.toMatchObject({
+      kind: "host-not-allowed",
+    });
+  });
+
+  it("cuts responses larger than 5 MB (F-14)", async () => {
+    const { agent, client: http } = client();
+    const big = JSON.stringify({ version: "1.0.0", padding: "x".repeat(6 * 1024 * 1024) });
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/big/latest" })
+      .reply(200, big, { headers: { "content-type": "application/json" } });
+    await expect(http.getJson("https://registry.npmjs.org/big/latest")).rejects.toMatchObject({
+      kind: "invalid-response",
+      message: "response from registry.npmjs.org is too large",
+    });
+  });
+
+  it("cancels pending and later requests when its signal aborts (F-16)", async () => {
+    const agent = new MockAgent();
+    agent.disableNetConnect();
+    const controller = new AbortController();
+    const http = undiciHttpClient({
+      userAgent: "actually/test",
+      signal: controller.signal,
+      dispatcher: agent,
+    });
+    agent
+      .get("https://registry.npmjs.org")
+      .intercept({ path: "/slow/latest" })
+      .reply(200, { version: "1.0.0" }, { headers: { "content-type": "application/json" } })
+      .delay(5_000);
+    const pending = http.getJson("https://registry.npmjs.org/slow/latest");
+    setTimeout(() => controller.abort(), 20);
+    await expect(pending).rejects.toMatchObject({ kind: "cancelled" });
+    await expect(http.getJson("https://registry.npmjs.org/other/latest")).rejects.toMatchObject({
+      kind: "cancelled",
+    });
+  });
+
   it("maps connection failures to recoverable NetworkError", async () => {
     const { client: http } = client();
     await expect(http.getJson("https://registry.npmjs.org/y/latest")).rejects.toBeInstanceOf(
       NetworkError,
     );
+  });
+});
+
+describe("untrusted text never reaches the terminal as control sequences (F-05)", () => {
+  const osc = "\u001b]0;pwned\u0007x";
+  const tool = buildRecord({
+    name: osc,
+    scope: "project",
+    projectRoot: "/p",
+    versions: {
+      requested: claimFrom("^1.0.0", [
+        { kind: "fact", source: "/p/package.json", description: `declares "${osc}"` },
+      ]),
+      resolved: notApplicable,
+      installed: claimFrom("1.0.0", [{ kind: "fact", source: "/p/x", description: "v" }]),
+      latest: claimFrom("2.0.0", [{ kind: "fact", source: "GET x", description: "\u009b2J" }]),
+    },
+    installation: { state: "unknown", reason: `bad \u001b[2K`, evidence: [] },
+    source: { state: "unknown", reason: "none", evidence: [] },
+    update: { state: "unknown", reason: "none", evidence: [] },
+  });
+  const opts = { home: "/home/me", verbose: true, style: createStyle(false) };
+  const hasControl = (text: string) =>
+    [...text].some((c) => {
+      const code = c.codePointAt(0) ?? 0;
+      return code !== 0x0a && (code <= 0x1f || (code >= 0x7f && code <= 0x9f));
+    });
+
+  it("escapes them in status, explain and diagnostics", () => {
+    const status = renderStatus(
+      {
+        tools: [tool],
+        projects: [
+          {
+            root: "/p",
+            packageManager: notApplicable,
+            repository: notApplicable,
+            dependenciesChecked: 1,
+            updatesAvailable: 1,
+          },
+        ],
+        diagnostics: [],
+      },
+      opts,
+    );
+    const explain = renderExplain(tool, opts);
+    const diagnostics = renderDiagnostics(
+      [{ severity: "warning", source: "pnpm", message: `failed: ${osc}\nfake line` }],
+      "/home/me",
+    );
+    for (const text of [status, explain, diagnostics]) {
+      expect(hasControl(text)).toBe(false);
+    }
+    expect(status).toContain("\\x1b]0;pwned\\x07x");
+    expect(diagnostics).toContain("\\x0afake line");
+  });
+
+  it("keeps colors, which the output adds itself", () => {
+    const colored = renderExplain(tool, { ...opts, style: createStyle(true) });
+    expect(colored).toContain("\u001b[");
+    expect(colored).not.toContain("\u001b]0;");
+  });
+});
+
+describe("neutral directory for pnpm (architecture.md §7, F-06)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "actually-state-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("never falls back to a shared temporary directory", async () => {
+    const stateDir = join(dir, "state");
+    const state = fileLocalState(stateDir);
+    expect(await state.neutralDir()).toBe(join(stateDir, "empty"));
+
+    const planted = join(dir, "planted");
+    mkdirSync(join(planted, "empty"), { recursive: true });
+    writeFileSync(join(planted, "empty", "package.json"), "{}");
+    await expect(fileLocalState(planted).neutralDir()).rejects.toThrow(/not empty/);
+  });
+
+  it("does not run pnpm without a neutral directory, but still runs git", async () => {
+    const runner = nodeCommandRunner({
+      neutralDir: async () => {
+        throw new Error("not empty");
+      },
+    });
+    expect(await runner.run({ command: "pnpm.version" })).toMatchObject({
+      ok: false,
+      reason: "failed",
+      message: expect.stringContaining("no neutral directory"),
+    });
+    expect(
+      buildInvocation({ command: "pnpm.version" }, { neutralDir: "", baseEnv: {} }),
+    ).toHaveProperty("rejected");
+    const repo = join(dir, "repo");
+    execFileSync("git", ["init", "-q", repo]);
+    expect(await runner.run({ command: "git.tags.head", repository: repo })).not.toMatchObject({
+      message: expect.stringContaining("neutral"),
+    });
   });
 });

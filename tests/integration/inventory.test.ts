@@ -1,6 +1,10 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildInventory } from "../../src/application/inventory.js";
 import { UsageError } from "../../src/core/errors.js";
+import { nodeFilesystem } from "../../src/infrastructure/filesystem/node-filesystem.js";
 import {
   config,
   fakeEnv,
@@ -200,6 +204,84 @@ describe("projects and Git repositories", () => {
     });
   });
 
+  function toolWorld(fs: ReturnType<typeof memoryFs>, scanPath: string) {
+    const runner = fakeRunner({
+      "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+      "git.tags.head": ok("v1.0.0\n"),
+    });
+    const cfg = config((c) => {
+      c.scan.paths = [scanPath];
+    });
+    return { fs, runner, env: fakeEnv(HOME), net: netContext(undefined), config: cfg, cwd: "/tmp" };
+  }
+
+  it("a failing provider emits an error for the tool it affects (architecture.md §13, F-12)", async () => {
+    const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
+    const world = toolWorld(fs, "/home/me/tools");
+    world.runner = fakeRunner({
+      "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+      "git.tags.head": { ok: false, reason: "timeout", message: "git.tags.head timed out" },
+    });
+    world.config.tools.git = [{ path: "/home/me/missing" }];
+    const inv = await buildInventory(world, { globalOnly: true });
+    const t = inv.tools.find((x) => x.name === "t");
+    const missing = inv.tools.find((x) => x.name === "missing");
+    expect(t).toMatchObject({ status: "error" });
+    expect(missing).toMatchObject({ status: "error" });
+    expect(inv.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ severity: "error", source: "git", toolId: t?.id }),
+        expect.objectContaining({ severity: "error", source: "git", toolId: missing?.id }),
+      ]),
+    );
+  });
+
+  it("--global still recognizes a repository used as a tool (F-07)", async () => {
+    const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
+    const inv = await buildInventory(toolWorld(fs, "/home/me/tools"), { globalOnly: true });
+    expect(inv.tools.find((x) => x.name === "t")).toMatchObject({
+      id: "global:git:t",
+      versions: { installed: { value: "1.0.0" } },
+    });
+    expect(inv.projects).toEqual([]);
+  });
+
+  it("compares scan paths that go through a symlink by their real path (F-09)", async () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), "actually-f09-")));
+    try {
+      const home = join(base, "home");
+      const repo = join(base, "data", "tools", "t");
+      mkdirSync(join(repo, ".git"), { recursive: true });
+      mkdirSync(join(repo, "bin"));
+      mkdirSync(join(home, ".local", "bin"), { recursive: true });
+      writeFileSync(join(repo, ".git", "HEAD"), `${"c".repeat(40)}\n`);
+      writeFileSync(join(repo, "bin", "t"), "#!/bin/sh\n", { mode: 0o755 });
+      symlinkSync(join(base, "data", "tools"), join(home, "tools"));
+      symlinkSync(join(repo, "bin", "t"), join(home, ".local", "bin", "t"));
+      const runner = fakeRunner({
+        "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+        "git.tags.head": ok("v1.0.0\n"),
+      });
+      const cfg = config((c) => {
+        c.scan.paths = [join(home, "tools")];
+      });
+      const inv = await buildInventory(
+        {
+          fs: nodeFilesystem(),
+          runner,
+          env: fakeEnv(home),
+          net: netContext(undefined),
+          config: cfg,
+          cwd: base,
+        },
+        { globalOnly: true },
+      );
+      expect(inv.tools.map((x) => x.id)).toEqual(["global:git:t"]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("declared tools count as a fact and --project needs a project", async () => {
     const fs = memoryFs(files);
     const runner = fakeRunner({
@@ -234,5 +316,77 @@ describe("projects and Git repositories", () => {
         { projectOnly: true },
       ),
     ).rejects.toBeInstanceOf(UsageError);
+  });
+});
+
+describe("project registry (architecture.md §8)", () => {
+  const runner = () => fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) });
+  const deps = { "https://registry.npmjs.org/a/latest": json({ version: "1.0.0" }) };
+
+  async function projectInventory(files: Record<string, string>, cwd: string) {
+    const http = fakeHttp(deps);
+    const inv = await buildInventory(
+      {
+        fs: memoryFs(files),
+        runner: runner(),
+        env: fakeEnv(HOME),
+        net: netContext(http),
+        config: config(),
+        cwd,
+      },
+      { projectOnly: true },
+    );
+    return { inv, http };
+  }
+
+  it("applies the .npmrc of the pnpm workspace root from a subpackage (F-03)", async () => {
+    const { inv, http } = await projectInventory(
+      {
+        [`${HOME}/ws/pnpm-workspace.yaml`]: "packages:\n  - app\n",
+        [`${HOME}/ws/.npmrc`]: "registry=https://npm.mycorp.example/\n",
+        [`${HOME}/ws/app/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      },
+      `${HOME}/ws/app`,
+    );
+    expect(http.calls).toEqual([]);
+    expect(inv.tools[0]?.versions.latest).toMatchObject({ state: "unknown" });
+  });
+
+  it("does not query when a .npmrc between the project and the workspace root exists", async () => {
+    const { http } = await projectInventory(
+      {
+        [`${HOME}/ws/pnpm-workspace.yaml`]: "packages:\n  - packages/*\n",
+        [`${HOME}/ws/packages/.npmrc`]: "registry=https://registry.npmjs.org/\n",
+        [`${HOME}/ws/packages/app/package.json`]: JSON.stringify({
+          dependencies: { a: "^1.0.0" },
+        }),
+      },
+      `${HOME}/ws/packages/app`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  it("does not query when the project .npmrc exists but cannot be read (F-04)", async () => {
+    const { inv, http } = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+        // A directory named .npmrc: it exists, but reading it fails.
+        [`${HOME}/p/.npmrc/x`]: "",
+      },
+      `${HOME}/p`,
+    );
+    expect(http.calls).toEqual([]);
+    expect(inv.tools[0]?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: `origin could not be determined: ${HOME}/p/.npmrc could not be read`,
+    });
+  });
+
+  it("still queries the public registry for a plain project", async () => {
+    const { http } = await projectInventory(
+      { [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }) },
+      `${HOME}/p`,
+    );
+    expect(http.calls.map((c) => c.url)).toEqual(["https://registry.npmjs.org/a/latest"]);
   });
 });

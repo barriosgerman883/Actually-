@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { NetworkError } from "../../src/core/errors.js";
-import { parseRemotes, readRepository } from "../../src/providers/git/repository.js";
+import {
+  installedFromTags,
+  parseRemotes,
+  readRepository,
+} from "../../src/providers/git/repository.js";
 import { resolveGithubLatest } from "../../src/providers/github/resolver.js";
 import { parseGithubUrl } from "../../src/providers/github/url.js";
 import { decideOrigin, isRegistrySpec } from "../../src/providers/npm-registry/origin.js";
@@ -10,10 +14,12 @@ import { scanProject } from "../../src/providers/project/project.js";
 import { cachedGet } from "../../src/providers/shared/cached-get.js";
 import {
   fakeHttp,
+  fakeRunner,
   json,
   memoryCache,
   memoryFs,
   netContext,
+  ok,
   PNPM_CONFIG_PUBLIC,
 } from "../helpers/fakes.js";
 
@@ -187,6 +193,18 @@ describe("cached GET", () => {
     const http = fakeHttp({ [url]: new NetworkError("network", "down") });
     expect((await cachedGet(url, netContext(http, { cache, now: 10 ** 9 }))).kind).toBe("stale");
   });
+  it("treats a 5xx as an unavailable network and uses the stale entry (F-13)", async () => {
+    const cache = memoryCache({ [url]: { fetchedAt: 0, body: { version: "1.0.0" } } });
+    const http = fakeHttp({ [url]: { status: 503, headers: {}, body: undefined } });
+    const result = await cachedGet(url, netContext(http, { cache, now: 10 ** 9 }));
+    expect(result).toMatchObject({
+      kind: "stale",
+      body: { version: "1.0.0" },
+      cause: { message: "registry.npmjs.org answered 503" },
+    });
+    const noEntry = await cachedGet(url, netContext(http, { now: 10 ** 9 }));
+    expect(noEntry).toMatchObject({ kind: "error", error: { kind: "network" } });
+  });
   it("does not cache non-200 responses", async () => {
     const cache = memoryCache();
     await cachedGet(url, netContext(fakeHttp({}), { cache }));
@@ -234,6 +252,20 @@ describe("GitHub", () => {
     });
     expect(claim).toMatchObject({ state: "known", value: "2.1.0", confidence: "medium" });
   });
+  it("says the latest release is not semver instead of claiming there are none (F-10)", async () => {
+    const http = fakeHttp({
+      [`${base}/releases/latest`]: json({ tag_name: "nightly" }),
+      [`${base}/tags?per_page=100`]: json([{ name: "v1.2.0" }]),
+    });
+    const claim = await resolveGithubLatest({ owner: "o", repo: "r" }, netContext(http), {
+      rateLimited: false,
+      diagnostics: [],
+    });
+    expect(claim).toMatchObject({ state: "known", value: "1.2.0" });
+    const descriptions = claim.state === "known" ? claim.evidence.map((e) => e.description) : [];
+    expect(descriptions).toContain("latest release is tagged nightly, which is not semver");
+    expect(descriptions).not.toContain("no releases");
+  });
   it("stops asking GitHub once the rate limit is reached", async () => {
     const http = fakeHttp({
       [`${base}/releases/latest`]: {
@@ -248,6 +280,32 @@ describe("GitHub", () => {
     expect(state.diagnostics).toHaveLength(1);
     await resolveGithubLatest({ owner: "o", repo: "r2" }, netContext(http), state);
     expect(http.calls).toHaveLength(1);
+  });
+});
+
+describe("installed version from tags", () => {
+  const repo = { root: "/r", gitDir: "/r/.git", remotes: [], commit: "a".repeat(40) };
+  async function describeEvidence(message: string) {
+    const runner = fakeRunner({
+      "git.tags.head": ok(""),
+      "git.describe.head": { ok: false, reason: "failed", message },
+    });
+    const info = await installedFromTags(runner, repo);
+    return info.unknownEvidence.find((e) => e.source.startsWith("git describe"))?.description;
+  }
+  it("records no reachable tag only when git found no names (F-11)", async () => {
+    expect(
+      await describeEvidence(
+        "git.describe.head failed: fatal: No names found, cannot describe anything.",
+      ),
+    ).toBe("no reachable tag");
+  });
+  it("records any other failure as it is (F-11)", async () => {
+    const message = "git.describe.head failed: fatal: detected dubious ownership in repository";
+    expect(await describeEvidence(message)).toBe(message);
+    expect(await describeEvidence("git.describe.head timed out")).toBe(
+      "git.describe.head timed out",
+    );
   });
 });
 
@@ -314,6 +372,44 @@ describe("project scan", () => {
     const scan = await scanProject(fs, "/p", "/");
     expect(scan.packageManager).toMatchObject({ value: "npm", evidence: [{ kind: "inference" }] });
     expect(scan.dependencies[0]?.resolved?.version).toBe("1.1.0");
+  });
+  it("prefers the project's own package-lock.json over a pnpm-lock.yaml above it (F-08)", async () => {
+    const fs = memoryFs({
+      "/ws/pnpm-lock.yaml":
+        "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      a:\n        specifier: ^1.0.0\n        version: 1.9.9\n",
+      "/ws/app/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      "/ws/app/package-lock.json": JSON.stringify({
+        lockfileVersion: 3,
+        packages: { "": {}, "node_modules/a": { version: "1.2.0" } },
+      }),
+    });
+    const scan = await scanProject(fs, "/ws/app", "/");
+    expect(scan.packageManager?.value).toBe("npm");
+    expect(scan.dependencies[0]?.resolved).toMatchObject({
+      version: "1.2.0",
+      evidence: { source: "/ws/app/package-lock.json" },
+    });
+  });
+  it("ignores a pnpm-lock.yaml above the project unless it lists the project (F-08)", async () => {
+    const v5 = "lockfileVersion: 5.4\ndependencies:\n  a: 1.9.9\n";
+    const fs = memoryFs({
+      "/ws/pnpm-lock.yaml": v5,
+      "/ws/app/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+    });
+    const scan = await scanProject(fs, "/ws/app", "/");
+    expect(scan.packageManager).toBeUndefined();
+    expect(scan.dependencies[0]).toMatchObject({ resolvedUnknownReason: "no lockfile" });
+    expect(scan.dependencies[0]?.resolved).toBeUndefined();
+  });
+  it("uses a workspace pnpm-lock.yaml that lists the project as an importer", async () => {
+    const fs = memoryFs({
+      "/ws/pnpm-lock.yaml":
+        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  packages/app:\n    dependencies:\n      a:\n        specifier: ^1.0.0\n        version: 1.3.0\n",
+      "/ws/packages/app/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+    });
+    const scan = await scanProject(fs, "/ws/packages/app", "/");
+    expect(scan.packageManager?.value).toBe("pnpm");
+    expect(scan.dependencies[0]?.resolved?.version).toBe("1.3.0");
   });
   it("marks unsupported lockfiles instead of guessing", async () => {
     const fs = memoryFs({
