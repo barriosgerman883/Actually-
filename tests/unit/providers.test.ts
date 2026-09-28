@@ -525,7 +525,6 @@ describe("git repository files", () => {
     });
     const repo = await readRepository(fs, "/r");
     expect(repo).toMatchObject({
-      branch: "main",
       commit: sha,
       github: { repo: { owner: "o", repo: "r" } },
     });

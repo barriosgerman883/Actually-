@@ -3,6 +3,7 @@ import semver from "semver";
 import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { CommandRunner, Filesystem } from "../../core/ports.js";
 import { parseGithubUrl, type GithubRepo } from "../github/url.js";
+import { tagVersion } from "../shared/tag-version.js";
 
 export interface GitRemote {
   name: string;
@@ -12,10 +13,9 @@ export interface GitRemote {
 export interface GitRepository {
   root: string;
   gitDir: string;
-  branch?: string;
   commit?: string;
   remotes: GitRemote[];
-  github?: { repo: GithubRepo; remote: string; evidence: Evidence };
+  github?: { repo: GithubRepo; evidence: Evidence };
 }
 
 async function resolveGitDir(
@@ -96,7 +96,6 @@ export async function readRepository(
   const head = (await readOptional(fs, join(gitDir, "HEAD")))?.trim();
   if (head?.startsWith("ref:")) {
     const ref = head.slice(4).trim();
-    if (ref.startsWith("refs/heads/")) repo.branch = ref.slice("refs/heads/".length);
     const loose = (await readOptional(fs, join(commonDir, ref)))?.trim();
     if (loose && /^[0-9a-f]{40,64}$/.test(loose)) {
       repo.commit = loose;
@@ -116,7 +115,6 @@ export async function readRepository(
   if (preferred && github) {
     repo.github = {
       repo: github,
-      remote: preferred.name,
       evidence: {
         kind: "fact",
         source: join(commonDir, "config"),
@@ -131,11 +129,6 @@ export interface TagInfo {
   version?: { value: string; evidence: Evidence };
   unknownEvidence: Evidence[];
   failure?: string;
-}
-
-function asVersion(tag: string): string | undefined {
-  const cleaned = tag.trim().replace(/^v/, "");
-  return semver.valid(cleaned) ?? undefined;
 }
 
 /**
@@ -155,7 +148,7 @@ export async function installedFromTags(
   }
   const versions = tags.stdout
     .split(/\r?\n/)
-    .map((t) => ({ tag: t.trim(), version: asVersion(t) }))
+    .map((t) => ({ tag: t.trim(), version: tagVersion(t) }))
     .filter((t): t is { tag: string; version: string } => t.version !== undefined)
     .sort((a, b) => semver.rcompare(a.version, b.version));
   const best = versions[0];

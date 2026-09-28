@@ -52,7 +52,6 @@ export type CommandResult =
       ok: false;
       reason: "not-found" | "timeout" | "failed" | "rejected";
       message: string;
-      exitCode?: number;
     };
 
 export interface CommandRunner {

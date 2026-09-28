@@ -26,7 +26,6 @@ export function failureResult(
     ok: false,
     reason: "failed",
     message: `${command} failed${firstLine ? `: ${firstLine}` : ""}`,
-    exitCode: typeof err.code === "number" ? err.code : undefined,
   };
 }
 

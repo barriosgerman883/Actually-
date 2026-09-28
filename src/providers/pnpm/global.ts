@@ -2,6 +2,7 @@ import { dirname, join, sep } from "node:path";
 import semver from "semver";
 import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { CommandRunner, Filesystem } from "../../core/ports.js";
+import { repositoryField } from "../shared/repository-field.js";
 
 export interface PnpmGlobalPackage {
   name: string;
@@ -43,19 +44,6 @@ function binNames(manifest: Record<string, unknown>, packageName: string): strin
   }
   if (typeof bin === "object" && bin !== null) return Object.keys(bin);
   return [];
-}
-
-function repositoryOf(manifest: Record<string, unknown>): string | undefined {
-  const repo = manifest.repository;
-  if (typeof repo === "string") return repo;
-  if (
-    typeof repo === "object" &&
-    repo !== null &&
-    typeof (repo as { url?: unknown }).url === "string"
-  ) {
-    return (repo as { url: string }).url;
-  }
-  return undefined;
 }
 
 async function readJson(
@@ -213,7 +201,7 @@ export async function scanPnpmGlobal(
       const manifest = await readJson(fs, join(dep.path, "package.json"));
       if (manifest) {
         pkg.bins = binNames(manifest, name);
-        pkg.repository = repositoryOf(manifest);
+        pkg.repository = repositoryField(manifest);
       }
     }
     scan.packages.push(pkg);

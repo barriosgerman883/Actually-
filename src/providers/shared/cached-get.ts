@@ -121,3 +121,7 @@ export function staleEvidenceText(fetchedAt: number, cause: "offline" | NetworkE
     ? `cached value from ${when}; running offline`
     : `cached value from ${when}; network unavailable (${cause.message})`;
 }
+
+export function cachedEvidenceText(fetchedAt: number): string {
+  return `cached response from ${new Date(fetchedAt).toISOString()}`;
+}

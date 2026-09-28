@@ -3,10 +3,12 @@ import { claimFrom } from "../../core/confidence.js";
 import type { Claim, Diagnostic, Evidence } from "../../core/model.js";
 import {
   cachedGet,
+  cachedEvidenceText,
   staleEvidenceText,
   type CachedGetResult,
   type NetContext,
 } from "../shared/cached-get.js";
+import { tagVersion } from "../shared/tag-version.js";
 import type { GithubRepo } from "./url.js";
 
 /** Shared across one run: once GitHub says the quota is gone, stop asking. */
@@ -50,14 +52,10 @@ function cacheEvidence(result: CachedGetResult): Evidence[] {
       {
         kind: "fact",
         source: "cache",
-        description: `cached response from ${new Date(result.fetchedAt).toISOString()}`,
+        description: cachedEvidenceText(result.fetchedAt),
       },
     ];
   return [];
-}
-
-function version(tag: string): string | undefined {
-  return semver.valid(tag.trim().replace(/^v/, "")) ?? undefined;
 }
 
 /**
@@ -96,7 +94,7 @@ export async function resolveGithubLatest(
     };
   } else if (release.status === 200) {
     const tag = (release.body as { tag_name?: unknown } | undefined)?.tag_name;
-    const v = typeof tag === "string" ? version(tag) : undefined;
+    const v = typeof tag === "string" ? tagVersion(tag) : undefined;
     if (typeof tag === "string" && v) {
       // A release its publisher did not mark as a prerelease can still carry
       // a prerelease tag, which contradicts "stable" (architecture.md §5, F-36).
@@ -145,7 +143,7 @@ export async function resolveGithubLatest(
     return { state: "unknown", reason: `GitHub answered ${tagsStatus}`, evidence: [] };
   }
   const candidates = (tags.body as { name?: unknown }[])
-    .map((t) => (typeof t.name === "string" ? { tag: t.name, v: version(t.name) } : undefined))
+    .map((t) => (typeof t.name === "string" ? { tag: t.name, v: tagVersion(t.name) } : undefined))
     .filter(
       (t): t is { tag: string; v: string } => t?.v !== undefined && semver.prerelease(t.v) === null,
     )

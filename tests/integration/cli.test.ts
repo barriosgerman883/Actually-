@@ -80,7 +80,7 @@ describe("cli", () => {
     ).toBe(EXIT.ok);
   });
 
-  it("keeps stdout clean JSON and sends the notice and diagnostics to stderr", async () => {
+  it("keeps stdout clean JSON, with the diagnostics inside it, and the notice on stderr", async () => {
     const h = harness(inventory, { notice: true });
     expect(await h.go(["status", "--json"])).toBe(EXIT.ok);
     const doc = JSON.parse(h.out.join(""));

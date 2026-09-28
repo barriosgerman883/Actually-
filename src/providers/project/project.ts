@@ -22,7 +22,6 @@ export interface ProjectDependency {
 }
 
 export interface ProjectScan {
-  root: string;
   manifestPath?: string;
   packageManager?: { value: string; evidence: Evidence[]; version?: string };
   dependencies: ProjectDependency[];
@@ -210,7 +209,7 @@ export async function scanProject(
   stopAt: string,
   workspaces: WorkspaceCache = new Map(),
 ): Promise<ProjectScan> {
-  const scan: ProjectScan = { root, dependencies: [], registryFiles: [], diagnostics: [] };
+  const scan: ProjectScan = { dependencies: [], registryFiles: [], diagnostics: [] };
   const manifestPath = join(root, "package.json");
   let hasManifest: boolean;
   try {
