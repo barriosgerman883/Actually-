@@ -707,6 +707,24 @@ describe("project scan", () => {
     expect(scan.dependencies[0]).toMatchObject({ resolvedUnknownReason: "no lockfile" });
     expect(scan.dependencies[0]?.resolved).toBeUndefined();
   });
+  it("strips the _peer suffix of a v5 lockfile, the lockfile of pnpm 7 (F-47)", async () => {
+    const fs = memoryFs({
+      "/p/package.json": JSON.stringify({ dependencies: { a: "^1.0.0", b: "^2.0.0" } }),
+      "/p/pnpm-lock.yaml":
+        "lockfileVersion: 5.4\nspecifiers:\n  a: ^1.0.0\n  b: ^2.0.0\ndependencies:\n  a: 1.2.3_react@18.0.0\n  b: 2.0.0_q4lwbyulqjlffwufsdswb6jcpq\n",
+    });
+    const scan = await scanProject(fs, "/p", "/");
+    expect(scan.dependencies.map((d) => d.resolved?.version)).toEqual(["1.2.3", "2.0.0"]);
+  });
+  it("keeps an underscore in a v6+ version as it is", async () => {
+    const fs = memoryFs({
+      "/p/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      "/p/pnpm-lock.yaml":
+        "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      a:\n        specifier: ^1.0.0\n        version: 1.2.3_x\n",
+    });
+    const scan = await scanProject(fs, "/p", "/");
+    expect(scan.dependencies[0]?.resolved).toBeUndefined();
+  });
   it("uses a workspace pnpm-lock.yaml that lists the project as an importer", async () => {
     const fs = memoryFs({
       "/ws/pnpm-lock.yaml":

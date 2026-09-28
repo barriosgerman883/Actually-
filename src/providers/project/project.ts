@@ -89,8 +89,12 @@ function dirsUpTo(start: string, end: string): string[] {
   return dirs;
 }
 
-function stripPeerSuffix(version: string): string {
-  const i = version.indexOf("(");
+/**
+ * The version without its peer suffix: `1.2.3(react@18.0.0)` since lockfile
+ * v6, and `1.2.3_react@18.0.0` in v5, the lockfile of pnpm 7 (F-47).
+ */
+function stripPeerSuffix(version: string, v5: boolean): string {
+  const i = v5 ? version.search(/[(_]/) : version.indexOf("(");
   return i >= 0 ? version.slice(0, i) : version;
 }
 
@@ -108,8 +112,8 @@ type LockEntries = Map<string, LockEntry>;
 
 const LOCAL_PREFIXES = ["link:", "file:", "workspace:"];
 
-function pnpmEntry(raw: string): LockEntry {
-  const value = stripPeerSuffix(raw);
+function pnpmEntry(raw: string, v5: boolean): LockEntry {
+  const value = stripPeerSuffix(raw, v5);
   if (semver.valid(value)) return { kind: "registry", version: value };
   const prefix = LOCAL_PREFIXES.find((p) => value.startsWith(p));
   return prefix ? { kind: "local", label: prefix } : { kind: "other" };
@@ -141,6 +145,7 @@ function pnpmLockEntries(text: string, importer: string): LockEntries | undefine
   const doc = parseYaml(text) as Record<string, unknown> | null;
   const out: LockEntries = new Map();
   if (!doc || typeof doc !== "object") return importer === "." ? out : undefined;
+  const v5 = /^5(\.|$)/.test(String(doc.lockfileVersion ?? ""));
   const importers = doc.importers as Record<string, Record<string, unknown>> | undefined;
   const scope = importers ? importers[importer] : importer === "." ? doc : undefined;
   if (!scope) return importers && importer === "." ? out : undefined;
@@ -156,7 +161,7 @@ function pnpmLockEntries(text: string, importer: string): LockEntries | undefine
               typeof (value as { version?: unknown }).version === "string"
             ? (value as { version: string }).version
             : undefined;
-      if (raw) out.set(name, pnpmEntry(raw));
+      if (raw) out.set(name, pnpmEntry(raw, v5));
     }
   }
   return out;

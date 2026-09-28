@@ -55,3 +55,4 @@ pnpm is never run inside a project, because a project's `.npmrc` or `packageMana
 - How pnpm itself was installed is not determined.
 - Windows is not supported: pnpm is a `.cmd` shim there, which cannot be run without a shell.
 - Yarn and Bun lockfiles are detected but not read.
+- `pnpm-lock.yaml` is read in the formats of lockfile v5 (pnpm 7, peers as `_suffix`), v6 (pnpm 8) and v9 (pnpm 9 and later, peers as `(suffix)`). An older or unknown format leaves `resolved` unknown instead of guessing.
