@@ -170,6 +170,8 @@ const WRAPPERS = new Set([
 ]);
 // Runners of a package's binary: the binary is the command to check (F-20).
 const BIN_RUNNERS = new Set(["npx", "pnpx", "bunx"]);
+const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
+const RUNNER_SUBCOMMANDS = new Set(["exec", "dlx"]);
 const CLAUDE_DIR = /(^|\/)\.claude(\/|$)/;
 const PROTECTED_ROOTS = new Set([".git", "src", "docs", "tests", ".claude", ".github"]);
 const SECRET_PATH =
@@ -271,6 +273,85 @@ const deny = (reason) => ({ decision: "deny", reason });
 const ask = (reason) => ({ decision: "ask", reason });
 
 const shortFlagsWith = (arg, letter) => new RegExp(`^-[A-Za-z]*${letter}[A-Za-z]*$`).test(arg);
+
+/** Commands nested in another command's text: checked, or denied past the limit (F-26). */
+function nested(text, depth, downloaded) {
+  return depth < MAX_DEPTH
+    ? evaluateText(text, depth + 1, downloaded)
+    : [deny("commands nested too deep to check")];
+}
+
+/** Whether a shell or an interpreter takes its code from stdin. */
+function readsStdin(args) {
+  const operands = args.filter((a) => a === "-" || !/^[-+]/.test(a));
+  return args.includes("-s") || operands.length === 0 || operands[0] === "-";
+}
+
+/** Text piped into a shell or an interpreter is code built at run time (F-20). */
+function pipedCode(cmd, from) {
+  return from.some((w) => w.includes(".claude"))
+    ? deny(`piping text that names .claude/ into ${cmd}`)
+    : ask(`piping into ${cmd} runs code built at run time`);
+}
+
+/**
+ * Skips the flags of a package runner (npx, pnpm exec, pnpm dlx and the
+ * like). Returns where the command it runs starts, or the shell text it
+ * runs when given -c, --call or --shell-mode (F-20).
+ */
+function runnerCommand(words, i) {
+  while (i < words.length && words[i].startsWith("-")) {
+    const flag = words[i];
+    if (flag === "--") return { at: i + 1 };
+    if (["-c", "--call", "--shell-mode"].includes(flag))
+      return { text: words.slice(i + 1).join(" ") };
+    if (flag.startsWith("--call=")) return { text: flag.slice("--call=".length) };
+    if (["-p", "--package"].includes(flag)) i++;
+    i++;
+  }
+  return { at: i };
+}
+
+const RUNS_FILES = /^(sh|bash|zsh|dash|ksh|source|\.|node|python3?|perl|ruby|deno|bun|php)$/;
+const fileName = (path) =>
+  path
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "")
+    .replace(/^.*\//, "");
+
+/** Records the files that curl or wget saves, by name (F-26). */
+function recordDownloads(cmd, args, downloaded) {
+  if (cmd !== "curl" && cmd !== "wget") return;
+  let named = false;
+  let remoteName = cmd === "wget";
+  for (let k = 0; k < args.length; k++) {
+    const a = args[k];
+    let out;
+    if (cmd === "curl") {
+      if (a === "--output" || /^-[A-Za-z]*o$/.test(a)) out = args[++k];
+      else if (a.startsWith("--output=")) out = a.slice("--output=".length);
+      else if (a === "--remote-name" || a === "--remote-name-all" || shortFlagsWith(a, "O"))
+        remoteName = true;
+    } else if (a === "--output-document" || /^-[A-Za-z]*O$/.test(a)) out = args[++k];
+    else if (a.startsWith("--output-document=")) out = a.slice("--output-document=".length);
+    else if (/^-[A-Za-z]*O./.test(a)) out = a.slice(a.indexOf("O") + 1);
+    if (out !== undefined) {
+      named = true;
+      if (out !== "-") downloaded.add(fileName(out));
+    }
+  }
+  if (remoteName && !(cmd === "wget" && named))
+    for (const url of args.filter((a) => /^[a-z]+:\/\//i.test(a))) downloaded.add(fileName(url));
+}
+
+/** Whether a command runs a file downloaded earlier in the same command line (F-26). */
+function runsDownloaded(word, cmd, args, downloaded) {
+  if (downloaded.size === 0) return false;
+  if (word.includes("/") && downloaded.has(fileName(word))) return true;
+  return (
+    RUNS_FILES.test(cmd) && args.some((a) => !a.startsWith("-") && downloaded.has(fileName(a)))
+  );
+}
 
 function hasUnguardedVariable(arg) {
   const vars = arg.match(/\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
@@ -531,7 +612,7 @@ function checkPackageManager(cmd, args) {
   return found;
 }
 
-function checkCommand(words, pipedFrom, depth) {
+function checkCommand(words, pipedFrom, depth, downloaded) {
   const found = [];
   let i = 0;
   let viaXargs = false;
@@ -548,13 +629,20 @@ function checkCommand(words, pipedFrom, depth) {
     const w = words[i];
     if (w === undefined) return found;
     if (WRAPPERS.has(w)) i++;
-    else if (BIN_RUNNERS.has(w)) {
-      // npx <flags> <package> <args>: the package's binary is the command.
-      i++;
-      while (i < words.length && words[i].startsWith("-")) {
-        if (["-p", "--package", "-c", "--call"].includes(words[i])) i++;
-        i++;
+    else if (
+      BIN_RUNNERS.has(w) ||
+      (PACKAGE_MANAGERS.has(w) &&
+        RUNNER_SUBCOMMANDS.has(words.slice(i + 1).find((a) => !a.startsWith("-"))))
+    ) {
+      // npx <flags> <package> <args>, pnpm exec <command> and pnpm dlx
+      // <package>: the package's binary is the command (F-20).
+      if (PACKAGE_MANAGERS.has(w)) {
+        i = words.findIndex((a, k) => k > i && !a.startsWith("-"));
+        if (words[i] === "dlx") found.push(ask(`${w} dlx downloads and runs a package`));
       }
+      const runs = runnerCommand(words, i + 1);
+      if (runs.text !== undefined) return [...found, ...nested(runs.text, depth, downloaded)];
+      i = runs.at;
     } else if (
       w === "env" &&
       words.length > i + 1 &&
@@ -580,24 +668,27 @@ function checkCommand(words, pipedFrom, depth) {
   }
   const cmd = words[i].replace(/^.*\//, "");
   const args = words.slice(i + 1);
+  if (runsDownloaded(words[i], cmd, args, downloaded))
+    found.push(deny("running a file downloaded in the same command runs unreviewed code"));
+  recordDownloads(cmd, args, downloaded);
 
   if (["sudo", "su", "doas", "pkexec"].includes(cmd))
     return [...found, deny(`${cmd}: elevated privileges are never needed`)];
   if (SHELLS.has(cmd)) {
     const c = args.indexOf("-c");
-    if (c >= 0 && args[c + 1] !== undefined && depth < 4)
-      found.push(...evaluateText(args[c + 1], depth + 1));
+    if (c >= 0 && args[c + 1] !== undefined) found.push(...nested(args[c + 1], depth, downloaded));
     if (pipedFrom && ["curl", "wget"].includes(pipedFrom[0]?.replace(/^.*\//, "")))
       found.push(deny("piping a download into a shell runs unreviewed code"));
+    else if (pipedFrom && c < 0 && readsStdin(args)) found.push(pipedCode(cmd, pipedFrom));
     return found;
   }
-  if (cmd === "eval" && depth < 4) return [...found, ...evaluateText(args.join(" "), depth + 1)];
-  if (
-    pipedFrom &&
-    ["curl", "wget"].includes(pipedFrom[0]?.replace(/^.*\//, "")) &&
-    /^(node|python3?|perl|ruby|deno|bun)$/.test(cmd)
-  )
-    found.push(deny("piping a download into an interpreter runs unreviewed code"));
+  if (cmd === "eval") return [...found, ...nested(args.join(" "), depth, downloaded)];
+  if (pipedFrom && /^(node|python3?|perl|ruby|deno|bun|php)$/.test(cmd)) {
+    if (["curl", "wget"].includes(pipedFrom[0]?.replace(/^.*\//, "")))
+      found.push(deny("piping a download into an interpreter runs unreviewed code"));
+    else if (readsStdin(args) && inlineCodeFlag(cmd, args) === undefined)
+      found.push(pipedCode(cmd, pipedFrom));
+  }
 
   // Secrets.
   if (cmd === "printenv") found.push(deny("printenv prints secrets such as tokens"));
@@ -743,7 +834,7 @@ function redirectTargets(text) {
   return targets;
 }
 
-function evaluateText(text, depth) {
+function evaluateText(text, depth, downloaded = new Set()) {
   const { clean, code } = heredocs(text);
   const found = [];
   if (/(^|[^<>])>>?\s*\/dev\/(sd|nvme|hd|vd|disk|mmcblk)/.test(clean))
@@ -763,15 +854,9 @@ function evaluateText(text, depth) {
         : ask(`${interpreter} runs code from a heredoc that can write any file`),
     );
   }
-  for (const inner of substitutions(clean)) {
-    found.push(
-      ...(depth < MAX_DEPTH
-        ? evaluateText(inner, depth + 1)
-        : [deny("commands nested too deep to check")]),
-    );
-  }
+  for (const inner of substitutions(clean)) found.push(...nested(inner, depth, downloaded));
   for (const { words, pipedFrom } of parse(clean))
-    found.push(...checkCommand(words, pipedFrom, depth));
+    found.push(...checkCommand(words, pipedFrom, depth, downloaded));
   return found;
 }
 
