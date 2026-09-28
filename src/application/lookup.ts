@@ -13,8 +13,8 @@ export function findTool(inventory: Inventory, query: string): ToolRecord {
   if (byName.length === 1 && byName[0]) return byName[0];
   if (byName.length > 1) {
     throw new UsageError(
-      `"${query}" matches ${byName.length} tools. Pass one of these ids:\n` +
-        byName.map((t) => `  ${t.id}`).join("\n"),
+      `"${query}" matches ${byName.length} tools. Pass one of these ids:`,
+      byName.map((t) => t.id),
     );
   }
   throw new UsageError(`no tool named "${query}" was found`);

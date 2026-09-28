@@ -97,6 +97,12 @@ describe("cli", () => {
     expect(doc.tools).toEqual([]);
     expect(doc.diagnostics[0].message).toContain("global:pnpm:a");
     expect(await harness(inventory).go(["explain", "global:pnpm:a"])).toBe(EXIT.ok);
+    // The ids go one per line in the human output, not as escaped \x0a (F-51).
+    const human = harness(inventory);
+    expect(await human.go(["explain", "a"])).toBe(EXIT.usage);
+    const err = human.err.join("");
+    expect(err).not.toContain("\\x0a");
+    expect(err).toMatch(/Pass one of these ids:\n {2}global:pnpm:a\n {2}\S+:a\n/);
   });
 
   it("explain --json includes evidence; status <tool> --json does not", async () => {
