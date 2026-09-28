@@ -88,7 +88,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-49 | baja | robustez | Ni el composition root ni el aviso de primera ejecución tienen tests | abierto |
 | F-50 | alta | corrección | Con pnpm 12, ningún paquete global recibe su `latest` | resuelto: código corregido en `793c369` |
 | F-51 | baja | corrección | El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea | abierto |
-| F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | abierto |
+| F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `f10a354` |
 | F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
 | F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | resuelto: código corregido en `7a5bfa9` |
@@ -1052,7 +1052,7 @@ Propuesta: sanear cada id y cada dato, no el mensaje armado; o partir el mensaje
 
 ### F-52 · Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `f10a354`
 - **Severidad:** alta
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/project/project.ts` (solo se leen `.npmrc`), `src/application/inventory.ts` (`projectRecords`)
@@ -1070,6 +1070,8 @@ Reproducción:
 architecture.md §8: "ante la duda, no se consulta".
 
 Propuesta: sumar `npmRegistryServer` y `npmScopes.<scope>.npmRegistryServer` de cada `.yarnrc.yml`, desde el proyecto hasta home, como fuentes más de la regla de F-32. El registry queda indeterminado si el archivo no se puede interpretar o usa `${VAR}`. Mientras no esté hecho, dejar indeterminado el registry de todo proyecto con un `.yarnrc.yml`.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable, según la propuesta y algo más amplia. `scanProject` lee, además de cada `.npmrc`, cada `.yarnrc.yml` y cada `.yarnrc` de yarn classic desde el proyecto hasta home, incluido home, porque pnpm no refleja esos archivos. `buildInventory` suma la variable `YARN_NPM_REGISTRY_SERVER`, que yarn berry lee antes que los archivos; con eso queda cubierto lo que el hallazgo dejaba sin verificar. La regla es la de F-32: público solo si todas las fuentes coinciden; un archivo ilegible o no interpretable, un valor que no es una cadena o que usa `${VAR}`, dejan el registry indeterminado. Documentado en architecture.md §8, `docs/providers/npm-registry.md`, `docs/providers/pnpm.md` y README. Tests: `tests/unit/providers.test.ts` (cuatro casos F-52) y `tests/integration/inventory.test.ts` (dos casos F-52, incluidos `~/.yarnrc.yml`, un `npmScopes` que bloquea solo su scope, un `.yarnrc.yml` ilegible y la variable de entorno); fallan sin el cambio.
 
 ### F-53 · Credenciales dentro de un spec que es una URL llegan a `explain`
 
