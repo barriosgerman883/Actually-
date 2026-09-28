@@ -94,12 +94,7 @@ No debe:
 - hacer requests;
 - conocer detalles de providers.
 
-Ejemplo:
-
-```ts
-const result = await application.status(options);
-formatter.render(result);
-```
+En el código, `src/cli/run.ts` parsea los argumentos, pide el inventario al runtime que arma `src/composition.ts` y lo pasa a los formatters de `src/cli/output/` (`human.ts` o `json.ts`).
 
 ---
 
@@ -134,33 +129,14 @@ Debe ser portable y altamente testeable.
 
 ## 3.3 Scanners
 
-Un scanner encuentra señales.
+Un scanner encuentra señales; la interpretación pertenece a un provider. Están en `src/scanners/`:
 
-Ejemplos:
+- `findProjects` (`project-finder.ts`) recorre `scan.paths` y devuelve cada directorio con `package.json` o `.git`, sin descender dentro de él;
+- `listExecutables` (`bin-scanner.ts`) lista los ejecutables de los directorios permitidos.
 
-```text
-ProjectScanner
-FilesystemScanner
-PathScanner
-GitRepositoryScanner
-```
+Un repositorio encontrado por `findProjects` es un proyecto salvo evidencia positiva de que es una herramienta. La regla está en mvp.md §5.3.
 
-Un scanner no determina necesariamente el significado completo de una señal.
-
-Ejemplo:
-
-```text
-FilesystemScanner
-
-found:
-~/projects/foo/pnpm-lock.yaml
-```
-
-La interpretación pertenece a un provider o detector especializado.
-
-Un repositorio encontrado por `GitRepositoryScanner` es un proyecto salvo evidencia positiva de que es una herramienta. La regla está en mvp.md §5.3.
-
-`PathScanner` no recorre todo PATH, porque listaría miles de binarios del sistema como herramientas desconocidas. En el MVP revisa solo:
+`listExecutables` no recorre todo PATH, porque listaría miles de binarios del sistema como herramientas desconocidas. En el MVP revisa solo:
 
 - el directorio global de binarios de pnpm, el que informa `pnpm bin --global` (refleja `PNPM_HOME`);
 - `~/.local/bin`;
@@ -174,17 +150,9 @@ Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando 
 
 ## 3.4 Providers
 
-Los providers traducen señales externas al modelo de dominio.
+Los providers traducen señales externas al modelo de dominio. Están en `src/providers/`: `pnpm/` (`scanPnpmGlobal`), `project/` (`scanProject`, workspaces y lockfiles), `git/` (`readRepository`, `installedFromTags`), `npm-registry/` y `github/` (resolvers de `latest`), y `shared/` (el GET con caché). `src/application/inventory.ts` los combina en un `Inventory`.
 
-Ejemplos:
-
-```text
-PnpmProvider
-GitProvider
-GitHubProvider
-```
-
-Tipos posibles:
+Por lo que determinan, cumplen uno de estos papeles:
 
 ### Installation Provider
 Determina quién administra una instalación.
@@ -584,12 +552,13 @@ Responsabilidades:
 - timeout y tamaño máximo de respuesta (5 MB);
 - user-agent;
 - retries limitados;
-- rate-limit handling;
 - JSON validation;
 - requests condicionales para revalidar la caché;
 - concurrencia limitada;
 - enviar el token de GitHub solo a `api.github.com` (§14);
 - cancellation.
+
+El límite de requests de GitHub no lo maneja `HttpClient`: lo detecta el resolver de GitHub, que deja de consultar en esa ejecución y emite un `warning` (§14).
 
 Ejemplos de hosts permitidos inicialmente:
 
@@ -829,7 +798,7 @@ La caché es parte del MVP. Guarda solo respuestas de red y es descartable. El e
 ### Qué guarda
 
 - Solo metadata pública: la versión con el dist-tag `latest`, tags, releases y el campo `repository` de npm.
-- La clave es el host más el recurso consultado, por ejemplo `registry.npmjs.org/gstack/latest`.
+- La clave es la URL completa consultada, por ejemplo `https://registry.npmjs.org/gstack/latest`. El nombre del archivo es su hash sha256, y la entrada guarda la URL para descartar colisiones.
 - Cada entrada guarda la fecha de obtención y los validadores que haya devuelto el servidor (`ETag` o `Last-Modified`).
 - Se guardan las respuestas 200 y, además, el 404 de `/releases/latest` de GitHub, que dice que un repositorio no tiene releases. Así esa consulta no se repite dentro del TTL ni hace falta red para saberlo.
 - Nunca guarda tokens, rutas locales, nombres de proyectos ni resultados del inventario local.
@@ -870,25 +839,16 @@ Borrar ese directorio es siempre seguro.
 
 ## 15. Extensibilidad
 
-Un nuevo provider debe implementar un contrato estable.
+En el MVP no hay una interfaz común `Provider`: cada provider es un módulo de `src/providers/` con funciones que reciben los puertos que necesitan (`Filesystem`, `CommandRunner`, `NetContext`) y devuelven datos con su evidencia. `src/application/inventory.ts` decide cuándo se llama a cada uno y arma los `ToolRecord`.
 
-Ejemplo conceptual:
+Un provider nuevo necesita:
 
-```ts
-export interface Provider {
-  readonly id: string;
+- su módulo en `src/providers/`, que solo usa puertos (RA-001 a RA-006);
+- su lugar en `buildInventory`;
+- si ejecuta un comando, una entrada nueva en el allowlist, con un ADR (§7);
+- tests y su página en `docs/providers/` (design.md §17).
 
-  detect(
-    context: DetectionContext
-  ): Promise<DetectionResult[]>;
-
-  resolveLatestVersion?(
-    target: VersionTarget
-  ): Promise<VersionResult | null>;
-}
-```
-
-No todos los providers necesitan implementar todas las capacidades.
+Una interfaz común se define cuando haya suficientes providers para saber qué comparten.
 
 ---
 

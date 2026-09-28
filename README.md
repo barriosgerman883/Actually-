@@ -96,7 +96,7 @@ color = "auto"                      # "auto", "always" or "never"; NO_COLOR is r
 
 ## JSON and exit codes
 
-`--json` prints a versioned document (`schemaVersion: 1`) on stdout and nothing else. Notices and diagnostics go to stderr. `explain --json` includes the evidence.
+`--json` prints a versioned document (`schemaVersion: 1`) on stdout and nothing else, diagnostics included. The first-run notice goes to stderr. `explain --json` includes the evidence.
 
 | Code | Meaning                                                    |
 | ---- | ---------------------------------------------------------- |

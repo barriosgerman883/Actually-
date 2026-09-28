@@ -29,11 +29,11 @@ Installed versions come from pnpm. Latest versions come from the npm registry pr
 
 ## Commands executed
 
-`pnpm --version`, `pnpm root --global`, `pnpm bin --global`, `pnpm list --global --json --depth=0` and `pnpm config list --json`. All of them run in an empty directory owned by actually, never inside a project, with `npm_config_update_notifier=false` so pnpm does not contact the network by itself, and with corepack auto-pinning and download prompts disabled.
+`pnpm --version`, `pnpm root --global`, `pnpm bin --global`, `pnpm list --global --json --depth=0` and `pnpm config list --json`. All of them run in an empty directory owned by actually, never inside a project, with `npm_config_update_notifier=false` so pnpm does not contact the network by itself, and with corepack auto-pinning, download prompts and downloads disabled (`COREPACK_ENABLE_NETWORK=0`).
 
 ## Files inspected
 
-The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`.
+The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `package-lock.json`, the workspace markers (`pnpm-workspace.yaml` and the `workspaces` field of each `package.json` up to home), `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, and the presence of `yarn.lock`, `bun.lock` and `bun.lockb`.
 
 ## Network requests
 
