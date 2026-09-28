@@ -211,6 +211,31 @@ describe("global inventory with pnpm", () => {
     });
   });
 
+  it("warns that a project pinning another pnpm major hides its globals (F-57)", async () => {
+    const { runner, fs: base } = pnpmWorld();
+    const fs = {
+      ...base,
+      exists: async (p: string) => p === `${HOME}/repo/package.json` || (await base.exists(p)),
+      readText: async (p: string) =>
+        p === `${HOME}/repo/package.json`
+          ? JSON.stringify({ packageManager: "pnpm@9.15.0+sha512.abc" })
+          : base.readText(p),
+    };
+    const inv = await buildInventory({
+      fs,
+      runner,
+      env: fakeEnv(HOME),
+      net: netContext(undefined),
+      config: config(),
+      cwd: `${HOME}/repo`,
+    });
+    expect(inv.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        message: expect.stringContaining("pins pnpm 9.15.0, but pnpm 10.0.0 runs outside projects"),
+      }),
+    );
+  });
   it("works offline without sending anything", async () => {
     const { runner, fs } = pnpmWorld();
     const inv = await buildInventory(

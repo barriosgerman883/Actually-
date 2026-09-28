@@ -24,7 +24,7 @@ export interface ProjectDependency {
 export interface ProjectScan {
   root: string;
   manifestPath?: string;
-  packageManager?: { value: string; evidence: Evidence[] };
+  packageManager?: { value: string; evidence: Evidence[]; version?: string };
   dependencies: ProjectDependency[];
   /** Every registry file that could apply, from the outermost directory to the project. */
   registryFiles: RegistryFile[];
@@ -235,10 +235,11 @@ export async function scanProject(
   if (!manifest) return scan;
 
   if (typeof manifest.packageManager === "string") {
-    const pm = manifest.packageManager.split("@")[0];
+    const [pm, pinned] = manifest.packageManager.split("@");
     if (pm) {
       scan.packageManager = {
         value: pm,
+        version: semver.valid(pinned?.split("+")[0] ?? "") ?? undefined,
         evidence: [
           {
             kind: "fact",

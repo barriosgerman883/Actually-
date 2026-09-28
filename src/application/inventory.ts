@@ -1,4 +1,5 @@
 import { join, sep } from "node:path";
+import semver from "semver";
 import { claimFrom } from "../core/confidence.js";
 import type { Config } from "../core/config.js";
 import { UsageError } from "../core/errors.js";
@@ -116,8 +117,11 @@ export async function buildInventory(
     ]);
   }
 
+  // The pnpm that runs outside projects, whose global packages are listed.
+  let neutralPnpm: string | undefined;
   if (!options.projectOnly) {
     const pnpm = await scanPnpmGlobal(runner, fs);
+    neutralPnpm = pnpm.version;
     diagnostics.push(...pnpm.diagnostics);
 
     // Executables in the allowed directories (architecture.md §3.3).
@@ -191,6 +195,7 @@ export async function buildInventory(
         deps,
         diagnostics,
         workspaces,
+        neutralPnpm,
       );
       projects.push(summary);
       tools.push(...records);
@@ -433,10 +438,22 @@ async function projectRecords(
   deps: InventoryDeps,
   diagnostics: Diagnostic[],
   workspaces: WorkspaceCache,
+  neutralPnpm?: string,
 ): Promise<{ summary: ProjectSummary; records: ToolRecord[] }> {
   const { fs, config, net } = deps;
   const scan = await scanProject(fs, root, deps.env.homeDir, workspaces);
   diagnostics.push(...scan.diagnostics);
+  // Each pnpm major keeps global packages in its own place, and pnpm only
+  // ever runs outside projects (§7): what the project's pnpm installed
+  // globally is not listed. Say so instead of looking silently empty (F-57).
+  const pinned = scan.packageManager?.value === "pnpm" ? scan.packageManager.version : undefined;
+  if (pinned && neutralPnpm && semver.major(pinned) !== semver.major(neutralPnpm)) {
+    diagnostics.push({
+      severity: "warning",
+      source: "pnpm",
+      message: `${root} pins pnpm ${pinned}, but pnpm ${neutralPnpm} runs outside projects: global packages installed with pnpm ${pinned} are not listed`,
+    });
+  }
   let registry: RegistryConfig = scan.registryUnknown
     ? { state: "unknown", reason: scan.registryUnknown }
     : applyYarnEnvironment(userRegistry, deps.env.get("YARN_NPM_REGISTRY_SERVER"));

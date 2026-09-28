@@ -53,6 +53,7 @@ pnpm is never run inside a project, because a project's `.npmrc` or `packageMana
 ## Known limitations
 
 - How pnpm itself was installed is not determined.
+- Only the global packages of the pnpm that runs outside any project are seen: pnpm always runs from an empty directory (architecture.md §7), and each pnpm major keeps its global packages in its own place. What `pnpm add -g` installed inside a project whose `packageManager` pins another major is not listed. When that project is checked in the same run, a warning names both versions.
 - Windows is not supported: pnpm is a `.cmd` shim there, which cannot be run without a shell.
 - Yarn and Bun lockfiles are detected but not read.
 - `pnpm-lock.yaml` is read in the formats of lockfile v5 (pnpm 7, peers as `_suffix`), v6 (pnpm 8) and v9 (pnpm 9 and later, peers as `(suffix)`). An older or unknown format leaves `resolved` unknown instead of guessing.
