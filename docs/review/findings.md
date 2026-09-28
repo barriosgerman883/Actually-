@@ -91,6 +91,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | abierto |
 | F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
+| F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | abierto |
+| F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1102,6 +1104,53 @@ Propuesta: cuando un spec o una versión parsea como URL, mostrar solo el esquem
 `git config core.hooksPath`, que solo lee el valor, se deniega con "changing core.hooksPath disables the git hooks". La regla no distingue lectura de escritura. El error va del lado seguro, pero el mensaje afirma algo falso sobre el comando, y para saber qué hooks corren hay que buscar otro camino.
 
 Propuesta: denegar solo cuando hay un valor después de la clave, o con `--unset`, `--replace-all` o `--add`. Permitir `git config core.hooksPath`, `git config --get core.hooksPath` y `--get-regexp`. Tests en `tests/security/agent-guard.test.ts` con las dos formas. Solo la persona responsable cambia `.claude/hooks/`.
+
+### F-55 · Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico
+
+- **Estado:** abierto
+- **Severidad:** alta
+- **Tipo:** robustez
+- **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`failureResult`, que solo distingue `ENOENT`), `src/providers/pnpm/global.ts:110-114` (el fallo con motivo `not-found` no genera diagnóstico), `src/application/inventory.ts:95-103` (mismo patrón al leer `pnpm.config.list`)
+- **Detectado:** 2026-09-28, la persona responsable, verificando en una VM Windows 11 real una limitación que ya documentan `prd.md §9` (RNF-004) y `docs/providers/pnpm.md`
+- **Verificación:** reproducido
+
+**Que pnpm no se pueda ejecutar en Windows no es nuevo: ya está documentado**, en dos lugares. `docs/prd.md §9`, RNF-004: "En Windows, pnpm es un shim `.cmd` que no se puede ejecutar sin shell, así que su soporte queda para después del MVP." Y `docs/providers/pnpm.md`, "Known limitations": "Windows is not supported: pnpm is a `.cmd` shim there, which cannot be run without a shell." La causa es real: desde que Node.js corrigió `CVE-2024-27980` (y su bypass, `CVE-2024-36138`), `execFile`/`spawn` de un `.cmd` sin `shell: true` no funciona, y `CommandRunner` llama a `execFile("pnpm", args, { shell: false })` sin excepción (architecture.md §7 prohíbe el shell).
+
+Lo que no estaba documentado, y es el motivo real de este hallazgo: **qué pasa si se usa igual**. No hay ningún error, ni una advertencia, ni un exit code distinto. `status --global` da `0 updates available`, como si hubiera revisado todo y no hubiera encontrado nada. La causa es genérica, no específica de Windows: `failureResult` solo reconoce `ENOENT` como `reason: "not-found"`, y `scanPnpmGlobal` solo agrega un diagnóstico "si `version.reason !== "not-found"`" (`global.ts:112`). El mismo patrón se repite en `inventory.ts` al leer la config de pnpm para decidir el registry. Cualquier fallo de `execFile` que Node clasifique como `ENOENT` —no solo el de Windows, también un PATH roto en Linux o macOS— desaparece de la misma forma.
+
+Reproducción, en una VM Windows 11 real con pnpm 10.33.0 (vía Git Bash/MINGW64):
+
+1. `pnpm add -g is-number` instala correctamente en `C:\Users\User\AppData\Local\pnpm\global\5\` — confirma que pnpm funciona de verdad, invocado desde una shell real.
+2. `node dist/cli/index.js status --global --json` da `{"schemaVersion":1,"tools":[],"projects":[],"diagnostics":[]}`. Ni el paquete instalado aparece, ni hay ningún diagnóstico que explique por qué.
+
+El layout de ese pnpm 10.33.0 real (`global/5/node_modules`) es el mismo que ya cubren los tests existentes (`pnpmWorld()` en `tests/integration/inventory.test.ts`), así que la lógica de detección en sí no está en duda: el bloqueo es enteramente en cómo se invoca el proceso.
+
+Propuesta, acotada al fallo silencioso, sin implementar: que `scanPnpmGlobal` y la lectura del registry en `inventory.ts` agreguen un diagnóstico también cuando el motivo es `not-found`, en vez de omitirlo. El usuario pierde el mensaje "pnpm no está instalado" (que hoy tampoco se muestra en ningún lado como diagnóstico, solo se infiere de la ausencia de datos), pero gana saber que algo no se pudo revisar. Test en `tests/unit` sobre `scanPnpmGlobal` con un doble de `CommandRunner` que devuelva `reason: "not-found"`.
+
+Hacer que pnpm funcione de verdad en Windows es un trabajo aparte, más grande, que no resuelve este hallazgo por sí solo: se investigó (ver la nota en `RNF-004` de que el bloqueo es real) y hay un camino concreto sin usar shell —leer el shim `.cmd` como texto en vez de ejecutarlo, porque sigue uno de dos patrones conocidos generados por `cmd-shim`: apunta directo a un `.exe` real, o a `node` más la ruta de un `.js`. Verificado leyendo shims reales en esa misma VM: la instalación standalone de pnpm despacha a un `@pnpm/exe/pnpm.exe` nativo; la que gestiona Corepack despacha a `node ... corepack/dist/pnpm.js`. No verificado: qué forma tienen los shims de nvm-windows, Volta, Scoop o Winget. Esto queda fuera de este hallazgo porque es soporte de plataforma nueva, no un error a corregir; si se retoma, actualizar RNF-004 y `docs/providers/pnpm.md` en el mismo cambio.
+
+### F-56 · En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** corrección
+- **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts:42` (`isExecutableFile`), consumido por `src/scanners/bin-scanner.ts` (`listExecutables`)
+- **Detectado:** 2026-09-28, hipótesis de Claude Code; confirmado por la persona responsable en una VM Windows 11 real
+- **Verificación:** reproducido
+
+`isExecutableFile` hace `if (process.platform === "win32") return true;` antes de llegar al chequeo de `X_OK` (que en Windows no distingue nada). No es un descuido silencioso: el código sabe que está en Windows y decide, a propósito, que todo archivo cuenta. El resultado es que `listExecutables` deja de filtrar nada dentro de los directorios que sí revisa.
+
+Reproducción, en la misma VM Windows 11: un archivo de texto plano en `~/.local/bin` (no un binario, ni un `.exe`, ni un `.cmd`) aparece en `status --global --json` como una herramienta desconocida completa, con su propio id:
+
+```json
+{ "id": "global:unknown:prueba-falsa", "name": "prueba-falsa", "status": "unknown", ... }
+```
+
+`architecture.md §3.3` explica por qué `PathScanner` no recorre todo PATH: "listaría miles de binarios del sistema como herramientas desconocidas". Esta falla reintroduce ese mismo ruido, pero dentro de los pocos directorios que sí se revisan: cualquier `README`, `.gitkeep` o archivo de configuración que conviva ahí con binarios reales pasa a listarse igual que ellos.
+
+El efecto se agranda una vez que se corrija F-55: hoy, sin pnpm funcionando, `pnpm.binDir` nunca se completa en Windows, así que solo se escanean `~/.local/bin` y `[scan] bin_paths`, que en una instalación típica de Windows no suelen existir. Corregido F-55, se sumaría también el directorio global de bins de pnpm a este mismo problema.
+
+Propuesta: en Windows, en vez de `return true`, resolver el nombre contra `PATHEXT` (o una lista por defecto `.EXE;.CMD;.BAT;.COM;.PS1` si la variable no está seteada), comparando la extensión sin distinguir mayúsculas. Un archivo sin extensión reconocida no cuenta como ejecutable. Test en `tests/unit` con un doble de `Filesystem` que simule `platform: "win32"` y un directorio con un `.exe`, un `.cmd` y un `.txt` mezclados.
 
 ### Verificaciones
 
