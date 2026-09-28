@@ -6,7 +6,7 @@ Resolve the latest version of repositories used as tools.
 
 ## Detection strategy
 
-1. The latest release (`/releases/latest`), which never includes drafts or prereleases.
+1. The latest release (`/releases/latest`), which never includes drafts or releases marked as prereleases. A release whose tag is a prerelease anyway (`v3.0.0-beta.1`) gets `low` confidence.
 2. Otherwise the highest non-prerelease semver tag.
 3. Otherwise unknown. `HEAD` of the default branch is never treated as a version.
 

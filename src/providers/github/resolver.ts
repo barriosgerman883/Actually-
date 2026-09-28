@@ -82,6 +82,9 @@ export async function resolveGithubLatest(
     const tag = (release.body as { tag_name?: unknown } | undefined)?.tag_name;
     const v = typeof tag === "string" ? version(tag) : undefined;
     if (typeof tag === "string" && v) {
+      // A release its publisher did not mark as a prerelease can still carry
+      // a prerelease tag, which contradicts "stable" (architecture.md §5, F-36).
+      const prerelease = semver.prerelease(v) !== null;
       return claimFrom(
         v,
         [
@@ -90,9 +93,18 @@ export async function resolveGithubLatest(
             source: `GET ${base}/releases/latest`,
             description: `latest release is tagged ${tag}`,
           },
+          ...(prerelease
+            ? [
+                {
+                  kind: "inference" as const,
+                  source: "semver",
+                  description: `${v} is a prerelease, so it may not be a stable release`,
+                },
+              ]
+            : []),
           ...cacheEvidence(release),
         ],
-        { cap: release.kind === "stale" ? "medium" : undefined },
+        { contradicted: prerelease, cap: release.kind === "stale" ? "medium" : undefined },
       );
     }
     releaseNote =

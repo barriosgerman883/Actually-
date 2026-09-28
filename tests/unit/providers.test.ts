@@ -345,6 +345,15 @@ describe("GitHub", () => {
     });
     expect(claim).toMatchObject({ state: "known", value: "2.0.0", confidence: "high" });
   });
+  it("lowers a release tagged as a prerelease to low (F-36)", async () => {
+    const http = fakeHttp({ [`${base}/releases/latest`]: json({ tag_name: "v3.0.0-beta.1" }) });
+    const claim = await resolveGithubLatest({ owner: "o", repo: "r" }, netContext(http), {
+      rateLimited: false,
+      diagnostics: [],
+    });
+    expect(claim).toMatchObject({ state: "known", value: "3.0.0-beta.1", confidence: "low" });
+    expect(claim.state === "known" && claim.evidence.map((e) => e.kind)).toContain("inference");
+  });
   it("falls back to the highest stable semver tag, capped at medium", async () => {
     const http = fakeHttp({
       [`${base}/tags?per_page=100`]: json([

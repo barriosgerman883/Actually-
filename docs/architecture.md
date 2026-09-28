@@ -453,7 +453,7 @@ Si no hay evidencia suficiente ni para `low`, el claim queda `unknown` con un `r
 
 Ajustes a esas reglas:
 
-- una prerelease bajo el dist-tag `latest` contradice "estable": `low`;
+- una prerelease bajo el dist-tag `latest`, o una release de GitHub cuyo tag es una prerelease, contradice "estable": `low`;
 - una respuesta vencida de la caché, usada porque no hay red: como máximo `medium`;
 - un tag de GitHub usado porque no hay releases: como máximo `medium`, porque un tag no es una release declarada;
 - el provider de actualización nunca tiene más confianza que la instalación de la que se deriva;
