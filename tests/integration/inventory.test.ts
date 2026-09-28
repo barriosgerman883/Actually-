@@ -541,6 +541,59 @@ describe("ids (design.md §14)", () => {
   });
 });
 
+describe("executables around pnpm (mutation-tested edges)", () => {
+  const inventory = (runner: ReturnType<typeof fakeRunner>, fs: ReturnType<typeof memoryFs>) =>
+    buildInventory(
+      { fs, runner, env: fakeEnv(HOME), net: netContext(undefined), config: config(), cwd: "/tmp" },
+      { globalOnly: true },
+    );
+
+  it("lists a pnpm executable as an unknown tool when pnpm itself does not run", async () => {
+    const fs = memoryFs({}, { executables: [`${HOME}/.local/bin/pnpm`] });
+    const inv = await inventory(fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) }), fs);
+    expect(inv.tools.map((t) => t.id)).toEqual(["global:unknown:pnpm"]);
+  });
+  it("never lists a global package's shim as a second, unknown tool", async () => {
+    const { runner, fs } = pnpmWorld();
+    const inv = await inventory(runner, fs);
+    expect(inv.tools.filter((t) => t.name === "gstack").map((t) => t.id)).toEqual([
+      "global:pnpm:gstack",
+    ]);
+  });
+  it("lists an executable in pnpm's bin directory that no package provides", async () => {
+    const { runner } = pnpmWorld();
+    const fs = memoryFs(
+      { [`${PNPM_HOME}/global/5/package.json`]: JSON.stringify({ dependencies: {} }) },
+      { executables: [`${PNPM_HOME}/orphan`, `${HOME}/.local/bin/gstack`] },
+    );
+    const inv = await inventory(runner, fs);
+    expect(inv.tools.map((t) => t.id)).toContain("global:unknown:orphan");
+    // gstack is outside pnpm's bin directory, so pnpm does not provide it.
+    const gstack = inv.tools.find((t) => t.id === "global:pnpm:gstack");
+    expect(JSON.stringify(gstack?.installation)).not.toContain("global bin directory provides");
+  });
+  it("takes the source from the package's own manifest when the registry has none", async () => {
+    const { runner, fs } = pnpmWorld();
+    const inv = await buildInventory(
+      {
+        fs,
+        runner,
+        env: fakeEnv(HOME),
+        net: netContext(
+          fakeHttp({ "https://registry.npmjs.org/gstack/latest": json({ version: "2.0.0" }) }),
+        ),
+        config: config(),
+        cwd: "/tmp",
+      },
+      { globalOnly: true },
+    );
+    expect(inv.tools.find((t) => t.name === "gstack")?.source).toMatchObject({
+      state: "known",
+      value: { identifier: "example/gstack" },
+    });
+  });
+});
+
 describe("current project root (mvp.md §6)", () => {
   it("stops at the nearest .git before a package.json further up (F-40)", async () => {
     const fs = memoryFs({
