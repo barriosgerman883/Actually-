@@ -406,7 +406,7 @@ ttl = "6h"
 color = "auto"
 ```
 
-Los defaults deben ser conservadores.
+Los defaults deben ser conservadores. Solo un archivo que no existe usa los defaults: uno que existe pero no se puede leer, comprobar o interpretar es fatal (exit code 3), porque podría decir `enabled = false`.
 
 ---
 

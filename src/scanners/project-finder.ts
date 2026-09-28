@@ -26,7 +26,9 @@ export async function findProjects(
     if (seen.has(real)) return;
     seen.add(real);
 
-    if ((await fs.exists(join(dir, "package.json"))) || (await fs.exists(join(dir, ".git")))) {
+    // A marker that cannot be checked is not taken as one.
+    const has = (entry: string) => fs.exists(join(dir, entry)).catch(() => false);
+    if ((await has("package.json")) || (await has(".git"))) {
       found.push(dir);
       return;
     }

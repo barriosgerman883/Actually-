@@ -25,7 +25,13 @@ async function resolveGitDir(
 ): Promise<string | undefined> {
   const dotGit = join(root, ".git");
   if (await fs.isDirectory(dotGit)) return dotGit;
-  if (!(await fs.exists(dotGit))) return undefined;
+  let present: boolean;
+  try {
+    present = await fs.exists(dotGit);
+  } catch {
+    present = true; // It is there but cannot be checked: reading it reports why.
+  }
+  if (!present) return undefined;
   // Worktrees and submodules: ".git" is a file with "gitdir: <path>". One
   // that cannot be read skips this repository, not the run (RA-009, F-38).
   const text = await readOptional(fs, dotGit);

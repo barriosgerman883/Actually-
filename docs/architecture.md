@@ -666,12 +666,16 @@ Ejemplo:
 
 ```ts
 interface Filesystem {
-  exists(path: string): Promise<boolean>;
-  readText(path: string): Promise<string>;
+  exists(path: string): Promise<boolean>;      // false solo si no existe; otro error se propaga
+  readText(path: string): Promise<string>;     // solo archivos regulares, hasta 64 MiB
   readDir(path: string): Promise<DirEntry[]>;
   realpath(path: string): Promise<string>;
+  isDirectory(path: string): Promise<boolean>;
+  isExecutableFile(path: string): Promise<boolean>;
 }
 ```
+
+`exists` no confunde "no existe" con "no se pudo comprobar": un error de permisos se propaga y cada llamador decide. La configuración que no se puede comprobar es fatal, y un `.npmrc`, `.yarnrc` o marcador de workspace que no se puede comprobar deja el registry indeterminado. `readText` rechaza un FIFO o un dispositivo, que dejarían la ejecución colgada, y un archivo de más de 64 MiB.
 
 Esto permite:
 

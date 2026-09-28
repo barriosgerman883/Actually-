@@ -11,7 +11,12 @@ export interface DirEntry {
 
 /** Read-only view of the filesystem. */
 export interface Filesystem {
+  /**
+   * False only when the path does not exist. Any other error, such as a
+   * permission error, is thrown so the caller decides what it means (F-46).
+   */
   exists(path: string): Promise<boolean>;
+  /** Text of a regular file of bounded size; anything else is thrown. */
   readText(path: string): Promise<string>;
   readDir(path: string): Promise<DirEntry[]>;
   realpath(path: string): Promise<string>;

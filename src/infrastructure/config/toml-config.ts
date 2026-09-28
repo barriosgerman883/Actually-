@@ -22,7 +22,15 @@ export async function loadConfig(
   env: Environment,
 ): Promise<LoadedConfig> {
   const config = defaultConfig();
-  if (!(await fs.exists(file))) return { config, warnings: [] };
+  // Only a missing file means defaults. One that cannot be checked may say
+  // `enabled = false`, so guessing would be less conservative (F-46).
+  let present: boolean;
+  try {
+    present = await fs.exists(file);
+  } catch (error) {
+    throw new FatalError(`cannot read config file ${file}: ${(error as Error).message}`);
+  }
+  if (!present) return { config, warnings: [] };
 
   let raw: Record<string, unknown>;
   try {

@@ -57,7 +57,10 @@ export async function findUpDir(
 ): Promise<string | undefined> {
   let dir = start;
   for (;;) {
-    for (const entry of entries) if (await fs.exists(join(dir, entry))) return dir;
+    for (const entry of entries) {
+      // An entry that cannot be checked is not taken as the marker.
+      if (await fs.exists(join(dir, entry)).catch(() => false)) return dir;
+    }
     if (dir === stopAt) return undefined;
     const parent = dirname(dir);
     if (parent === dir) return undefined;
@@ -209,7 +212,13 @@ export async function scanProject(
 ): Promise<ProjectScan> {
   const scan: ProjectScan = { root, dependencies: [], registryFiles: [], diagnostics: [] };
   const manifestPath = join(root, "package.json");
-  if (!(await fs.exists(manifestPath))) return scan;
+  let hasManifest: boolean;
+  try {
+    hasManifest = await fs.exists(manifestPath);
+  } catch {
+    hasManifest = true; // Reading it below reports that it cannot be read.
+  }
+  if (!hasManifest) return scan;
   scan.manifestPath = manifestPath;
 
   let manifest: Record<string, unknown> | undefined;
@@ -286,10 +295,10 @@ export async function scanProject(
     };
   };
   const ownPnpmLock = join(root, "pnpm-lock.yaml");
-  const npmLock = (await fs.exists(join(root, "package-lock.json")))
-    ? join(root, "package-lock.json")
-    : undefined;
   try {
+    const npmLock = (await fs.exists(join(root, "package-lock.json")))
+      ? join(root, "package-lock.json")
+      : undefined;
     let pnpmLock: string | undefined;
     let pnpmEntries: LockEntries | undefined;
     if (await fs.exists(ownPnpmLock)) {
@@ -427,8 +436,10 @@ export async function scanProject(
     for (const [name, format] of registryFiles) {
       if (format === "npmrc" && dir === stopAt && dir !== root) continue;
       const path = join(dir, name);
-      if (!(await fs.exists(path))) continue;
       try {
+        // One that exists but cannot be checked or read leaves the registry
+        // unknown; it is never skipped (F-04, F-46).
+        if (!(await fs.exists(path))) continue;
         scan.registryFiles.push({ path, text: await fs.readText(path), format });
       } catch {
         scan.registryUnknown ??= `${path} could not be read`;

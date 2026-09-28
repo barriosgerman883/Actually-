@@ -30,7 +30,17 @@ async function markerAt(fs: Filesystem, dir: string): Promise<Marker> {
   let found = false;
   const patterns: string[] = [];
   const yamlPath = join(dir, "pnpm-workspace.yaml");
-  if (await fs.exists(yamlPath)) {
+  const manifestPath = join(dir, "package.json");
+  let hasYaml: boolean;
+  let hasManifest: boolean;
+  try {
+    hasYaml = await fs.exists(yamlPath);
+    hasManifest = await fs.exists(manifestPath);
+  } catch {
+    // A marker that cannot be checked could declare siblings (F-46).
+    return { error: `${dir} could not be read` };
+  }
+  if (hasYaml) {
     found = true;
     let doc: unknown;
     try {
@@ -44,8 +54,7 @@ async function markerAt(fs: Filesystem, dir: string): Promise<Marker> {
     if (!list) return { error: `${yamlPath} could not be interpreted` };
     patterns.push(...list);
   }
-  const manifestPath = join(dir, "package.json");
-  if (await fs.exists(manifestPath)) {
+  if (hasManifest) {
     let manifest: unknown;
     try {
       manifest = JSON.parse(await fs.readText(manifestPath));

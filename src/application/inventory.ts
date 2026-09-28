@@ -154,7 +154,7 @@ export async function buildInventory(
       )
         continue;
       const repo = repoCandidates.find((c) => isInside(exe.realPath, c.real))?.root;
-      if (repo && (await fs.exists(join(repo, ".git")))) {
+      if (repo && (await fs.exists(join(repo, ".git")).catch(() => false))) {
         const list = repoToolEvidence.get(repo) ?? [];
         list.push({
           kind: "inference",
