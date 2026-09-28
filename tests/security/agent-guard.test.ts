@@ -50,6 +50,25 @@ describe("bash guard", () => {
     "pnpm format:check",
     "pnpm lint",
     "prettier --write src/a.ts",
+    // F-26: compound commands and substitutions that only read.
+    "(cd /tmp && ls)",
+    "if [ -f x ]; then cat x; fi",
+    "for f in a b; do echo $f; done",
+    "while read -r l; do echo $l; done < x",
+    'echo "$(date)"',
+    "echo $( (date) )",
+    "busybox ls",
+    "curl -o x.json https://example.com/x.json && cat x.json",
+    // F-20: runners, redirections and heredocs that are harmless.
+    "npx prettier --check src",
+    "pnpm exec vitest run tests/unit",
+    "echo x > out.txt",
+    'echo x > "notes/out.txt"',
+    "node x.js > out.txt 2>&1",
+    "cat <<'EOF' > notes.md\nsome notes\nEOF",
+    "git apply --check x.patch",
+    "tar -tf x.tgz",
+    "OUT=out.txt; echo x > out.txt",
   ])("allows %j", (command) => {
     expect(decide(command)).toBe("allow");
   });
@@ -142,6 +161,44 @@ describe("bash guard", () => {
     ["./node_modules/.bin/prettier -w .claude/settings.json", "formatter writes guardrails"],
     ["eslint --fix .claude/hooks", "formatter writes guardrails"],
     ["prettier --write .claude", "formatter writes guardrails"],
+    // F-26: grouping, reserved words, nesting and downloads.
+    ["(rm -rf ~)", "subshell"],
+    ["{ rm -rf ~; }", "group"],
+    ["if true; then rm -rf ~; fi", "if"],
+    ["for x in 1; do rm -rf ~; done", "for"],
+    ["true || { git push --force; }", "group after ||"],
+    ["echo $( (rm -rf ~) )", "nested substitution"],
+    ["echo $(echo $(rm -rf ~))", "nested substitution"],
+    ["echo $(echo $(echo $(echo $(echo $(rm -rf ~)))))", "substitutions past the limit"],
+    [nestedShells(3, "rm -rf ~"), "nesting within the limit"],
+    ["busybox rm -rf ~", "busybox"],
+    ["toybox rm -rf /", "toybox"],
+    // F-20, F-21: runners, variables, globs, links and copies that write the guardrails.
+    ["npx prettier --write .claude", "runner writes guardrails"],
+    ["pnpm exec prettier --write .claude/hooks/guard-bash.mjs", "runner writes guardrails"],
+    ["ln -s .claude cl", "link to guardrails"],
+    ["ln -sf /tmp/x .claude/hooks/guard-bash.mjs", "link inside guardrails"],
+    ["cp -r x/. .claude/", "copy into guardrails"],
+    ["mv dir .claude/", "move into guardrails"],
+    ["rsync -a x/ .claude/", "sync into guardrails"],
+    ["cd .claude && echo {} > settings.json", "cd into guardrails"],
+    ["cd .claude/hooks; cat > guard-bash.mjs <<'EOF'\nx\nEOF", "cd into guardrails"],
+    ["tar -xf x.tar -C .claude", "extract into guardrails"],
+    ["npx -y some-tool .claude/settings.json", "runner on guardrails"],
+    ["F=.claude/settings.json; echo {} > $F", "variable names guardrails"],
+    ["echo {} > .claude/set*.json", "glob names guardrails"],
+    ["cat x > .clau?e/hooks/guard-bash.mjs", "glob names guardrails"],
+    ["cp x .claude/hooks/*.mjs", "glob names guardrails"],
+    ["git checkout HEAD~3 -- .claude", "git rewrites guardrails"],
+    ["git restore --source=HEAD~1 .claude", "git rewrites guardrails"],
+    [
+      "node <<'EOF'\nrequire('fs').writeFileSync('.claude/settings.json','{}')\nEOF",
+      "heredoc code touches guardrails",
+    ],
+    [
+      "python3 - <<'EOF'\nopen('.claude/settings.json','w')\nEOF",
+      "heredoc code touches guardrails",
+    ],
   ])("denies %j (%s)", (command) => {
     expect(decide(command)).toBe("deny");
   });
@@ -175,10 +232,28 @@ describe("bash guard", () => {
     `node -e "console.log(1)"`,
     `python3 -c "print(1)"`,
     `node -e "require('fs').writeFileSync('.cla'+'ude/settings.json','{}')"`,
+    // F-20: paths built at run time, code from heredocs, patches and pipes.
+    "echo x > $OUT",
+    'echo {} > "$S/x.json"',
+    "printf '{}' > $(printf x)",
+    "echo x > out-*.txt",
+    "node <<'EOF'\nconsole.log(1)\nEOF",
+    "python3 - <<'EOF'\nprint(1)\nEOF",
+    "git apply x.patch",
+    "patch -p1 < x.patch",
+    "tar -xf x.tgz",
+    "tar xzf x.tgz",
   ])("asks before %j", (command) => {
     expect(decide(command)).toBe("ask");
   });
 });
+
+/** `bash -c "bash -c \"...\""`, `levels` deep, around `inner`. */
+function nestedShells(levels: number, inner: string): string {
+  let command = inner;
+  for (let i = 0; i < levels; i++) command = `bash -c ${JSON.stringify(command)}`;
+  return command;
+}
 
 describe("edit guard", () => {
   const project = resolve(".");
@@ -195,24 +270,38 @@ describe("edit guard", () => {
     [".claude/settings.json"],
     [".claude/settings.local.json"],
     [".claude/hooks/guard-bash.mjs"],
+    // F-21: everything under .claude/ changes how agents behave.
+    [".claude/agents/reviewer.md"],
+    [".claude/commands/deploy.md"],
+    [".claude/skills/x/SKILL.md"],
+    // F-22: the rules themselves.
+    ["CLAUDE.md"],
+    ["AGENTS.md"],
     ["pnpm-lock.yaml"],
     [".git/config"],
     ["docs/review/2026-09-cross-review.md"],
   ])("denies editing %s", (path) => {
     expect(
       edit.evaluate(
-        input("Edit", { file_path: resolve(path), old_string: "a", new_string: "b" }),
+        input("Edit", {
+          file_path: resolve(path),
+          old_string: "a",
+          new_string: "b",
+        }),
         project,
       )?.decision,
     ).toBe("deny");
   });
 
-  it("asks before editing a CI workflow", () => {
+  it.each([
+    [".github/workflows/ci.yml"],
+    // F-22: what the checks cover.
+    ["vitest.config.ts"],
+    ["eslint.config.js"],
+    [".prettierignore"],
+  ])("asks before editing %s", (path) => {
     expect(
-      edit.evaluate(
-        input("Write", { file_path: ".github/workflows/ci.yml", content: "x" }),
-        project,
-      )?.decision,
+      edit.evaluate(input("Write", { file_path: path, content: "x" }), project)?.decision,
     ).toBe("ask");
   });
 
@@ -223,7 +312,11 @@ describe("edit guard", () => {
     [`${lintOff}\nconst x = 1;`],
   ])("denies adding %j to code", (added) => {
     const decision = edit.evaluate(
-      input("Edit", { file_path: "tests/unit/core.test.ts", old_string: "a", new_string: added }),
+      input("Edit", {
+        file_path: "tests/unit/core.test.ts",
+        old_string: "a",
+        new_string: added,
+      }),
       project,
     );
     expect(decision?.decision).toBe("deny");
@@ -239,14 +332,21 @@ describe("edit guard", () => {
       file_path: "src/a.ts",
       edits: [{ old_string: `${skipped}"x"`, new_string: 'it("x"' }],
     });
-    const doc = input("Write", { file_path: "docs/mvp.md", content: `No ${skipped} allowed.` });
+    const doc = input("Write", {
+      file_path: "docs/mvp.md",
+      content: `No ${skipped} allowed.`,
+    });
     for (const i of [keep, remove, doc]) expect(edit.evaluate(i, project)).toBeUndefined();
   });
 
   it("allows ordinary edits", () => {
     expect(
       edit.evaluate(
-        input("Edit", { file_path: "src/core/versions.ts", old_string: "a", new_string: "b" }),
+        input("Edit", {
+          file_path: "src/core/versions.ts",
+          old_string: "a",
+          new_string: "b",
+        }),
         project,
       ),
     ).toBeUndefined();
@@ -272,7 +372,10 @@ describe("hook wiring", () => {
     expect(out.permissionDecision).toBe("deny");
     expect(out.permissionDecisionReason).toContain("docs/mvp.md §9");
 
-    const allowed = run("guard-bash.mjs", { tool_name: "Bash", tool_input: { command: "ls" } });
+    const allowed = run("guard-bash.mjs", {
+      tool_name: "Bash",
+      tool_input: { command: "ls" },
+    });
     expect(allowed.status).toBe(0);
     expect(allowed.stdout).toBe("");
 

@@ -10,17 +10,37 @@ import { pathToFileURL } from "node:url";
 
 const PREFIX = "actually guardrail (docs/mvp.md §9)";
 
-/** Splits a command line into simple commands, each a list of words. */
+// Words that open or close a compound command; a command after them is
+// still that command (F-26).
+const RESERVED = new Set(["if", "then", "else", "elif", "while", "until", "do", "!", "fi", "done"]);
+const GROUPING = new Set(["{", "}"]);
+
+/**
+ * Splits a command line into simple commands, each a list of words.
+ * Unquoted parentheses, braces on their own and the reserved words of
+ * compound commands never count as part of a command (F-26).
+ */
 export function parse(text) {
   const commands = [];
   let words = [];
   let word = "";
   let inWord = false;
+  let quoted = false;
   let pipedFrom = null;
   const endWord = () => {
-    if (inWord) words.push(word);
+    if (inWord) {
+      if (!quoted && GROUPING.has(word)) {
+        // `{` and `}` on their own separate commands like `;` does.
+        if (words.length > 0) commands.push({ words, pipedFrom });
+        pipedFrom = null;
+        words = [];
+      } else if (!(words.length === 0 && !quoted && RESERVED.has(word))) {
+        words.push(word);
+      }
+    }
     word = "";
     inWord = false;
+    quoted = false;
   };
   const endCommand = (op) => {
     endWord();
@@ -33,11 +53,13 @@ export function parse(text) {
     if (c === "\\" && i + 1 < text.length) {
       word += text[++i];
       inWord = true;
+      quoted = true;
     } else if (c === "'") {
       const end = text.indexOf("'", i + 1);
       word += text.slice(i + 1, end < 0 ? text.length : end);
       i = end < 0 ? text.length : end;
       inWord = true;
+      quoted = true;
     } else if (c === '"') {
       let j = i + 1;
       while (j < text.length && text[j] !== '"') {
@@ -47,8 +69,12 @@ export function parse(text) {
       }
       i = j;
       inWord = true;
+      quoted = true;
     } else if (c === "#" && !inWord) {
       while (i + 1 < text.length && text[i + 1] !== "\n") i++;
+    } else if (c === "(" || c === ")") {
+      // Subshells and $( ): the command inside is a command of its own.
+      endCommand(";");
     } else if (c === "\n" || c === ";") {
       endCommand(";");
     } else if (c === "&" && text[i + 1] === "&") {
@@ -72,37 +98,79 @@ export function parse(text) {
   return commands;
 }
 
-/** Removes heredoc bodies unless they are fed to a shell. */
-export function stripHeredocs(text) {
+const INTERPRETER_LINE = /(^|[\s;&|(])(node|python3?|perl|ruby|deno|bun|php)(\s|$)/;
+
+/**
+ * Heredocs: the body of one fed to a shell stays in the text, so its
+ * commands are checked; one fed to an interpreter is reported as code
+ * (F-20); any other body is data and is removed.
+ */
+function heredocs(text) {
   const lines = text.split("\n");
   const out = [];
+  const code = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     out.push(line);
     const match = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
     if (!match) continue;
-    const toShell = /(^|[\s;&|(])(ba|z|da|k)?sh(\s|$)/.test(line.slice(0, match.index));
+    const head = line.slice(0, match.index);
+    const toShell = /(^|[\s;&|(])(ba|z|da|k)?sh(\s|$)/.test(head);
+    const interpreter = INTERPRETER_LINE.exec(head)?.[2];
     const terminator = match[2];
+    const body = [];
     let j = i + 1;
     while (j < lines.length && lines[j].trim() !== terminator) {
       if (toShell) out.push(lines[j]);
+      body.push(lines[j]);
       j++;
     }
+    if (interpreter && !toShell) code.push({ interpreter, body: body.join("\n") });
     i = j;
   }
-  return out.join("\n");
+  return { clean: out.join("\n"), code };
 }
 
-/** Command texts nested in $(...) and backticks. */
+/** Removes heredoc bodies unless they are fed to a shell. */
+export function stripHeredocs(text) {
+  return heredocs(text).clean;
+}
+
+/** Command texts nested in $(...) and backticks, with nested parentheses balanced (F-26). */
 function substitutions(text) {
   const found = [];
-  for (const m of text.matchAll(/\$\(([^()]*)\)/g)) found.push(m[1]);
+  for (let i = text.indexOf("$("); i >= 0; i = text.indexOf("$(", i + 2)) {
+    let depth = 0;
+    let end = -1;
+    for (let j = i + 1; j < text.length; j++) {
+      if (text[j] === "(") depth++;
+      else if (text[j] === ")" && --depth === 0) {
+        end = j;
+        break;
+      }
+    }
+    found.push(text.slice(i + 2, end < 0 ? text.length : end));
+  }
   for (const m of text.matchAll(/`([^`]*)`/g)) found.push(m[1]);
   return found;
 }
 
+const MAX_DEPTH = 4;
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
-const WRAPPERS = new Set(["command", "builtin", "exec", "nohup", "time", "nice", "stdbuf"]);
+const WRAPPERS = new Set([
+  "command",
+  "builtin",
+  "exec",
+  "nohup",
+  "time",
+  "nice",
+  "stdbuf",
+  "busybox",
+  "toybox",
+]);
+// Runners of a package's binary: the binary is the command to check (F-20).
+const BIN_RUNNERS = new Set(["npx", "pnpx", "bunx"]);
+const CLAUDE_DIR = /(^|\/)\.claude(\/|$)/;
 const PROTECTED_ROOTS = new Set([".git", "src", "docs", "tests", ".claude", ".github"]);
 const SECRET_PATH =
   /(^|\/)(\.npmrc|\.netrc|\.git-credentials|\.pypirc)$|(^|\/)\.ssh(\/|$)|\.config\/gh\/hosts\.yml$|\.aws\/credentials$|\.docker\/config\.json$|^\/proc\/[^/]+\/environ$/;
@@ -135,6 +203,35 @@ const GIT_SAFE_ON_GUARDS = new Set([
   "commit",
 ]);
 const HOOK_SCRIPT = /(^|\/)\.claude\/hooks\/[\w.-]+\.mjs$/;
+const GUARD_SAMPLES = [
+  ".claude/settings.json",
+  ".claude/settings.local.json",
+  ".claude/hooks/",
+  ".claude/hooks/guard-bash.mjs",
+  ".claude/hooks/guard-edit.mjs",
+];
+
+/**
+ * Whether an argument names a guardrail file, literally or through a glob
+ * that would expand to one, such as `.claude/set*.json` (F-20).
+ */
+function namesGuards(arg) {
+  if (GUARD_FILES.test(arg)) return true;
+  if (!/[*?[]/.test(arg)) return false;
+  const pattern = arg
+    .replace(/[.+^${}()|\\]/g, "\\$&")
+    .replace(/\*\*/g, ".*")
+    .replace(/\*/g, "[^/]*")
+    .replace(/\?/g, "[^/]")
+    .replace(/\[!/g, "[^");
+  let re;
+  try {
+    re = new RegExp(`(^|/)${pattern}$`);
+  } catch {
+    return false;
+  }
+  return GUARD_SAMPLES.some((sample) => re.test(sample));
+}
 
 /**
  * Whether a command that names a guardrail file only reads it. Running a
@@ -147,6 +244,7 @@ function onlyReadsGuards(cmd, args) {
   if (cmd === "prettier" || cmd === "eslint") return !formatterWrites(cmd, args);
   return false;
 }
+
 
 /** prettier --write and eslint --fix rewrite the files they are given. */
 function formatterWrites(cmd, args) {
@@ -277,6 +375,8 @@ function checkGit(args) {
         found.push(deny("git clean -f deletes untracked files, such as unrecorded findings"));
       break;
     case "checkout":
+      if (rest.some((a) => CLAUDE_DIR.test(a)))
+        found.push(deny("git checkout would rewrite .claude/ from history"));
       if (
         rest.includes("--") ||
         positional.includes(".") ||
@@ -286,8 +386,16 @@ function checkGit(args) {
       if (rest.includes("-B")) found.push(ask("git checkout -B resets a branch"));
       break;
     case "restore":
+      if (rest.some((a) => CLAUDE_DIR.test(a)))
+        found.push(deny("git restore would rewrite .claude/ from history"));
       if (!rest.includes("--staged") || rest.includes("--worktree"))
         found.push(ask("git restore discards local changes"));
+      break;
+    case "apply":
+    case "am":
+      // A patch can carry any path, .claude/ included (F-20).
+      if (!rest.some((a) => a === "--check" || a === "--stat" || a === "--numstat"))
+        found.push(ask(`git ${sub} writes the paths inside the patch`));
       break;
     case "switch":
       if (
@@ -431,13 +539,23 @@ function checkCommand(words, pipedFrom, depth) {
   while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) {
     if (/^(SKIP_SIMPLE_GIT_HOOKS=|HUSKY=0)/.test(words[i]))
       found.push(deny(`${words[i]} disables the git hooks`));
+    // A variable that names .claude/ is a path to write it later (F-20).
+    if (CLAUDE_DIR.test(words[i].slice(words[i].indexOf("=") + 1)))
+      found.push(deny(`${words[i]} names the agent guardrails in .claude/`));
     i++;
   }
   for (;;) {
     const w = words[i];
     if (w === undefined) return found;
     if (WRAPPERS.has(w)) i++;
-    else if (
+    else if (BIN_RUNNERS.has(w)) {
+      // npx <flags> <package> <args>: the package's binary is the command.
+      i++;
+      while (i < words.length && words[i].startsWith("-")) {
+        if (["-p", "--package", "-c", "--call"].includes(words[i])) i++;
+        i++;
+      }
+    } else if (
       w === "env" &&
       words.length > i + 1 &&
       !words.slice(i + 1).every((a) => a.startsWith("-"))
@@ -510,10 +628,33 @@ function checkCommand(words, pipedFrom, depth) {
   }
 
   // The guardrails themselves.
-  if (args.some((a) => GUARD_FILES.test(a)) && !onlyReadsGuards(cmd, args))
+  if (args.some(namesGuards) && !onlyReadsGuards(cmd, args))
     found.push(deny("only the user changes the agent guardrails in .claude/"));
   if (formatterWrites(cmd, args) && args.some((a) => /^(\.\/)?\.claude\/?$/.test(a)))
     found.push(deny(`${cmd} would rewrite the agent guardrails in .claude/`));
+  // Commands whose destination, or whose working directory, is .claude/ (F-20, F-21).
+  const positionals = args.filter((a) => !a.startsWith("-"));
+  if (["cp", "mv", "rsync", "install"].includes(cmd) && CLAUDE_DIR.test(positionals.at(-1) ?? ""))
+    found.push(deny(`${cmd} into .claude/ would rewrite the agent guardrails`));
+  if (cmd === "ln" && args.some((a) => CLAUDE_DIR.test(a)))
+    found.push(deny("a link to or inside .claude/ would let an edit bypass the guardrails"));
+  if ((cmd === "cd" || cmd === "pushd") && args.some((a) => CLAUDE_DIR.test(a)))
+    found.push(deny(`${cmd} into .claude/; read its files by path instead`));
+  if (cmd === "tar") {
+    const dir = args.findIndex((a) => a === "-C" || a === "--directory");
+    if (
+      (dir >= 0 && CLAUDE_DIR.test(args[dir + 1] ?? "")) ||
+      args.some((a) => /^(-C|--directory=)(.*)$/.test(a) && CLAUDE_DIR.test(a.split(/=|C/)[1] ?? ""))
+    )
+      found.push(deny("tar into .claude/ would rewrite the agent guardrails"));
+    else if (
+      args.includes("--extract") ||
+      args.includes("-x") ||
+      /^-?[A-Za-z]*x[A-Za-z]*$/.test(args[0] ?? "")
+    )
+      found.push(ask("tar extracts whatever paths the archive carries"));
+  }
+  if (cmd === "patch") found.push(ask("patch writes the paths inside the patch"));
   if (
     (cmd === "sed" || cmd === "perl") &&
     args.some((a) => /^-[a-zA-Z]*i/.test(a)) &&
@@ -591,16 +732,44 @@ function checkCommand(words, pipedFrom, depth) {
   return found;
 }
 
+/** Targets of output redirections, unquoted, as written. */
+function redirectTargets(text) {
+  const targets = [];
+  for (const m of text.matchAll(/(^|[^<>])>>?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>"']+))/g)) {
+    const target = m[2] ?? m[3] ?? m[4] ?? "";
+    if (target.startsWith("&")) continue; // >&2 duplicates a descriptor
+    targets.push(target);
+  }
+  return targets;
+}
+
 function evaluateText(text, depth) {
-  const clean = stripHeredocs(text);
+  const { clean, code } = heredocs(text);
   const found = [];
   if (/(^|[^<>])>>?\s*\/dev\/(sd|nvme|hd|vd|disk|mmcblk)/.test(clean))
     found.push(deny("writing to a block device"));
   if (/<\(\s*(curl|wget)\b/.test(clean)) found.push(deny("running a downloaded script"));
-  if (/(^|[^<])>>?\s*["']?[^\s"';|&]*\.claude\/(settings(\.local)?\.json|hooks\/)/.test(clean))
-    found.push(deny("only the user changes the agent guardrails in .claude/"));
-  if (depth < 4)
-    for (const inner of substitutions(clean)) found.push(...evaluateText(inner, depth + 1));
+  for (const target of redirectTargets(clean)) {
+    if (namesGuards(target) || (/[*?[]/.test(target) && CLAUDE_DIR.test(target)))
+      found.push(deny("only the user changes the agent guardrails in .claude/"));
+    else if (/[$`*?[]/.test(target))
+      found.push(ask(`redirecting to a path built at run time (${target})`));
+  }
+  for (const { interpreter, body } of code) {
+    // Code from a heredoc can write any file, like code on the command line.
+    found.push(
+      body.includes(".claude")
+        ? deny(`${interpreter} runs code from a heredoc that touches .claude/`)
+        : ask(`${interpreter} runs code from a heredoc that can write any file`),
+    );
+  }
+  for (const inner of substitutions(clean)) {
+    found.push(
+      ...(depth < MAX_DEPTH
+        ? evaluateText(inner, depth + 1)
+        : [deny("commands nested too deep to check")]),
+    );
+  }
   for (const { words, pipedFrom } of parse(clean))
     found.push(...checkCommand(words, pipedFrom, depth));
   return found;

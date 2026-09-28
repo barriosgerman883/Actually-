@@ -13,8 +13,8 @@ import { pathToFileURL } from "node:url";
 const PREFIX = "actually guardrail (docs/mvp.md §9)";
 
 const DENY_PATHS = [
-  [/^\.claude\/settings(\.local)?\.json$/, "only the user changes the agent guardrails"],
-  [/^\.claude\/hooks\//, "only the user changes the agent guardrails"],
+  [/^\.claude(\/|$)/, "only the user changes the agent guardrails"],
+  [/^(CLAUDE|AGENTS)\.md$/, "only the user changes the rules for agents"],
   [/(^|\/)pnpm-lock\.yaml$/, "the lockfile is regenerated with pnpm install, never edited by hand"],
   [/(^|\/)\.git(\/|$)/, "files inside .git are managed by git"],
   [
@@ -22,7 +22,13 @@ const DENY_PATHS = [
     "the cross-review is a snapshot of the original documents and is not updated (CLAUDE.md)",
   ],
 ];
-const ASK_PATHS = [[/^\.github\/workflows\//, "CI workflows decide what blocks a merge"]];
+const ASK_PATHS = [
+  [/^\.github\/workflows\//, "CI workflows decide what blocks a merge"],
+  [
+    /^(vitest\.config\.ts|eslint\.config\.js|\.prettierignore)$/,
+    "this file decides what the checks cover",
+  ],
+];
 
 const CODE_FILE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 // Built from parts so this file does not trip the checks it implements.

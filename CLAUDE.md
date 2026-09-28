@@ -62,7 +62,7 @@ Fix a finding only when the user asks for it by id. If the user decides the code
 
 ## Agent guardrails
 
-`.claude/settings.json` runs two `PreToolUse` hooks. `.claude/hooks/guard-bash.mjs` denies destructive or irreversible shell commands and asks before risky ones, including any inline code such as `node -e` or `python -c`. `.claude/hooks/guard-edit.mjs` protects the guardrails themselves, `pnpm-lock.yaml`, `.git/` and the review snapshot, and rejects `.skip(`, `.only(`, `@ts-ignore` and `eslint-disable`. Do not try to get around a denial: tell the user what you needed and why. Only the user changes these files.
+`.claude/settings.json` runs two `PreToolUse` hooks. `.claude/hooks/guard-bash.mjs` denies destructive or irreversible shell commands and asks before risky ones, including any inline code such as `node -e` or `python -c`. `.claude/hooks/guard-edit.mjs` protects all of `.claude/`, `CLAUDE.md`, `AGENTS.md`, `pnpm-lock.yaml`, `.git/` and the review snapshot, asks before `vitest.config.ts`, `eslint.config.js` and `.prettierignore`, and rejects `.skip(`, `.only(`, `@ts-ignore` and `eslint-disable`. Do not try to get around a denial: tell the user what you needed and why. Only the user changes these files and the rules they enforce.
 
 **Never modify what is protected, even with authorization.** If a guardrail or a session permission check blocks a change, do not ask for permission and do not use an authorization to make it. Report the problem or error (location, impact, proposed fix) and record it as a finding when you can. The user applies the change.
 
