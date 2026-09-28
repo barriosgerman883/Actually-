@@ -454,6 +454,35 @@ describe("projects and Git repositories", () => {
   });
 });
 
+describe("installed by (architecture.md §6)", () => {
+  it("is only as confident as the package manager it names (F-35)", async () => {
+    const fs = memoryFs({
+      "/home/me/p/package.json": JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      "/home/me/p/package-lock.json": JSON.stringify({
+        lockfileVersion: 3,
+        packages: { "": {}, "node_modules/a": { version: "1.0.0" } },
+      }),
+      "/home/me/p/node_modules/a/package.json": JSON.stringify({ version: "1.0.0" }),
+    });
+    const inv = await buildInventory(
+      {
+        fs,
+        runner: fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) }),
+        env: fakeEnv(HOME),
+        net: netContext(fakeHttp({})),
+        config: config((c) => {
+          c.network.enabled = false;
+        }),
+        cwd: "/home/me/p",
+      },
+      { projectOnly: true },
+    );
+    expect(inv.projects[0]?.packageManager).toMatchObject({ value: "npm", confidence: "low" });
+    const a = inv.tools.find((t) => t.name === "a");
+    expect(a?.installation).toMatchObject({ value: { provider: "npm" }, confidence: "low" });
+  });
+});
+
 describe("project registry (architecture.md §8)", () => {
   const runner = () => fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) });
   const deps = { "https://registry.npmjs.org/a/latest": json({ version: "1.0.0" }) };

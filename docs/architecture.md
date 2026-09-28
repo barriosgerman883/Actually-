@@ -456,7 +456,8 @@ Ajustes a esas reglas:
 - una prerelease bajo el dist-tag `latest` contradice "estable": `low`;
 - una respuesta vencida de la caché, usada porque no hay red: como máximo `medium`;
 - un tag de GitHub usado porque no hay releases: como máximo `medium`, porque un tag no es una release declarada;
-- el provider de actualización nunca tiene más confianza que la instalación de la que se deriva.
+- el provider de actualización nunca tiene más confianza que la instalación de la que se deriva;
+- quién instaló una dependencia de proyecto nunca tiene más confianza que el package manager que nombra: el `fact` de `node_modules` afirma la versión instalada, no el instalador.
 
 La confianza resumida de un `ToolRecord` es la mínima entre `versions.installed` (o `resolved`), `versions.latest` e `installation`, contando solo los que están en estado `known`.
 

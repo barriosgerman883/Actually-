@@ -451,10 +451,13 @@ async function projectRecords(
       const latest = await resolveNpmLatest(dep.name, origin, net);
       const installation: Claim<Installation> =
         dep.installed && packageManager.state === "known"
-          ? claimFrom({ provider: packageManager.value, path: dep.installed.path }, [
-              dep.installed.evidence,
-              ...(scan.packageManager?.evidence ?? []),
-            ])
+          ? // The fact is the installed version; who installed it is only as
+            // sure as the package manager (architecture.md §6, F-35).
+            claimFrom(
+              { provider: packageManager.value, path: dep.installed.path },
+              [dep.installed.evidence, ...(scan.packageManager?.evidence ?? [])],
+              { cap: packageManager.confidence },
+            )
           : dep.installed
             ? {
                 state: "unknown",
