@@ -333,7 +333,12 @@ export interface ToolRecord {
    * (design.md §14).
    * Formato actual:
    *   global:<provider>:<nombre>   (provider "unknown" si no se conoce)
+   *   global:<provider>:<ruta>     (repositorio de Git usado como herramienta:
+   *                                 dos pueden tener el mismo nombre)
    *   project:<raíz absoluta>:<nombre>
+   * Dos herramientas nunca comparten un id. Un ejecutable `pnpm` fuera del
+   * directorio de binarios de pnpm es evidencia del registro de pnpm, no
+   * otra herramienta.
    */
   id: string;
   name: string;

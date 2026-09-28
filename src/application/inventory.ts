@@ -130,7 +130,13 @@ export async function buildInventory(
     const binsInPnpmDir = new Set(
       executables.filter((e) => e.dir === pnpm.binDir).map((e) => e.name),
     );
-    tools.push(...(await pnpmRecords(pnpm, userRegistry, deps, binsInPnpmDir)));
+    // pnpm describes itself in one record: a pnpm executable elsewhere is
+    // evidence for that record, not a second tool with the same id (F-37).
+    const pnpmSelf = pnpm.installed && !pnpm.packages.some((p) => p.name === "pnpm");
+    const pnpmElsewhere = pnpmSelf
+      ? executables.filter((e) => e.name === "pnpm" && e.dir !== pnpm.binDir)
+      : [];
+    tools.push(...(await pnpmRecords(pnpm, userRegistry, deps, binsInPnpmDir, pnpmElsewhere)));
     const owned = new Set(pnpm.packages.flatMap((p) => p.bins));
     const unknownExecutables: Executable[] = [];
     // Executables resolve to real paths, so the roots are compared resolved too.
@@ -158,6 +164,7 @@ export async function buildInventory(
         repoToolEvidence.set(repo, list);
         continue;
       }
+      if (pnpmElsewhere.includes(exe)) continue;
       unknownExecutables.push(exe);
     }
     for (const exe of unknownExecutables) tools.push(unknownExecutableRecord(exe));
@@ -190,6 +197,21 @@ export async function buildInventory(
     }
   }
 
+  // Ids reference one tool each (design.md §14). A repeated id is a bug:
+  // say so instead of letting `status <id>` pick one silently (F-37).
+  const seen = new Set<string>();
+  for (const tool of tools) {
+    if (seen.has(tool.id)) {
+      diagnostics.push({
+        severity: "error",
+        source: "actually",
+        message: `two tools share the id ${tool.id}; please report this`,
+        toolId: tool.id,
+      });
+    }
+    seen.add(tool.id);
+  }
+
   return { tools, projects, diagnostics };
 }
 
@@ -198,6 +220,7 @@ async function pnpmRecords(
   registry: RegistryConfig,
   deps: InventoryDeps,
   binsInPnpmDir: Set<string>,
+  pnpmElsewhere: Executable[],
 ): Promise<ToolRecord[]> {
   if (!pnpm.installed) return [];
   const { config, net } = deps;
@@ -216,7 +239,11 @@ async function pnpmRecords(
         const installation: Claim<Installation> = {
           state: "unknown",
           reason: "how pnpm itself was installed is not determined",
-          evidence: [],
+          evidence: pnpmElsewhere.map((exe) => ({
+            kind: "fact",
+            source: exe.path,
+            description: `executable found in ${exe.dir}`,
+          })),
         };
         return buildRecord({
           name: "pnpm",
@@ -346,6 +373,7 @@ async function repoToolRecord(
     const record = buildRecord({
       name,
       scope: "global",
+      location: root,
       versions: {
         requested: notApplicable,
         resolved: notApplicable,
@@ -381,6 +409,7 @@ async function repoToolRecord(
   const record = buildRecord({
     name,
     scope: "global",
+    location: root,
     versions: { requested: notApplicable, resolved: notApplicable, installed, latest },
     installation,
     source: repositorySource(repo),

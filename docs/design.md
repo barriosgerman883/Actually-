@@ -496,7 +496,7 @@ Reglas:
 
 No es estable en sentido fuerte. Se mantiene entre ejecuciones mientras no cambien el scope, la ubicación ni el provider detectado, y cambia si:
 
-- el proyecto se mueve a otra carpeta, porque su raíz forma parte del id;
+- el proyecto, o un repositorio de Git usado como herramienta, se mueve a otra carpeta, porque su ruta forma parte del id;
 - cambia el provider detectado, por ejemplo cuando una herramienta pasa de `unknown` a `pnpm`.
 
 Un integrador que necesite seguir una herramienta a través de esos cambios puede correlacionar por `name` y `scope`, sabiendo que esa combinación puede ser ambigua.

@@ -107,6 +107,9 @@ describe("records", () => {
     expect(makeToolId({ scope: "global", name: "x", provider: "pnpm" })).toBe("global:pnpm:x");
     expect(makeToolId({ scope: "global", name: "x" })).toBe("global:unknown:x");
     expect(makeToolId({ scope: "project", name: "x", projectRoot: "/p" })).toBe("project:/p:x");
+    expect(makeToolId({ scope: "global", name: "t", provider: "git", location: "/a/t" })).toBe(
+      "global:git:/a/t",
+    );
   });
   it("sets updateType and mayBreak only when outdated", () => {
     const base = {

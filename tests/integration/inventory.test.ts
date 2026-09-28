@@ -315,7 +315,7 @@ describe("projects and Git repositories", () => {
 
     const t = inv.tools.find((x) => x.name === "t");
     expect(t).toMatchObject({
-      id: "global:git:t",
+      id: "global:git:/home/me/tools/t",
       status: "outdated",
       updateType: "minor",
       mayBreak: true,
@@ -375,7 +375,7 @@ describe("projects and Git repositories", () => {
     const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
     const inv = await buildInventory(toolWorld(fs, "/home/me/tools"), { globalOnly: true });
     expect(inv.tools.find((x) => x.name === "t")).toMatchObject({
-      id: "global:git:t",
+      id: "global:git:/home/me/tools/t",
       versions: { installed: { value: "1.0.0" } },
     });
     expect(inv.projects).toEqual([]);
@@ -411,7 +411,7 @@ describe("projects and Git repositories", () => {
         },
         { globalOnly: true },
       );
-      expect(inv.tools.map((x) => x.id)).toEqual(["global:git:t"]);
+      expect(inv.tools.map((x) => x.id)).toEqual([`global:git:${join(home, "tools", "t")}`]);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -451,6 +451,68 @@ describe("projects and Git repositories", () => {
         { projectOnly: true },
       ),
     ).rejects.toBeInstanceOf(UsageError);
+  });
+});
+
+describe("ids (design.md §14)", () => {
+  it("gives two repositories with the same name different ids (F-37)", async () => {
+    const fs = memoryFs({
+      "/home/me/vendor-a/tool/.git/HEAD": `${"a".repeat(40)}\n`,
+      "/home/me/vendor-b/tool/.git/HEAD": `${"b".repeat(40)}\n`,
+    });
+    const cfg = config((c) => {
+      c.tools.git = [{ path: "/home/me/vendor-a/tool" }, { path: "/home/me/vendor-b/tool" }];
+    });
+    const inv = await buildInventory(
+      {
+        fs,
+        runner: fakeRunner({
+          "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
+          "git.tags.head": ok("v1.0.0\n"),
+        }),
+        env: fakeEnv(HOME),
+        net: netContext(undefined),
+        config: cfg,
+        cwd: "/tmp",
+      },
+      { globalOnly: true },
+    );
+    expect(inv.tools.map((t) => t.id).sort()).toEqual([
+      "global:git:/home/me/vendor-a/tool",
+      "global:git:/home/me/vendor-b/tool",
+    ]);
+  });
+  it("keeps one pnpm record when a pnpm executable is also found elsewhere (F-37)", async () => {
+    const { runner } = pnpmWorld();
+    const fs = memoryFs(
+      {
+        [`${PNPM_HOME}/global/5/package.json`]: JSON.stringify({
+          dependencies: { gstack: "^1.0.0" },
+        }),
+      },
+      // pnpm installed outside its own bin directory, e.g. with the npm prefix in ~/.local.
+      { executables: [`${HOME}/.local/bin/pnpm`] },
+    );
+    const inv = await buildInventory(
+      {
+        fs,
+        runner,
+        env: fakeEnv(HOME),
+        net: netContext(fakeHttp(registry)),
+        config: config(),
+        cwd: "/tmp",
+      },
+      { globalOnly: true },
+    );
+    const pnpm = inv.tools.filter((t) => t.name === "pnpm");
+    expect(pnpm).toHaveLength(1);
+    expect(pnpm[0]?.installation).toMatchObject({
+      state: "unknown",
+      evidence: [expect.objectContaining({ source: `${HOME}/.local/bin/pnpm` })],
+    });
+    const ids = inv.tools.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(inv.diagnostics.filter((d) => d.source === "actually")).toEqual([]);
   });
 });
 
