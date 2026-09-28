@@ -93,15 +93,24 @@ export async function buildInventory(
 
   // Effective registry, read once from pnpm (architecture.md §8).
   const registryResult = await runner.run({ command: "pnpm.config.list" });
-  const userRegistry: RegistryConfig = registryResult.ok
-    ? parsePnpmConfig(registryResult.stdout)
-    : {
-        state: "unknown",
-        reason:
-          registryResult.reason === "not-found"
-            ? "pnpm is not installed"
-            : "pnpm config could not be read",
-      };
+  let userRegistry: RegistryConfig;
+  if (registryResult.ok) {
+    userRegistry = parsePnpmConfig(registryResult.stdout);
+  } else {
+    // Without the registry nothing is queried, so say so (§13, F-55).
+    userRegistry = {
+      state: "unknown",
+      reason:
+        registryResult.reason === "not-found"
+          ? "pnpm is not installed"
+          : "pnpm config could not be read",
+    };
+    diagnostics.push({
+      severity: "warning",
+      source: "pnpm",
+      message: `default registry not determined (${registryResult.message}): no package was queried on registry.npmjs.org`,
+    });
+  }
 
   // Git repositories under scan.paths, and the ones declared as tools.
   const declaredTools = new Map(config.tools.git.map((t) => [t.path, t]));

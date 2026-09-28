@@ -222,7 +222,7 @@ describe("global inventory with pnpm", () => {
     });
   });
 
-  it("degrades gracefully when pnpm is not installed", async () => {
+  it("says what was not checked when pnpm cannot run (F-55)", async () => {
     const inv = await buildInventory(
       {
         fs: memoryFs({}),
@@ -235,7 +235,46 @@ describe("global inventory with pnpm", () => {
       { globalOnly: true },
     );
     expect(inv.tools).toEqual([]);
-    expect(inv.diagnostics).toEqual([]);
+    // Not an error: the result is valid but incomplete, and never silent.
+    expect(inv.diagnostics.map((d) => d.severity)).toEqual(["warning", "warning"]);
+    expect(inv.diagnostics.map((d) => d.message)).toEqual([
+      "default registry not determined (pnpm.config.list not scripted): no package was queried on registry.npmjs.org",
+      "pnpm.version not scripted: global packages were not checked",
+    ]);
+  });
+
+  it("reports a real pnpm failure as an error, and a project run still warns (F-55)", async () => {
+    const failing = fakeRunner({
+      "pnpm.version": { ok: false, reason: "failed", message: "pnpm.version failed: boom" },
+    });
+    const global = await buildInventory(
+      {
+        fs: memoryFs({}),
+        runner: failing,
+        env: fakeEnv(HOME),
+        net: netContext(fakeHttp({})),
+        config: config(),
+        cwd: "/tmp",
+      },
+      { globalOnly: true },
+    );
+    expect(global.diagnostics.map((d) => d.severity)).toEqual(["warning", "error"]);
+    const project = await buildInventory(
+      {
+        fs: memoryFs({ [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1" } }) }),
+        runner: fakeRunner({}),
+        env: fakeEnv(HOME),
+        net: netContext(fakeHttp({})),
+        config: config(),
+        cwd: `${HOME}/p`,
+      },
+      { projectOnly: true },
+    );
+    expect(project.diagnostics).toHaveLength(1);
+    expect(project.tools[0]?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: "origin could not be determined: pnpm is not installed",
+    });
   });
 });
 

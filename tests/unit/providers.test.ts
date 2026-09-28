@@ -10,6 +10,7 @@ import { parseGithubUrl } from "../../src/providers/github/url.js";
 import { decideOrigin, isRegistrySpec } from "../../src/providers/npm-registry/origin.js";
 import { applyNpmrc, parsePnpmConfig } from "../../src/providers/npm-registry/registry-config.js";
 import { latestUrl, resolveNpmLatest } from "../../src/providers/npm-registry/resolver.js";
+import { scanPnpmGlobal } from "../../src/providers/pnpm/global.js";
 import { scanProject } from "../../src/providers/project/project.js";
 import { findWorkspace } from "../../src/providers/project/workspace.js";
 import { cachedGet } from "../../src/providers/shared/cached-get.js";
@@ -389,6 +390,30 @@ describe("workspace packages (architecture.md §8, F-32)", () => {
   it("is undefined outside any workspace", async () => {
     const fs = memoryFs({ "/p/package.json": JSON.stringify({ name: "p" }) });
     expect(await findWorkspace(fs, "/p", "/")).toBeUndefined();
+  });
+});
+
+describe("pnpm global scan", () => {
+  it("warns instead of staying silent when pnpm cannot run (F-55)", async () => {
+    const missing = await scanPnpmGlobal(fakeRunner({}), memoryFs({}));
+    expect(missing.installed).toBe(false);
+    expect(missing.packages).toEqual([]);
+    expect(missing.diagnostics).toEqual([
+      {
+        severity: "warning",
+        source: "pnpm",
+        message: "pnpm.version not scripted: global packages were not checked",
+      },
+    ]);
+    const broken = await scanPnpmGlobal(
+      fakeRunner({
+        "pnpm.version": { ok: false, reason: "timeout", message: "pnpm.version timed out" },
+      }),
+      memoryFs({}),
+    );
+    expect(broken.diagnostics).toEqual([
+      { severity: "error", source: "pnpm", message: "pnpm.version timed out" },
+    ]);
   });
 });
 
