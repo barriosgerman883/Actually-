@@ -400,6 +400,19 @@ describe("GitHub", () => {
   });
 });
 
+describe("GitHub rate limit", () => {
+  it("warns when the limit is reached on /tags too (F-42)", async () => {
+    const base = "https://api.github.com/repos/o/r";
+    const http = fakeHttp({
+      [`${base}/tags?per_page=100`]: { status: 429, headers: {}, body: undefined },
+    });
+    const state = { rateLimited: false, diagnostics: [] };
+    const claim = await resolveGithubLatest({ owner: "o", repo: "r" }, netContext(http), state);
+    expect(claim).toMatchObject({ state: "unknown", reason: "GitHub rate limit reached" });
+    expect(state.diagnostics).toEqual([expect.objectContaining({ severity: "warning" })]);
+  });
+});
+
 describe("installed version from tags", () => {
   const repo = { root: "/r", gitDir: "/r/.git", remotes: [], commit: "a".repeat(40) };
   async function describeEvidence(message: string) {

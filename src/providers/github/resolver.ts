@@ -23,6 +23,19 @@ function isRateLimited(result: CachedGetResult): boolean {
   return result.status === 403 && result.headers["x-ratelimit-remaining"] === "0";
 }
 
+/** Stops asking GitHub for the rest of the run and says why (architecture.md §13). */
+function rateLimitReached(state: GithubRunState): Claim<string> {
+  if (!state.rateLimited) {
+    state.rateLimited = true;
+    state.diagnostics.push({
+      severity: "warning",
+      source: "github",
+      message: "GitHub rate limit reached; remaining GitHub versions are unknown",
+    });
+  }
+  return { state: "unknown", reason: "GitHub rate limit reached", evidence: [] };
+}
+
 function cacheEvidence(result: CachedGetResult): Evidence[] {
   if (result.kind === "stale")
     return [
@@ -66,15 +79,7 @@ export async function resolveGithubLatest(
   if (release.kind === "offline-miss") return { state: "unknown", reason: "offline", evidence: [] };
   if (release.kind === "error")
     return { state: "unknown", reason: release.error.message, evidence: [] };
-  if (isRateLimited(release)) {
-    state.rateLimited = true;
-    state.diagnostics.push({
-      severity: "warning",
-      source: "github",
-      message: "GitHub rate limit reached; remaining GitHub versions are unknown",
-    });
-    return { state: "unknown", reason: "GitHub rate limit reached", evidence: [] };
-  }
+  if (isRateLimited(release)) return rateLimitReached(state);
   const releaseStatus = release.kind === "stale" ? 200 : release.status;
   // What the releases endpoint said, for the evidence of the tag fallback.
   let releaseNote = "no releases";
@@ -118,10 +123,7 @@ export async function resolveGithubLatest(
   const tags = await cachedGet(`${base}/tags?per_page=100`, ctx, HEADERS);
   if (tags.kind === "offline-miss") return { state: "unknown", reason: "offline", evidence: [] };
   if (tags.kind === "error") return { state: "unknown", reason: tags.error.message, evidence: [] };
-  if (isRateLimited(tags)) {
-    state.rateLimited = true;
-    return { state: "unknown", reason: "GitHub rate limit reached", evidence: [] };
-  }
+  if (isRateLimited(tags)) return rateLimitReached(state);
   const tagsStatus = tags.kind === "stale" ? 200 : tags.status;
   if (tagsStatus === 404)
     return { state: "unknown", reason: "repository not found or private", evidence: [] };
