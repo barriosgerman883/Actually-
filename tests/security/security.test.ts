@@ -570,6 +570,25 @@ describe("untrusted text never reaches the terminal as control sequences (F-05)"
     expect(sanitize("café ñandú 日本")).toBe("café ñandú 日本");
   });
 
+  it.each([
+    [0x00, 0x1f],
+    [0x7f, 0x9f],
+    [0x200b, 0x200f],
+    [0x2028, 0x202e],
+    [0x2060, 0x2064],
+    [0x2066, 0x2069],
+  ])("escapes both ends of the range %s-%s and nothing just outside it", (from, to) => {
+    for (const code of [from, to]) {
+      expect(sanitize(String.fromCodePoint(code))).not.toBe(String.fromCodePoint(code));
+    }
+    for (const code of [from - 1, to + 1]) {
+      // Just outside: plain characters, except where another range starts.
+      const inAnother = [0x1f, 0x7f, 0x2065].includes(code) || code === 0x2027;
+      if (!inAnother && code >= 0x20)
+        expect(sanitize(String.fromCodePoint(code))).toBe(String.fromCodePoint(code));
+    }
+  });
+
   it("keeps colors, which the output adds itself", () => {
     const colored = renderExplain(tool, { ...opts, style: createStyle(true) });
     expect(colored).toContain("\u001b[");
