@@ -91,7 +91,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | abierto |
 | F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
 | F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
-| F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | abierto |
+| F-55 | alta | robustez | Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico | resuelto: código corregido en `7a5bfa9` |
 | F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
@@ -1107,7 +1107,7 @@ Propuesta: denegar solo cuando hay un valor después de la clave, o con `--unset
 
 ### F-55 · Un fallo real al ejecutar pnpm se reporta igual que "no instalado", sin ningún diagnóstico
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `7a5bfa9`
 - **Severidad:** alta
 - **Tipo:** robustez
 - **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`failureResult`, que solo distingue `ENOENT`), `src/providers/pnpm/global.ts:110-114` (el fallo con motivo `not-found` no genera diagnóstico), `src/application/inventory.ts:95-103` (mismo patrón al leer `pnpm.config.list`)
@@ -1128,6 +1128,8 @@ El layout de ese pnpm 10.33.0 real (`global/5/node_modules`) es el mismo que ya 
 Propuesta, acotada al fallo silencioso, sin implementar: que `scanPnpmGlobal` y la lectura del registry en `inventory.ts` agreguen un diagnóstico también cuando el motivo es `not-found`, en vez de omitirlo. El usuario pierde el mensaje "pnpm no está instalado" (que hoy tampoco se muestra en ningún lado como diagnóstico, solo se infiere de la ausencia de datos), pero gana saber que algo no se pudo revisar. Test en `tests/unit` sobre `scanPnpmGlobal` con un doble de `CommandRunner` que devuelva `reason: "not-found"`.
 
 Hacer que pnpm funcione de verdad en Windows es un trabajo aparte, más grande, que no resuelve este hallazgo por sí solo: se investigó (ver la nota en `RNF-004` de que el bloqueo es real) y hay un camino concreto sin usar shell —leer el shim `.cmd` como texto en vez de ejecutarlo, porque sigue uno de dos patrones conocidos generados por `cmd-shim`: apunta directo a un `.exe` real, o a `node` más la ruta de un `.js`. Verificado leyendo shims reales en esa misma VM: la instalación standalone de pnpm despacha a un `@pnpm/exe/pnpm.exe` nativo; la que gestiona Corepack despacha a `node ... corepack/dist/pnpm.js`. No verificado: qué forma tienen los shims de nvm-windows, Volta, Scoop o Winget. Esto queda fuera de este hallazgo porque es soporte de plataforma nueva, no un error a corregir; si se retoma, actualizar RNF-004 y `docs/providers/pnpm.md` en el mismo cambio.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable, como propone el hallazgo. `scanPnpmGlobal` emite un `warning` cuando `pnpm --version` falla con motivo `not-found` ("global packages were not checked") y mantiene el `error` para los demás motivos. `buildInventory` emite otro `warning` cuando `pnpm config list` falla, con el motivo, porque sin registry no se consulta ningún paquete; antes ese silencio también afectaba a `--project`. Documentado en `docs/providers/pnpm.md`, "Failure modes". Tests: `tests/unit/providers.test.ts` ("pnpm global scan") y `tests/integration/inventory.test.ts` (dos casos F-55); fallan sin el cambio.
 
 ### F-56 · En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable
 
