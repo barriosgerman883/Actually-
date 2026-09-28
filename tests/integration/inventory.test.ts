@@ -58,6 +58,53 @@ function pnpmWorld(pnpmConfig = PNPM_CONFIG_PUBLIC) {
   return { runner, fs };
 }
 
+// pnpm 12 layout, as `pnpm add -g` 12.6.0 leaves it: `pnpm root --global` is
+// global/v11 and each package gets its own directory with its own package.json.
+const PNPM12_ROOT = `${PNPM_HOME}/global/v11`;
+
+function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC) {
+  const isNumber = `${PNPM12_ROOT}/2c-18d9606f358acbc3-0`;
+  const types = `${PNPM12_ROOT}/2c-18d9606f75c4749e-2`;
+  const runner = fakeRunner({
+    "pnpm.version": ok("12.6.0\n"),
+    "pnpm.root.global": ok(`${PNPM12_ROOT}\n`),
+    "pnpm.bin.global": ok(`${PNPM_HOME}/bin\n`),
+    "pnpm.config.list": ok(pnpmConfig),
+    "pnpm.list.global": ok(
+      JSON.stringify([
+        {
+          path: PNPM12_ROOT,
+          private: true,
+          dependencies: {
+            "@types/node": {
+              from: "@types/node",
+              version: "22.0.0",
+              path: `${types}/node_modules/@types/node`,
+            },
+            "is-number": {
+              from: "is-number",
+              version: "6.0.0",
+              path: `${isNumber}/node_modules/is-number`,
+            },
+            stray: {
+              from: "stray",
+              version: "1.0.0",
+              path: "/home/me/elsewhere/node_modules/stray",
+            },
+          },
+        },
+      ]),
+    ),
+  });
+  const fs = memoryFs({
+    [`${isNumber}/package.json`]: JSON.stringify({ dependencies: { "is-number": "6.0.0" } }),
+    [`${types}/package.json`]: JSON.stringify({ dependencies: { "@types/node": "22.0.0" } }),
+    // A manifest outside the global root must never supply a spec.
+    "/home/me/elsewhere/package.json": JSON.stringify({ dependencies: { stray: "^1.0.0" } }),
+  });
+  return { runner, fs };
+}
+
 const registry = {
   "https://registry.npmjs.org/gstack/latest": json({
     version: "2.0.0",
@@ -112,6 +159,55 @@ describe("global inventory with pnpm", () => {
     expect(inv.tools.find((t) => t.name === "gstack")?.versions.latest).toMatchObject({
       state: "unknown",
       reason: "private default registry configured",
+    });
+  });
+
+  it("reads each package's spec from its own directory with pnpm 12 (F-50)", async () => {
+    const { runner, fs } = pnpm12World();
+    const http = fakeHttp({
+      "https://registry.npmjs.org/is-number/latest": json({ version: "7.0.0" }),
+      "https://registry.npmjs.org/@types%2Fnode/latest": json({ version: "22.1.0" }),
+      "https://registry.npmjs.org/pnpm/latest": json({ version: "12.6.0" }),
+    });
+    const inv = await buildInventory(
+      { fs, runner, env: fakeEnv(HOME), net: netContext(http), config: config(), cwd: "/tmp" },
+      { globalOnly: true },
+    );
+    expect(inv.tools.find((t) => t.name === "is-number")).toMatchObject({
+      status: "outdated",
+      updateType: "major",
+    });
+    expect(inv.tools.find((t) => t.name === "@types/node")).toMatchObject({ status: "outdated" });
+    // The package outside the global root is not trusted, so it is never queried.
+    expect(inv.tools.find((t) => t.name === "stray")?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: "origin could not be determined: no spec found",
+    });
+    expect(http.calls.map((c) => c.url).sort()).toEqual([
+      "https://registry.npmjs.org/@types%2Fnode/latest",
+      "https://registry.npmjs.org/is-number/latest",
+      "https://registry.npmjs.org/pnpm/latest",
+    ]);
+  });
+
+  it("cites the pnpm 12 manifest that declares the spec (F-50)", async () => {
+    const { runner, fs } = pnpm12World(JSON.stringify({ registry: "https://npm.corp.example/" }));
+    const inv = await buildInventory(
+      {
+        fs,
+        runner,
+        env: fakeEnv(HOME),
+        net: netContext(fakeHttp({})),
+        config: config(),
+        cwd: "/tmp",
+      },
+      { globalOnly: true },
+    );
+    const latest = inv.tools.find((t) => t.name === "is-number")?.versions.latest;
+    expect(latest?.state === "unknown" ? latest.evidence : []).toContainEqual({
+      kind: "fact",
+      source: `${PNPM12_ROOT}/2c-18d9606f358acbc3-0/package.json`,
+      description: 'declared as "6.0.0"',
     });
   });
 
@@ -352,16 +448,222 @@ describe("project registry (architecture.md §8)", () => {
     expect(inv.tools[0]?.versions.latest).toMatchObject({ state: "unknown" });
   });
 
-  it("does not query when a .npmrc between the project and the workspace root exists", async () => {
+  it("counts a .npmrc between the project and the workspace root as one more source", async () => {
+    const files = (registry: string) => ({
+      [`${HOME}/ws/pnpm-workspace.yaml`]: "packages:\n  - packages/*\n",
+      [`${HOME}/ws/packages/.npmrc`]: `registry=${registry}\n`,
+      [`${HOME}/ws/packages/app/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+    });
+    const priv = await projectInventory(
+      files("https://npm.mycorp.example/"),
+      `${HOME}/ws/packages/app`,
+    );
+    expect(priv.http.calls).toEqual([]);
+    const pub = await projectInventory(
+      files("https://registry.npmjs.org/"),
+      `${HOME}/ws/packages/app`,
+    );
+    expect(pub.http.calls.map((c) => c.url)).toEqual(["https://registry.npmjs.org/a/latest"]);
+  });
+
+  it("does not query when any .npmrc above the project sets a private registry (F-32)", async () => {
     const { http } = await projectInventory(
       {
+        [`${HOME}/work/.npmrc`]: "registry=https://npm.mycorp.example/\n",
+        [`${HOME}/work/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+      },
+      `${HOME}/work/p`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  // npm workspace: the lockfile and node_modules live in the root, and the
+  // sibling @corp/utils is linked (F-32).
+  const npmWorkspace = {
+    [`${HOME}/ws/package.json`]: JSON.stringify({ name: "ws", workspaces: ["packages/*"] }),
+    [`${HOME}/ws/package-lock.json`]: JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        "": { name: "ws", workspaces: ["packages/*"] },
+        "packages/app": { name: "app" },
+        "packages/utils": { name: "@corp/utils", version: "1.0.0" },
+        "node_modules/@corp/utils": { resolved: "packages/utils", link: true },
+        "node_modules/a": {
+          version: "1.0.0",
+          resolved: "https://registry.npmjs.org/a/-/a-1.0.0.tgz",
+        },
+      },
+    }),
+    [`${HOME}/ws/node_modules/a/package.json`]: JSON.stringify({ version: "1.0.0" }),
+    [`${HOME}/ws/packages/utils/package.json`]: JSON.stringify({
+      name: "@corp/utils",
+      version: "1.0.0",
+    }),
+    [`${HOME}/ws/packages/app/package.json`]: JSON.stringify({
+      name: "app",
+      dependencies: { "@corp/utils": "^1.0.0", a: "^1.0.0" },
+    }),
+  };
+
+  it("never queries a sibling of an npm workspace, and reads the root lockfile (F-32)", async () => {
+    const { inv, http } = await projectInventory(npmWorkspace, `${HOME}/ws/packages/app`);
+    // Control: a plain registry dependency of the same member is still queried.
+    expect(http.calls.map((c) => c.url)).toEqual(["https://registry.npmjs.org/a/latest"]);
+    const utils = inv.tools.find((t) => t.name === "@corp/utils");
+    expect(utils?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: "a package of the same workspace",
+    });
+    const a = inv.tools.find((t) => t.name === "a");
+    expect(a?.versions.resolved).toMatchObject({
+      state: "known",
+      value: "1.0.0",
+      evidence: [{ source: `${HOME}/ws/package-lock.json` }],
+    });
+    expect(a?.versions.installed).toMatchObject({
+      state: "known",
+      value: "1.0.0",
+      evidence: [{ source: `${HOME}/ws/node_modules/a/package.json` }],
+    });
+  });
+
+  it("applies the .npmrc of an npm workspace root (F-32)", async () => {
+    const { http } = await projectInventory(
+      { ...npmWorkspace, [`${HOME}/ws/.npmrc`]: "registry=https://npm.mycorp.example/\n" },
+      `${HOME}/ws/packages/app`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  it("does not query a name a pnpm lockfile links locally (F-32)", async () => {
+    const { inv, http } = await projectInventory(
+      {
         [`${HOME}/ws/pnpm-workspace.yaml`]: "packages:\n  - packages/*\n",
-        [`${HOME}/ws/packages/.npmrc`]: "registry=https://registry.npmjs.org/\n",
+        [`${HOME}/ws/pnpm-lock.yaml`]: [
+          "lockfileVersion: '9.0'",
+          "importers:",
+          "  packages/app:",
+          "    dependencies:",
+          "      '@corp/utils':",
+          "        specifier: ^1.0.0",
+          "        version: link:../utils",
+          "",
+        ].join("\n"),
         [`${HOME}/ws/packages/app/package.json`]: JSON.stringify({
-          dependencies: { a: "^1.0.0" },
+          dependencies: { "@corp/utils": "^1.0.0" },
         }),
       },
       `${HOME}/ws/packages/app`,
+    );
+    expect(http.calls).toEqual([]);
+    const utils = inv.tools[0];
+    expect(utils?.versions.latest).toMatchObject({
+      state: "unknown",
+      reason: "resolved locally by the lockfile",
+    });
+    expect(JSON.stringify(utils)).not.toContain("../utils");
+  });
+
+  it("does not query a sibling of a pnpm workspace that has no lockfile yet (F-32)", async () => {
+    const { http } = await projectInventory(
+      {
+        [`${HOME}/ws/pnpm-workspace.yaml`]: "packages:\n  - packages/*\n",
+        [`${HOME}/ws/packages/utils/package.json`]: JSON.stringify({ name: "@corp/utils" }),
+        [`${HOME}/ws/packages/app/package.json`]: JSON.stringify({
+          dependencies: { "@corp/utils": "^1.0.0" },
+        }),
+      },
+      `${HOME}/ws/packages/app`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  it.each([
+    [
+      "a file: resolution (overrides)",
+      { version: "1.0.0", resolved: "file:../internal-1.0.0.tgz" },
+    ],
+    ["a tarball on another host", { version: "1.0.0", resolved: "https://npm.corp.example/a.tgz" }],
+    ["a link", { resolved: "../internal", link: true }],
+  ])("does not query a dependency package-lock.json resolves to %s (F-32)", async (_, entry) => {
+    const { http } = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+        [`${HOME}/p/package-lock.json`]: JSON.stringify({
+          lockfileVersion: 3,
+          packages: { "": {}, "node_modules/a": entry },
+        }),
+      },
+      `${HOME}/p`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  it("does not query a dependency a v1 package-lock.json resolves to file: (F-32)", async () => {
+    const { http } = await projectInventory(
+      {
+        [`${HOME}/p/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+        [`${HOME}/p/package-lock.json`]: JSON.stringify({
+          lockfileVersion: 1,
+          dependencies: { a: { version: "file:../a" } },
+        }),
+      },
+      `${HOME}/p`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  it("takes the outermost workspace, so nested workspaces see all siblings (F-32)", async () => {
+    const { http } = await projectInventory(
+      {
+        [`${HOME}/mono/package.json`]: JSON.stringify({ workspaces: ["apps/*", "libs/*"] }),
+        [`${HOME}/mono/libs/shared/package.json`]: JSON.stringify({ name: "@corp/shared" }),
+        [`${HOME}/mono/apps/web/package.json`]: JSON.stringify({
+          name: "web",
+          workspaces: ["plugins/*"],
+          dependencies: { "@corp/shared": "^1.0.0" },
+        }),
+      },
+      `${HOME}/mono/apps/web`,
+    );
+    expect(http.calls).toEqual([]);
+  });
+
+  it("queries nothing when the workspace cannot be fully read (F-32)", async () => {
+    const app = {
+      [`${HOME}/ws/package.json`]: JSON.stringify({ workspaces: ["packages/*"] }),
+      [`${HOME}/ws/packages/app/package.json`]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+    };
+    const cases = [
+      { ...app, [`${HOME}/ws/packages/broken/package.json`]: "{" },
+      {
+        ...app,
+        [`${HOME}/ws/package.json`]: JSON.stringify({ workspaces: ["../elsewhere/*"] }),
+      },
+    ];
+    for (const files of cases) {
+      const { inv, http } = await projectInventory(files, `${HOME}/ws/packages/app`);
+      expect(http.calls).toEqual([]);
+      expect(inv.tools[0]?.versions.latest).toMatchObject({
+        state: "unknown",
+        reason: expect.stringContaining("origin could not be determined"),
+      });
+    }
+
+    const http = fakeHttp(deps);
+    await buildInventory(
+      {
+        fs: memoryFs(
+          { ...app, [`${HOME}/elsewhere/package.json`]: JSON.stringify({ name: "@corp/x" }) },
+          { symlinks: { [`${HOME}/ws/packages/linked`]: `${HOME}/elsewhere` } },
+        ),
+        runner: runner(),
+        env: fakeEnv(HOME),
+        net: netContext(http),
+        config: config(),
+        cwd: `${HOME}/ws/packages/app`,
+      },
+      { projectOnly: true },
     );
     expect(http.calls).toEqual([]);
   });

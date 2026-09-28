@@ -62,7 +62,7 @@ Every value is either known, with a confidence level and evidence, unknown with 
 
 It never sends file paths, file contents, project names or installed versions. Those services can still see which names were checked.
 
-A package is only checked on the public registry when its origin is known to be public: it was declared with a registry spec, your effective default registry is `registry.npmjs.org`, and its scope is not mapped to another registry. Otherwise its latest version is reported as unknown. The first run that uses the network prints a notice on stderr explaining this.
+A package is only checked on the public registry when its origin is known to be public: it was declared with a registry spec, it is not a package of the same workspace and the lockfile does not resolve it locally, and none of your pnpm config or `.npmrc` files sets another registry for it. Otherwise its latest version is reported as unknown. The first run that uses the network prints a notice on stderr explaining this.
 
 Use `--offline` to send nothing, or set `[network] enabled = false`.
 

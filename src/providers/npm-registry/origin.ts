@@ -1,6 +1,6 @@
 import semver from "semver";
 import type { Evidence } from "../../core/model.js";
-import { isPublicRegistry, type RegistryConfig } from "./registry-config.js";
+import type { RegistryConfig } from "./registry-config.js";
 
 export type OriginDecision =
   { query: true; evidence: Evidence[] } | { query: false; reason: string; evidence: Evidence[] };
@@ -46,12 +46,13 @@ function matchesPattern(name: string, pattern: string): boolean {
  * (docs/architecture.md §8). All conditions must hold:
  *
  * 1. its spec is a registry spec;
- * 2. the effective default registry is the public one;
- * 3. its scope is not mapped to another registry.
+ * 2. neither its workspace nor its lockfile resolves it to something local;
+ * 3. every source of configuration makes the default registry the public one;
+ * 4. no source maps its scope to another registry.
  *
- * Also, when pnpm reports the tarball it was installed from, it must come
- * from the public registry, and the name must not be excluded by config.
- * Anything that cannot be determined means: do not query.
+ * Also, when pnpm or the lockfile reports the tarball it comes from, it must
+ * come from the public registry, and the name must not be excluded by
+ * config. Anything that cannot be determined means: do not query.
  */
 export function decideOrigin(input: {
   name: string;
@@ -63,7 +64,10 @@ export function decideOrigin(input: {
   spec: string | undefined | null;
   registry: RegistryConfig;
   exclude?: string[];
-  resolvedTarball?: string;
+  /** Set when its workspace or its lockfile resolves it to something local. */
+  local?: { reason: string; evidence: Evidence };
+  /** The tarball it comes from, and the file or command that reports it. */
+  tarball?: { url: string; source: string };
   specSource?: string;
 }): OriginDecision {
   const evidence: Evidence[] = [];
@@ -83,6 +87,10 @@ export function decideOrigin(input: {
       return { query: false, reason: `not installed from a registry ("${input.spec}")`, evidence };
     }
   }
+  if (input.local) {
+    evidence.push(input.local.evidence);
+    return { query: false, reason: input.local.reason, evidence };
+  }
   if (input.registry.state === "unknown") {
     return {
       query: false,
@@ -91,18 +99,17 @@ export function decideOrigin(input: {
     };
   }
   evidence.push(...input.registry.evidence);
-  if (!isPublicRegistry(input.registry.defaultRegistry)) {
+  if (!input.registry.defaultPublic) {
     return { query: false, reason: "private default registry configured", evidence };
   }
   const scope = scopeOf(input.name);
-  const scopeRegistry = scope ? input.registry.scopes.get(scope) : undefined;
-  if (scopeRegistry && !isPublicRegistry(scopeRegistry)) {
+  if (scope && input.registry.scopes.get(scope) === false) {
     return { query: false, reason: `scope ${scope} is mapped to a private registry`, evidence };
   }
-  if (input.resolvedTarball !== undefined) {
+  if (input.tarball !== undefined) {
     let host: string | undefined;
     try {
-      host = new URL(input.resolvedTarball).host;
+      host = new URL(input.tarball.url).host;
     } catch {
       host = undefined;
     }
@@ -115,7 +122,7 @@ export function decideOrigin(input: {
     }
     evidence.push({
       kind: "fact",
-      source: "pnpm list --global --json",
+      source: input.tarball.source,
       description: "installed from a registry.npmjs.org tarball",
     });
   }

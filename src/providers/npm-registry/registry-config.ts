@@ -1,32 +1,39 @@
 import type { Evidence } from "../../core/model.js";
 
-export const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
+const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
 
+/**
+ * Only whether each registry is the public one is kept. A registry URL can
+ * carry a credential in its user info, its query or its path, so no part of
+ * it is stored or shown (docs/architecture.md §8).
+ */
 export type RegistryConfig =
   | {
       state: "known";
-      defaultRegistry: string;
-      /** "@scope" → registry URL. */
-      scopes: Map<string, string>;
+      defaultPublic: boolean;
+      /** "@scope" → whether it maps to the public registry. */
+      scopes: Map<string, boolean>;
       evidence: Evidence[];
     }
   | { state: "unknown"; reason: string };
 
-export function normalizeRegistry(url: string): string {
+function isPublicRegistry(url: string): boolean {
   const trimmed = url.trim();
-  return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+  const normalized = trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+  return normalized.toLowerCase() === PUBLIC_REGISTRY;
 }
 
-export function isPublicRegistry(url: string): boolean {
-  return normalizeRegistry(url).toLowerCase() === PUBLIC_REGISTRY;
+function describeRegistry(subject: string, isPublic: boolean): string {
+  return `${subject} is ${isPublic ? "" : "not "}the public registry`;
 }
 
 /**
  * Extracts only registry settings from `pnpm config list --json`.
  *
  * The output can contain auth tokens. Only `registry` and `@scope:registry`
- * keys are read; every other value is dropped immediately and never logged
- * or stored (docs/architecture.md §8).
+ * keys are read, and only whether each is the public registry is kept; every
+ * other value is dropped immediately and never logged or stored
+ * (docs/architecture.md §8).
  */
 export function parsePnpmConfig(stdout: string): RegistryConfig {
   let parsed: unknown;
@@ -42,33 +49,37 @@ export function parsePnpmConfig(stdout: string): RegistryConfig {
   const registry = typeof record.registry === "string" ? record.registry : undefined;
   if (!registry) return { state: "unknown", reason: "pnpm config does not report a registry" };
 
-  const scopes = new Map<string, string>();
+  const scopes = new Map<string, boolean>();
   for (const [key, value] of Object.entries(record)) {
     const match = /^(@[^:]+):registry$/.exec(key);
-    if (match?.[1] && typeof value === "string") scopes.set(match[1], normalizeRegistry(value));
+    if (match?.[1] && typeof value === "string") scopes.set(match[1], isPublicRegistry(value));
   }
+  const defaultPublic = isPublicRegistry(registry);
   return {
     state: "known",
-    defaultRegistry: normalizeRegistry(registry),
+    defaultPublic,
     scopes,
     evidence: [
       {
         kind: "fact",
         source: "pnpm config list --json",
-        description: `effective default registry is ${normalizeRegistry(registry)}`,
+        description: describeRegistry("effective default registry", defaultPublic),
       },
     ],
   };
 }
 
 /**
- * Applies a project's .npmrc on top of the user's effective config. Only
- * registry lines are read. A value that uses ${VAR} expansion cannot be
- * resolved safely, so the registry becomes unknown and nothing is queried.
+ * Adds a .npmrc that could apply to a project. A registry stays public only
+ * while every source agrees: a public value never undoes a private one from
+ * another source, because which file wins depends on the package manager
+ * (architecture.md §8). Only registry lines are read. A value that uses
+ * ${VAR} expansion cannot be resolved safely, so the registry becomes
+ * unknown and nothing is queried.
  */
 export function applyNpmrc(base: RegistryConfig, text: string, file: string): RegistryConfig {
   if (base.state === "unknown") return base;
-  let defaultRegistry = base.defaultRegistry;
+  let defaultPublic = base.defaultPublic;
   const scopes = new Map(base.scopes);
   const evidence = [...base.evidence];
   for (const rawLine of text.split(/\r?\n/)) {
@@ -86,16 +97,14 @@ export function applyNpmrc(base: RegistryConfig, text: string, file: string): Re
     if (value.includes("${")) {
       return { state: "unknown", reason: `${file} sets ${key} through an environment variable` };
     }
+    const isPublic = isPublicRegistry(value);
     if (key === "registry") {
-      defaultRegistry = normalizeRegistry(value);
+      defaultPublic &&= isPublic;
     } else {
-      scopes.set(key.slice(0, key.indexOf(":")), normalizeRegistry(value));
+      const scope = key.slice(0, key.indexOf(":"));
+      scopes.set(scope, (scopes.get(scope) ?? true) && isPublic);
     }
-    evidence.push({
-      kind: "fact",
-      source: file,
-      description: `${key} is ${normalizeRegistry(value)}`,
-    });
+    evidence.push({ kind: "fact", source: file, description: describeRegistry(key, isPublic) });
   }
-  return { state: "known", defaultRegistry, scopes, evidence };
+  return { state: "known", defaultPublic, scopes, evidence };
 }

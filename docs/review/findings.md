@@ -67,6 +67,30 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-28 | baja | robustez | Falsos positivos del guard de Bash con backticks y con `.npmrc` | abierto |
 | F-29 | baja | robustez | El guard de edición revisa archivos fuera del repositorio | abierto |
 | F-30 | baja | seguridad | Los hooks fallan abiertos ante una entrada inválida | abierto |
+| F-31 | alta | privacidad | Credenciales dentro de la URL del registry llegan a la evidencia y a `explain` | resuelto: código corregido en `55d8461` |
+| F-32 | alta | privacidad | En workspaces se consultan en el registry público paquetes que resuelven a uno local | resuelto: código corregido en `93a1807` |
+| F-33 | media | privacidad | Specs locales tratados como de registry: tarballs `.tgz` y `optionalDependencies` | abierto |
+| F-34 | media | privacidad | El `.npmrc` del proyecto se interpreta distinto que en npm y pnpm | abierto |
+| F-35 | media | evidencia | "installed by" con confianza `high` cuando el package manager solo se infiere | abierto |
+| F-36 | media | evidencia | Una release de GitHub con tag prerelease queda con confianza `high` | abierto |
+| F-37 | media | corrección | Dos herramientas distintas reciben el mismo id | abierto |
+| F-38 | media | robustez | Un archivo `.git` ilegible aborta toda la ejecución | abierto |
+| F-39 | media | privacidad | `--offline` no impide que Corepack descargue pnpm por la red | abierto |
+| F-40 | baja | corrección | Un `package.json` de un directorio superior le gana a un `.git` más cercano | abierto |
+| F-41 | baja | robustez | Sin releases en GitHub, los tags en caché no se usan offline y `/releases/latest` se repite | abierto |
+| F-42 | baja | desvío de docs | El límite de GitHub alcanzado en `/tags` no emite diagnóstico | abierto |
+| F-43 | baja | desvío de docs | Un fallo de `git describe` no produce `error` ni diagnóstico | abierto |
+| F-44 | baja | privacidad | Un remote relativo se interpreta como repositorio de GitHub | abierto |
+| F-45 | baja | seguridad | `sanitize` no escapa controles bidi ni de ancho cero | abierto |
+| F-46 | baja | robustez | `Filesystem` lee sin límite ni chequeo de tipo, y `exists` trata `EACCES` como ausencia | abierto |
+| F-47 | baja | corrección | Los sufijos de peers de un lockfile pnpm v5 dejan `resolved` desconocido | abierto |
+| F-48 | baja | robustez | El repositorio no se puede verificar en Windows | abierto |
+| F-49 | baja | robustez | Ni el composition root ni el aviso de primera ejecución tienen tests | abierto |
+| F-50 | alta | corrección | Con pnpm 12, ningún paquete global recibe su `latest` | resuelto: código corregido en `793c369` |
+| F-51 | baja | corrección | El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea | abierto |
+| F-52 | alta | privacidad | Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público | abierto |
+| F-53 | media | privacidad | Credenciales dentro de un spec que es una URL llegan a `explain` | abierto |
+| F-54 | baja | robustez | El guard de Bash bloquea leer `core.hooksPath` | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -153,6 +177,8 @@ Propuesta:
 - Si hay un `.npmrc` en un directorio intermedio que no se sabe interpretar, dejar el registry como indeterminado.
 
 **Corrección.** Aplicada el 2026-09-27, a pedido de la persona responsable. Se aplica el `.npmrc` de la raíz del workspace (`pnpm-workspace.yaml`) antes que el del proyecto, y un `.npmrc` intermedio deja el registry indeterminado. Documentado en architecture.md §8. Tests en `tests/integration/inventory.test.ts`: la reproducción del hallazgo ya no consulta nada.
+
+**Nota del 2026-09-28.** La corrección de F-32 (`93a1807`) reemplazó esta regla. Ahora se leen todos los `.npmrc` desde el proyecto hasta home, incluido el intermedio, y un registry es público solo si ninguno dice otra cosa. La reproducción de este hallazgo sigue sin consultar nada.
 
 ### F-04 · Un `.npmrc` ilegible no impide consultar
 
@@ -404,6 +430,8 @@ Propuesta: permitir `sed` sin `-i` y `awk` sin redirecciones, con casos de test 
 
 Lo mismo pasa con `git check-ignore .claude/settings.local.json`: `check-ignore` solo lee, pero no está en `GIT_SAFE_ON_GUARDS`. La propuesta suma `check-ignore` a esa lista. No se corrige desde la sesión: `.claude/hooks/` solo lo cambia la persona responsable.
 
+El 2026-09-28 también se bloqueó `tr -d '\r' < .claude/settings.json`, sobre una copia exportada fuera del repositorio: la regla compara el texto de la ruta, no dónde está el archivo (lo mismo que F-29 para el guard de edición).
+
 ### F-18 · `node -e` puede escribir los archivos de los frenos sin que el guard lo bloquee
 
 - **Estado:** resuelto: código corregido en `54ec142`
@@ -651,3 +679,445 @@ Propuesta: aplicar los patrones solo dentro del repositorio, bajo `src/` y `test
 Con JSON inválido o una entrada vacía por stdin, los dos hooks terminan sin decidir, y Claude Code permite la acción. Si `command` no es un string, se convierte con `String()`: `["rm","-rf","~"]` pasa como `rm,-rf,~`. Un error del hook o un timeout de más de 10 segundos tampoco bloquea. El riesgo práctico es bajo: Claude Code manda JSON válido, y un comando de 800.000 caracteres o 5.000 `$(` anidados se evaluó en menos de 50 ms.
 
 Propuesta: ante una entrada que no se puede interpretar, devolver `deny`; envolver la evaluación en `try/catch` y denegar ante un error.
+
+## Segunda revisión integral del 2026-09-28
+
+Pedida por la persona responsable: revisión de punta a punta de `src/`, tests, CI, docs y frenos, con Codex como segunda opinión. Método:
+
+- Se revisó una exportación limpia de `origin/main` (`b92a561`). El clon local estaba en `0ad1b23`, con el código nuevo sin trackear y los docs canónicos en su versión vieja, así que revisar sobre él habría producido desvíos falsos.
+- Codex revisó en paralelo, en modo solo lectura y sin poder ejecutar nada. Sus hallazgos se verificaron uno por uno: los que están abajo se reprodujeron o se confirmaron leyendo el código; los que no se sostuvieron figuran al final.
+- Las reproducciones son tests de vitest escritos fuera del repositorio sobre los dobles de `tests/helpers/fakes.ts`: cada test afirma la conducta defectuosa y pasa. Además, se probaron contra sistemas reales Corepack (F-39), `api.github.com` (ver "Verificaciones") y la búsqueda de ejecutables de Node en Windows.
+- Entorno: Windows 11, Node.js 22.23.2, pnpm 10.33.0 por Corepack 0.34.6, Git 2.55.0. La CI de `b92a561` en Linux está verde: 289 tests, `pnpm audit --prod` sin vulnerabilidades.
+
+### F-31 · Credenciales dentro de la URL del registry llegan a la evidencia y a `explain`
+
+- **Estado:** resuelto: código corregido en `55d8461`
+- **Severidad:** alta
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/npm-registry/registry-config.ts:58`, `:97`; `src/providers/npm-registry/origin.ts:93`
+- **Detectado:** 2026-09-28, Codex; reproducido por Claude Code
+- **Verificación:** reproducido
+
+`parsePnpmConfig` y `applyNpmrc` copian la URL completa del registry en la evidencia, y `decideOrigin` pasa esa evidencia al claim `latest`. Si el registry lleva credenciales en la URL, algo que npm acepta, por ejemplo `https://user:S3CRET@npm.corp.example/`, `explain` y `explain --json` imprimen `S3CRET`.
+
+Reproducción: `pnpm config list --json` con ese registry, un proyecto con una dependencia, y `renderExplain` de esa dependencia. La salida contiene `S3CRET`.
+
+architecture.md §8 dice que de la salida de `pnpm config list` solo se extraen las claves de registry y que "el resto se descarta sin registrarse en logs, evidencia ni diagnósticos". El riesgo es concreto: la plantilla de issues `actually-was-wrong.yml` exige pegar la salida de `actually explain <tool>`, y solo pide quitar rutas y nombres de paquetes.
+
+Propuesta: quitar `username`, `password` y la query de toda URL de registry antes de armar la evidencia, en `parsePnpmConfig` y en `applyNpmrc`. Test en `tests/security` con una URL con credenciales, sobre `explain` y `explain --json`.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable, y distinta de la propuesta. Quitar usuario, contraseña y query no alcanza: hay registries que llevan el token en el path, como `https://npm.fury.io/<TOKEN>/`. Lo señaló Codex al revisar el plan. `RegistryConfig` ya no guarda URLs, solo si cada registry es el público. La evidencia dice "is the public registry" o "is not the public registry", con el comando o el archivo que lo configuró; `10fe43a` ajustó la redacción para el `.npmrc`. Las decisiones de consulta no cambian. Documentado en architecture.md §8 y docs/providers/pnpm.md. Tests en `tests/security/security.test.ts`, con credenciales en el usuario, la query y el path, por `pnpm config list` y por `.npmrc`, sobre `explain`, `toolJson` y el inventario serializado entero; fallan sin el cambio. De punta a punta en Docker con pnpm 10.33.0: el `pnpm config list --json` real imprime la URL con la credencial completa, y `actually explain` y `explain --json` no muestran ni la credencial ni la URL.
+
+### F-32 · En workspaces se consultan en el registry público paquetes que resuelven a uno local
+
+- **Estado:** resuelto: código corregido en `93a1807`
+- **Severidad:** alta
+- **Tipo:** privacidad
+- **Ubicación:** `src/application/inventory.ts:420-426`, `src/providers/project/project.ts:194`, `:296`
+- **Detectado:** 2026-09-28, Claude Code; el caso del `.npmrc` de la raíz de npm, Codex
+- **Verificación:** reproducido
+
+La decisión de origen mira solo el spec del `package.json`. En un workspace, un rango semver puede resolver a otro paquete del mismo repositorio, y ese nombre se consulta en `registry.npmjs.org`:
+
+- **npm o yarn workspaces.** Desde `ws/packages/app`, que depende de `"@corp/utils": "^1.0.0"`, hermano en `ws/packages/utils`, se consultó `https://registry.npmjs.org/@corp%2Futils/latest`. El `package-lock.json` de la raíz dice `link: true`, pero solo se lee el lockfile del directorio del proyecto. Tampoco se aplica el `.npmrc` de la raíz, porque solo se reconoce `pnpm-workspace.yaml`: con `registry=https://npm.corp.example/` en `ws/.npmrc`, igual se consultó `left-pad`.
+- **pnpm.** El `pnpm-lock.yaml` del workspace dice `version: link:../utils` para ese importer. `resolved` queda `unknown` con el motivo "not a registry version", pero el nombre se consulta igual.
+
+Además, en un miembro de un workspace npm, `resolved` e `installed` quedan `unknown` con el motivo "no lockfile", aunque el lockfile y el paquete instalado están en la raíz.
+
+architecture.md §8: "Nunca se envían [...] nombres ni raíces de proyectos", y "ante la duda, no se consulta". El nombre de un paquete interno del workspace es un nombre de proyecto. La regla 1 de §8, "su spec es de registry: un rango semver", no cubre este caso: el spec es un rango y la resolución es local.
+
+Propuesta:
+
+- No consultar un paquete si el lockfile lo resuelve a algo que no es una versión de registry (`link:`, `file:`, `link: true`, una ruta).
+- Reconocer la raíz de un workspace npm o yarn (`workspaces` en un `package.json` superior), aplicar su `.npmrc` y tratar como locales los nombres de sus miembros. Si la raíz no se puede interpretar, registry indeterminado.
+- Sumar a §8 la resolución del lockfile como condición.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable. La revisión del plan con Codex cambió tres puntos de la propuesta:
+
+- **Nombres del workspace.** La raíz es el directorio más alto con `pnpm-workspace.yaml` o con `workspaces` en su `package.json`. Emular los globs de cada gestor podía dar menos miembros de los reales, así que se juntan los `name` de todos los `package.json` bajo la raíz, hasta la profundidad que alcanzan los patrones. Un paquete con uno de esos nombres no se consulta.
+- **Lockfile tipado.** No se consulta un paquete que el lockfile resuelve a `link:`, `file:`, `workspace:`, `link: true`, `resolved: file:` (el caso de `overrides`), git o una URL, ni uno cuyo tarball no es de `registry.npmjs.org`. La evidencia nombra solo el tipo de resolución.
+- **`.npmrc`.** En lugar de modelar cuál aplica en cada gestor, se leen todos desde el proyecto hasta home, y un registry es público solo si ninguno dice otra cosa. Reemplaza la regla de F-03 sobre el `.npmrc` intermedio. Costo: un proyecto que vuelve al registry público sobre un mirror configurado para el usuario deja de consultarse.
+
+Además, en un miembro de un workspace npm, `resolved` sale del `package-lock.json` de la raíz, e `installed` se busca hasta la raíz, como lo hace Node.
+
+Documentado en architecture.md §8, CLAUDE.md, README y docs/providers. Hay 15 tests nuevos en `tests/integration/inventory.test.ts` y `tests/unit/providers.test.ts`, que fallan sin el cambio. `pnpm check` en Linux: 308 tests.
+
+De punta a punta en Docker, con un workspace npm real (`npm install`) y `actually` sin red (`--network none`):
+
+- `@corp/utils` da "a package of the same workspace";
+- `is-number`, del mismo miembro, da "could not reach registry.npmjs.org": solo para él se intentó la consulta;
+- `resolved` e `installed` salen del lockfile y del `node_modules` de la raíz.
+
+Con los gestores reales se verificó lo que dice §8 de cada uno:
+
+- npm 10.9.9 avisa `ignoring workspace config` para el `.npmrc` de un miembro;
+- yarn 1.22.22 hace sus requests al registry de un `.npmrc` que está dos niveles arriba.
+
+Pérdida funcional acotada: con un lockfile v5 (pnpm 7), una dependencia con sufijo de peers (`1.2.3_react@18`) deja de consultarse hasta que se corrija F-47.
+
+### F-33 · Specs locales tratados como de registry: tarballs `.tgz` y `optionalDependencies`
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/npm-registry/origin.ts:26-33`, `src/providers/project/project.ts:178-186`
+- **Detectado:** 2026-09-28, Claude Code (tarballs) y Codex (`optionalDependencies`)
+- **Verificación:** reproducido
+
+Dos casos en los que npm no resuelve del registry y `actually` consulta igual:
+
+- `"internal-lib": "internal-lib-1.0.0.tgz"`: npm trata como archivo local todo spec terminado en `.tgz`, `.tar.gz` o `.tar`. `isRegistrySpec` lo acepta como dist-tag.
+- `dependencies.secret = "^1.0.0"` y `optionalDependencies.secret = "file:../secret"`: según la documentación de npm, `optionalDependencies` reemplaza la entrada de `dependencies`. El código se queda con la primera sección, informa `requested: ^1.0.0` y consulta `/secret/latest`.
+
+En los dos casos se envía el nombre de un paquete local. Si alguien publicó ese nombre en npm, la versión de ese paquete ajeno aparece como `latest`, con evidencia `fact`.
+
+Propuesta: excluir en `isRegistrySpec` los specs que npm-package-arg trata como archivo; aplicar la precedencia de npm entre secciones, `optionalDependencies` por encima de `dependencies`. Tests con los dos casos.
+
+### F-34 · El `.npmrc` del proyecto se interpreta distinto que en npm y pnpm
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/npm-registry/registry-config.ts:77-85`, `src/application/inventory.ts:405-408`
+- **Detectado:** 2026-09-28, Codex (claves con comillas) y Claude Code (precedencia)
+- **Verificación:** reproducido el primer caso; el segundo, por lectura
+
+- **Claves con comillas.** El formato ini de npm acepta `"@corp:registry"=https://npm.corp.example/`. `applyNpmrc` no reconoce la clave, la ignora, y `@corp/secret` se consultó en el registry público.
+- **Precedencia.** En npm y pnpm, las variables de entorno (`npm_config_registry`) ganan sobre el `.npmrc` del proyecto. El código aplica el `.npmrc` del proyecto encima de la configuración efectiva, que ya incluye el entorno. Con `npm_config_registry` apuntando a un mirror y `registry=https://registry.npmjs.org/` en el proyecto, `actually` consulta el público y pnpm usaría el mirror. No se verificó con pnpm: el guard de Bash bloquea `pnpm config get registry`. Es inferencia a partir del orden de capas de npm (cli, env, proyecto, usuario, global).
+
+architecture.md §8, condición 2: el registry predeterminado efectivo tiene que ser el público.
+
+Propuesta: interpretar las claves como lo hace ini, sacando las comillas; ante cualquier línea que mencione `registry` y no se pueda interpretar, registry indeterminado. Si el entorno define `npm_config_registry` o `npm_config_@scope:registry`, que no lo pise el `.npmrc` del proyecto.
+
+### F-35 · "installed by" con confianza `high` cuando el package manager solo se infiere
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** evidencia
+- **Ubicación:** `src/application/inventory.ts:428-433`
+- **Detectado:** 2026-09-28, Claude Code y Codex
+- **Verificación:** reproducido
+
+El claim `installation` de una dependencia de proyecto junta el `fact` "`node_modules/a/package.json` version is 1.0.0" con la inferencia del package manager, por ejemplo "package-lock.json is present". Como hay un `fact`, `confidenceFor` da `high`. Reproducción: `packageManager` del proyecto `npm` con confianza `low`, e `installation` y `update` de `a`, "installed by npm", con `high`.
+
+architecture.md §6: `high` exige que un `fact` afirme el valor. Ese `fact` afirma la versión instalada, no quién la instaló.
+
+Propuesta: limitar la confianza de `installation` a la del package manager (`cap`), o dejar como evidencia del instalador solo la del package manager.
+
+### F-36 · Una release de GitHub con tag prerelease queda con confianza `high`
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** evidencia
+- **Ubicación:** `src/providers/github/resolver.ts:80-97`
+- **Detectado:** 2026-09-28, Claude Code y Codex
+- **Verificación:** reproducido
+
+Si `/releases/latest` devuelve `tag_name: "v3.0.0-beta.1"` porque quien publica no la marcó como prerelease, el resultado es `latest: 3.0.0-beta.1` con confianza `high`.
+
+architecture.md §5, "Qué significa `latest`": si la versión declarada tiene sufijo de prerelease, la evidencia contradice "estable" y el claim queda `low`. El resolver de npm ya lo aplica; el de GitHub, no.
+
+Propuesta: igual que en npm, `contradicted` cuando `semver.prerelease(v) !== null`, con la inferencia en la evidencia.
+
+### F-37 · Dos herramientas distintas reciben el mismo id
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** corrección
+- **Ubicación:** `src/core/record.ts:17-25`, `src/application/inventory.ts:203-235`, `:339`, `src/application/lookup.ts:10`
+- **Detectado:** 2026-09-28, Claude Code y Codex
+- **Verificación:** reproducido
+
+- Dos repositorios declarados en `[[tools.git]]`, `~/vendor-a/tool` y `~/vendor-b/tool`, reciben `global:git:tool`.
+- El registro de pnpm mismo y un ejecutable `~/.local/bin/pnpm`, por ejemplo con el prefix de npm en `~/.local`, reciben `global:unknown:pnpm`.
+
+`status pnpm` responde "matches 2 tools. Pass one of these ids" y lista dos ids idénticos. Pasar ese id devuelve siempre el primero: el segundo no se puede consultar.
+
+design.md §14: el id sirve "para comparar y referenciar" y "distingue [...] las herramientas sin provider conocido". architecture.md §5 dice que cambia si cambia la ubicación, y para las herramientas globales la ubicación no es parte del id.
+
+Propuesta: sumar la ubicación al id de los repositorios herramienta, como en `project:`; unir el ejecutable `pnpm` al registro de pnpm en vez de crear otro; y verificar en `buildInventory` que no haya ids repetidos. Actualizar el formato en architecture.md §5.
+
+### F-38 · Un archivo `.git` ilegible aborta toda la ejecución
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** robustez
+- **Ubicación:** `src/providers/git/repository.ts:26`
+- **Detectado:** 2026-09-28, Claude Code y Codex
+- **Verificación:** reproducido con un Filesystem que devuelve `EACCES`; en disco real, por lectura
+
+`resolveGitDir` es la única lectura sin protección: si `.git` es un archivo, de worktree o submódulo, que no se puede leer, la excepción sube hasta `run` y la ejecución termina con exit code `3` sin resultados. Alcanza con que ese `.git` esté en el proyecto actual o en cualquier repositorio bajo `scan.paths`.
+
+RA-009: los fallos de un provider no derriban el scan. architecture.md §13 clasifica "permission denied" como recuperable.
+
+Propuesta: leerlo con `readOptional` y, si falla, emitir un diagnóstico para ese repositorio y seguir.
+
+### F-39 · `--offline` no impide que Corepack descargue pnpm por la red
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** privacidad
+- **Ubicación:** `src/infrastructure/command-runner/allowlist.ts:58-64`, `src/application/inventory.ts:94`
+- **Detectado:** 2026-09-28, Codex; verificado por Claude Code
+- **Verificación:** reproducido con pnpm y Corepack reales, sin `nodeCommandRunner`, que en Windows no puede lanzar el shim
+
+`pnpm config list` corre siempre, también con `--offline` o `[network] enabled = false`. Si pnpm es un shim de Corepack, Corepack puede salir a la red. Reproducción: en un directorio vacío, con el entorno que `actually` le da a pnpm (`npm_config_update_notifier=false`, `COREPACK_ENABLE_AUTO_PIN=0`, `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, `LC_ALL=C`) y un `COREPACK_HOME` vacío, `pnpm --version` resolvió la última versión y descargó pnpm 12.6.0 ("Downloading the pnpm 12.6.0 binary for win32-x64..."). Con `COREPACK_ENABLE_NETWORK=0` falla con "Network access disabled by the environment". Con la caché de Corepack ya poblada no se observó tráfico, pero no se pudo descartar una consulta periódica: no verificado.
+
+architecture.md §8: "`--offline` evita toda consulta en esa ejecución". §7 agrega esas variables justamente para que pnpm no consulte la red por su cuenta. La descarga tampoco pasa por el aviso de design.md §12. El test `tests/security/security.test.ts:59` se llama "keeps pnpm from reaching the network", pero solo verifica esas variables.
+
+Propuesta: agregar `COREPACK_ENABLE_NETWORK=0` al entorno de pnpm, siempre o al menos sin red; considerar `COREPACK_DEFAULT_TO_LATEST=0`; documentarlo en §7.
+
+### F-40 · Un `package.json` de un directorio superior le gana a un `.git` más cercano
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** corrección
+- **Ubicación:** `src/application/inventory.ts:176-177`
+- **Detectado:** 2026-09-28, Codex; reproducido por Claude Code
+- **Verificación:** reproducido
+
+Primero se busca un `package.json` hacia arriba hasta el home, y solo si no aparece se busca `.git`. Con `~/work/package.json` y `status --project` desde `~/work/py`, un repositorio sin `package.json`, el proyecto informado es `~/work`, con sus dependencias.
+
+mvp.md §6: una raíz de proyecto es un directorio con `package.json` o `.git`.
+
+Propuesta: una sola búsqueda hacia arriba que se detenga en el primer directorio con cualquiera de los dos.
+
+### F-41 · Sin releases en GitHub, los tags en caché no se usan offline y `/releases/latest` se repite
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `src/providers/github/resolver.ts:65-68`, `src/providers/shared/cached-get.ts:73`
+- **Detectado:** 2026-09-28, Codex; reproducido por Claude Code
+- **Verificación:** reproducido
+
+La caché guarda solo respuestas 200. En un repositorio sin releases, el 404 de `/releases/latest` no se guarda:
+
+- offline, el resolver devuelve "offline" antes de mirar los tags, que sí están en caché;
+- online, dentro del TTL, `/releases/latest` se pide en cada ejecución y gasta cuota.
+
+architecture.md §8: sin red se usa la caché si tiene la entrada. §14 justifica la caché por la cuota de GitHub.
+
+Propuesta: guardar también el 404 de `/releases/latest` con el mismo TTL, o seguir a los tags en caché cuando falta la respuesta de releases, dejando dicho en la evidencia que no se sabe si hay releases.
+
+### F-42 · El límite de GitHub alcanzado en `/tags` no emite diagnóstico
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** desvío de docs
+- **Ubicación:** `src/providers/github/resolver.ts:109-112`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido
+
+Si el límite se agota en la consulta de releases, se emite el warning "GitHub rate limit reached". Si se agota en la de tags, se corta igual pero sin diagnóstico: las versiones quedan `unknown` y la salida no dice por qué.
+
+architecture.md §13 usa exactamente ese caso como ejemplo de `warning`.
+
+Propuesta: una sola función que marque el límite y emita el diagnóstico, usada en los dos lugares.
+
+### F-43 · Un fallo de `git describe` no produce `error` ni diagnóstico
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** desvío de docs
+- **Ubicación:** `src/providers/git/repository.ts:169-178`
+- **Detectado:** 2026-09-28, Codex; reproducido por Claude Code
+- **Verificación:** reproducido
+
+Si `git tag --points-at HEAD` funciona pero `git describe` falla por timeout o por `safe.directory`, el mensaje queda solo como evidencia: la herramienta queda `unknown`, no `error`, y no hay diagnóstico. La corrección de F-12 cubre el fallo del primer comando, no el del segundo.
+
+architecture.md §13: un provider que falla emite `error` y sus herramientas quedan en `status: "error"`.
+
+Propuesta: fuera de "No names found", un fallo de `describe` completa `failure`, como el de `tags`.
+
+### F-44 · Un remote relativo se interpreta como repositorio de GitHub
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/github/url.ts:15`, `src/providers/git/repository.ts:94`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido
+
+`parseGithubUrl` acepta la abreviatura `owner/repo` de npm, y se usa también para los remotes de Git, donde `url = backups/tool` o `url = ../upstream` son rutas locales. `../upstream` da `owner: ".."`, y el request a `/repos/../upstream/...` se normaliza a `/upstream/...`. En los dos casos se envía a `api.github.com` el nombre de un directorio local, y la evidencia afirma como `fact` que el remote apunta a GitHub.
+
+architecture.md §8: nunca se envían rutas.
+
+Propuesta: un parser para remotes de Git que no acepte la abreviatura, y rechazar `.` y `..` como owner o repo.
+
+### F-45 · `sanitize` no escapa controles bidi ni de ancho cero
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** seguridad
+- **Ubicación:** `src/cli/output/sanitize.ts:2-4`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido
+
+`sanitize` escapa C0, DEL y C1, pero no los caracteres de formato de Unicode: `U+202A`–`U+202E`, `U+2066`–`U+2069`, `U+200B`–`U+200F` y `U+FEFF`. Un tag, un remote, un nombre de directorio o de ejecutable con `U+202E` reordena visualmente la línea en la terminal. Es la misma promesa que cerró F-05: la salida tiene que poder verificarse.
+
+Propuesta: escapar también esos rangos, con casos en `tests/security`.
+
+### F-46 · `Filesystem` lee sin límite ni chequeo de tipo, y `exists` trata `EACCES` como ausencia
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts:8-16`
+- **Detectado:** 2026-09-28, Codex y Claude Code
+- **Verificación:** por lectura
+
+- `readText` usa `readFile` sin verificar que sea un archivo regular ni limitar el tamaño. Un `package.json` o un lockfile que es un FIFO deja la ejecución colgada para siempre; uno enorme agota la memoria. El timeout del CommandRunner no cubre estas lecturas.
+- `exists` devuelve `false` ante cualquier error. Si el directorio de la configuración no tiene permiso de búsqueda, `loadConfig` aplica los defaults, con la red activada, aunque el archivo diga `enabled = false`. Un `.npmrc` que es un symlink a un destino inaccesible se omite, en vez de dejar el registry indeterminado como pide la corrección de F-04.
+
+design.md §13: los defaults tienen que ser conservadores y un archivo que no se puede interpretar es fatal.
+
+Propuesta: en `readText`, `stat` previo, solo archivos regulares y un tope de tamaño; en `exists`, `false` solo para `ENOENT` y `ENOTDIR`, y cualquier otro error se propaga para que cada llamador decida.
+
+### F-47 · Los sufijos de peers de un lockfile pnpm v5 dejan `resolved` desconocido
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** corrección
+- **Ubicación:** `src/providers/project/project.ts:78-81`
+- **Detectado:** 2026-09-28, Claude Code y Codex
+- **Verificación:** reproducido
+
+En los lockfiles v5 (pnpm 7), los peers van con `_`: `a: 1.2.3_react@18.0.0`. `stripPeerSuffix` solo corta en `(`, así que `resolved` queda `unknown` con el motivo "is not a registry version", que es falso. El error va del lado seguro. docs/providers/pnpm.md no dice qué versiones de lockfile se soportan.
+
+Propuesta: cortar en `_` cuando `lockfileVersion` es 5.x, o declarar en docs/providers/pnpm.md que v5 no se soporta.
+
+### F-48 · El repositorio no se puede verificar en Windows
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** falta `.gitattributes`; `tests/helpers/fakes.ts`; `package.json` (`simple-git-hooks`)
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido
+
+En un clon hecho en Windows con la configuración por defecto de Git (`core.autocrlf=true`):
+
+- `pnpm format:check` falla en 62 archivos. La única diferencia es CRLF: con `--end-of-line crlf` pasa.
+- 26 tests fallan. Los dobles usan rutas POSIX (`/home/me/...`) y el código usa `node:path`, que en Windows arma rutas con `\`. Los tests del repositorio hostil dependen de `sh`.
+
+El hook `pre-commit` corre `format:check`, y `pre-push` corre `pnpm check`: en Windows no se puede commitear ni pushear sin saltear los hooks, que es lo que el guard intenta impedir (F-23). El runtime en Windows está fuera del MVP (prd.md), pero no hay una decisión escrita sobre desarrollar en Windows.
+
+Propuesta: `.gitattributes` con `* text=auto eol=lf`, que es barato y no ambiguo. Para los tests, decidir si se soporta desarrollar en Windows (dobles con `path.posix` o rutas armadas con `join`) o se documenta WSL como requisito en CONTRIBUTING.
+
+### F-49 · Ni el composition root ni el aviso de primera ejecución tienen tests
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `src/composition.ts:71-93`, `tests/integration/cli.test.ts:41-53`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** por lectura (ningún test importa `createRuntime` ni el marcador)
+
+Las reglas del aviso de design.md §12 viven en `createRuntime`: antes del primer request, una sola vez, marcador en el estado local, nunca con `--offline`, y repetirlo si el marcador no se puede escribir. El test de la CLI reemplaza el runtime por un doble que llama a `notice` a mano, así que ninguna de esas reglas está cubierta. Tampoco hay un test que ejecute el binario compilado: mvp-acceptance.md lo verificó a mano.
+
+Propuesta: tests de `createRuntime` con directorios temporales (`XDG_*_HOME`) y un `HttpClient` doble, y un smoke test de `dist/cli/index.js --json` en CI.
+
+### F-50 · Con pnpm 12, ningún paquete global recibe su `latest`
+
+- **Estado:** resuelto: código corregido en `793c369`
+- **Severidad:** alta
+- **Tipo:** corrección
+- **Ubicación:** `src/providers/pnpm/global.ts:141-145`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido en Docker (Linux, pnpm 12.6.0 por Corepack)
+
+El spec de cada paquete global se lee de `dirname(pnpm root --global)/package.json`. En pnpm 10, `pnpm root --global` es `…/global/5/node_modules` y ese archivo lista todos los paquetes. En pnpm 12, `pnpm root --global` es `…/global/v11` y cada `pnpm add -g` crea su propio directorio, `…/global/v11/<id>/package.json`, con su lockfile. El archivo que se busca no existe, así que todos los paquetes globales quedan con `latest: unknown` ("origin could not be determined: no spec found") y nunca se consultan. Falla del lado seguro, sin enviar nada, pero la función principal para herramientas globales deja de andar con la versión de pnpm que Corepack instala hoy por defecto. `pnpm list --global --json` sigue dando versión y `path` de cada paquete, y en pnpm 12 ya no incluye `resolved`.
+
+Reproducción: imagen `node:22`, `corepack enable`, `pnpm add -g semver@7.5.0 is-number@6.0.0` con pnpm 12.6.0, y `actually status --global`.
+
+Propuesta: tomar el spec del `package.json` del directorio que contiene el `node_modules` de cada paquete, a partir del `path` que da `pnpm list`; sirve para los dos layouts. Tests con salidas reales de pnpm 10 y 12, y documentar en docs/providers/pnpm.md qué versiones de pnpm se soportan. En la CI, probar con pnpm 10 y 12.
+
+**Corrección.** Aplicada el 2026-09-28, a pedido de la persona responsable. El spec sale del `package.json` que declara cada paquete: el global de pnpm 10, junto a `pnpm root --global`, o el directorio propio del paquete directamente dentro de esa ruta con pnpm 12. Ningún otro `package.json` se usa, y la evidencia cita el que se usó. Documentado en architecture.md §8 y docs/providers/pnpm.md. Dos tests en `tests/integration/inventory.test.ts` con el layout real de pnpm 12.6.0; fallan sin el cambio. `pnpm check` en Linux: 291 tests. De punta a punta en Docker, con el paquete instalado con `pnpm add -g`: pnpm 12.6.0 y pnpm 10.33.0 informan `is-number` 6.0.0 → 7.0.0 y `semver` 7.5.0 → 7.8.5. Quedan sin hacer la prueba contra pnpm 10 y 12 en la CI y una lista explícita de versiones soportadas.
+
+### F-51 · El mensaje de nombre ambiguo muestra `\x0a` en vez de saltos de línea
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** corrección
+- **Ubicación:** `src/cli/run.ts:175`, `src/application/lookup.ts:15-18`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido en Docker
+
+`findTool` arma el mensaje de ambigüedad con saltos de línea, y `run` le aplica `sanitize` entero, que escapa `\n`. La salida real fue `actually: "is-number" matches 2 tools. Pass one of these ids:\x0a  global:pnpm:is-number\x0a  project:/home/node/projects/app:is-number`. Es un efecto de la corrección de F-05. design.md §9 pide listar los ids para elegir uno.
+
+Propuesta: sanear cada id y cada dato, no el mensaje armado; o partir el mensaje en líneas y sanear cada una. Test del mensaje de ambigüedad en `tests/integration/cli.test.ts`.
+
+### F-52 · Con yarn berry, un registry privado en `.yarnrc.yml` no impide consultar el público
+
+- **Estado:** abierto
+- **Severidad:** alta
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/project/project.ts` (solo se leen `.npmrc`), `src/application/inventory.ts` (`projectRecords`)
+- **Detectado:** 2026-09-28, Codex, al revisar el plan de F-32; verificado por Claude Code
+- **Verificación:** reproducido
+
+Yarn berry (2 en adelante) no lee `.npmrc`. Su registry sale de `npmRegistryServer` y de `npmScopes` en `.yarnrc.yml`, y por defecto es `https://registry.yarnpkg.com`. `actually` no lee ese archivo. En un proyecto yarn berry con registry privado toma la config de pnpm, que dice el registry público, y consulta en `registry.npmjs.org` los nombres de sus dependencias.
+
+Reproducción:
+
+- Con yarn 4.5.0 real, en un proyecto con `packageManager: yarn@4.5.0`, `yarn config get npmRegistryServer` da `https://registry.yarnpkg.com` con solo un `.npmrc` privado, y `https://npm.corp.example` con ese valor en `.yarnrc.yml`.
+- Con los dobles de tests, el mismo proyecto con `.yarnrc.yml` privado consultó `https://registry.npmjs.org/a/latest`.
+- No verificado: que yarn berry también lea el `.yarnrc.yml` de los directorios superiores y la variable `YARN_NPM_REGISTRY_SERVER`, como dice su documentación según Codex.
+
+architecture.md §8: "ante la duda, no se consulta".
+
+Propuesta: sumar `npmRegistryServer` y `npmScopes.<scope>.npmRegistryServer` de cada `.yarnrc.yml`, desde el proyecto hasta home, como fuentes más de la regla de F-32. El registry queda indeterminado si el archivo no se puede interpretar o usa `${VAR}`. Mientras no esté hecho, dejar indeterminado el registry de todo proyecto con un `.yarnrc.yml`.
+
+### F-53 · Credenciales dentro de un spec que es una URL llegan a `explain`
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** privacidad
+- **Ubicación:** `src/application/inventory.ts:460` (claim `requested`), `src/providers/npm-registry/origin.ts:84` (`declared as`), `src/application/inventory.ts:283` (global con versión que no es de registry)
+- **Detectado:** 2026-09-28, Claude Code, durante la corrección de F-31
+- **Verificación:** reproducido
+
+Un spec que es una URL con credenciales sale tal cual en tres lugares:
+
+- en `requested`;
+- en la evidencia `declared as "..."` de `latest`;
+- en `explain --json`.
+
+Por ejemplo, `"a": "https://user:TOKEN@files.corp.example/a-1.0.0.tgz"` en `package.json`. Si un paquete global se instaló desde un tarball así y pnpm informa esa URL como versión, también aparece en el motivo "pnpm reports a non-registry version (...)". Es el riesgo de F-31 por otro camino, y la plantilla de issues pide pegar esa salida. Es menos probable que F-31, porque exige escribir la credencial en el spec.
+
+Reproducción: con los dobles de tests, un proyecto con ese spec. `renderExplain` contiene el token.
+
+Propuesta: cuando un spec o una versión parsea como URL, mostrar solo el esquema y el host (`https://files.corp.example/…`). El path también puede llevar un token, como en F-31. La decisión de origen no cambia: un spec URL ya no se consulta. Test en `tests/security` sobre `explain` y `toolJson`.
+
+### F-54 · El guard de Bash bloquea leer `core.hooksPath`
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `.claude/hooks/guard-bash.mjs:340`
+- **Detectado:** 2026-09-28, Claude Code
+- **Verificación:** reproducido
+
+`git config core.hooksPath`, que solo lee el valor, se deniega con "changing core.hooksPath disables the git hooks". La regla no distingue lectura de escritura. El error va del lado seguro, pero el mensaje afirma algo falso sobre el comando, y para saber qué hooks corren hay que buscar otro camino.
+
+Propuesta: denegar solo cuando hay un valor después de la clave, o con `--unset`, `--replace-all` o `--add`. Permitir `git config core.hooksPath`, `git config --get core.hooksPath` y `--get-regexp`. Tests en `tests/security/agent-guard.test.ts` con las dos formas. Solo la persona responsable cambia `.claude/hooks/`.
+
+### Verificaciones
+
+- **Resolver de GitHub contra `api.github.com` real.** Estaba pendiente en mvp-acceptance.md. El 2026-09-28, desde Windows y sin token: `pnpm/pnpm` da `12.6.0` con confianza `high` por su última release, y `git/git`, sin releases, da `2.55.0` con confianza `medium` por el tag semver más alto, con la evidencia esperada.
+- **Prueba de punta a punta en Docker, 2026-09-28.** Linux (`node:22`, Node 22.23.3, Git 2.39.5). El paquete se compiló, se empaquetó con `pnpm pack` y se instaló con `pnpm add -g` usando pnpm 12.6.0. Escenario: paquetes globales viejos, un proyecto con tres dependencias desactualizadas, un repositorio de Git usado como herramienta y un ejecutable sin provider. Resultados:
+  - proyecto: las tres actualizaciones detectadas con su tipo (`minor`, `major`, `minor`) y la evidencia del lockfile, de `node_modules` y del registry;
+  - repositorio herramienta: instalado `10.0.0` por su tag y `latest` `12.6.0` desde `api.github.com`;
+  - el aviso de red sale una sola vez y por stderr;
+  - JSON: `schemaVersion`, sin `null`, todos los claims presentes y sin ids repetidos;
+  - exit codes `0`, `1` con `--exit-code`, `2` con flag inválido o herramienta inexistente, `3` con config inválida, que igual emite JSON válido;
+  - `--offline` usa la caché;
+  - solo lectura: nada cambió fuera de los directorios de caché y estado de `actually`. Una primera medición mostró un cambio en `.git/index` del repositorio, pero lo causaba el `git status` del propio script de medición; con el índice refrescado antes de medir, no hay cambios.
+  - Fallaron: F-50 y F-51.
+
+### Descartados en esta revisión
+
+- **Symlinks en el estado local y en la caché (Codex).** Plantar un symlink en `~/.local/state/actually` o en la caché exige poder escribir como la persona usuaria, y con eso ya se puede todo lo demás.
+- **Orden de los tags de GitHub (hipótesis de Claude Code).** Se pensó que la primera página de `/tags` podía no incluir el tag más alto. La API real devuelve los tags ordenados por versión descendente (`v2.56.0-rc2`, `v2.56.0-rc1`, …, `v2.55.0`), y el límite de 100 tags ya figura en docs/providers/github.md.
+- **Búsqueda de `git.exe` en el directorio del repositorio en Windows (hipótesis de Claude Code).** Con un `git.exe` falso en el directorio de trabajo, `execFile("git")` ejecutó el Git real.

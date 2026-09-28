@@ -9,12 +9,13 @@ Resolve the latest version of npm packages and read their `repository` field.
 A package is queried on `registry.npmjs.org` only if all of these hold:
 
 1. its spec is a registry spec: a semver range or a dist-tag, not `npm:`, `workspace:`, `link:`, `file:`, git or a URL;
-2. the effective default registry is `https://registry.npmjs.org/`;
-3. its scope is not mapped to another registry;
-4. when pnpm reports the tarball, it came from `registry.npmjs.org`;
-5. its name is not in `[network] exclude`.
+2. it is not a package of the same workspace, and the lockfile does not resolve it to something other than a registry version;
+3. every config source that could apply makes `https://registry.npmjs.org/` the default registry;
+4. no source maps its scope to another registry;
+5. when pnpm or the lockfile reports the tarball, it came from `registry.npmjs.org`;
+6. its name is not in `[network] exclude`.
 
-The effective registry comes from `pnpm config list --json`, with the project's `.npmrc` applied on top. A registry set through `${VAR}` cannot be resolved safely, so nothing is queried. If any condition cannot be determined, the package is not queried and `latest` is unknown with the reason.
+The config sources are `pnpm config list --json` and every `.npmrc` from the project up to home: which one applies depends on the package manager, so a registry counts as public only if none says otherwise. A registry set through `${VAR}` cannot be resolved safely, so nothing is queried. If any condition cannot be determined, the package is not queried and `latest` is unknown with the reason. architecture.md §8 has the full rule, including how a workspace and its packages are found.
 
 ## Evidence used
 
@@ -34,7 +35,7 @@ The effective registry comes from `pnpm config list --json`, with the project's 
 
 ## Files inspected
 
-The project's `.npmrc`.
+Every `.npmrc` from the project up to home, the workspace markers (`pnpm-workspace.yaml`, `workspaces` in `package.json`) and the `package.json` of the workspace's packages, and the lockfile.
 
 ## Network requests
 
