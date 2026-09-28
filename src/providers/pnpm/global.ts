@@ -96,6 +96,13 @@ function specManifests(rootDir: string, packagePath: unknown): string[] {
  * specManifests), which the npm-registry origin rule needs. pnpm is never
  * run inside a project.
  */
+/** actually never lets Corepack download pnpm (F-39): say how to do it by hand. */
+function withCorepackHint(message: string): string {
+  return /network access disabled/i.test(message)
+    ? `${message} (Corepack has not downloaded this pnpm version yet; run pnpm --version once outside any project)`
+    : message;
+}
+
 export async function scanPnpmGlobal(
   runner: CommandRunner,
   fs: Filesystem,
@@ -119,7 +126,7 @@ export async function scanPnpmGlobal(
             source: "pnpm",
             message: `${version.message}: global packages were not checked`,
           }
-        : { severity: "error", source: "pnpm", message: version.message },
+        : { severity: "error", source: "pnpm", message: withCorepackHint(version.message) },
     );
     return scan;
   }

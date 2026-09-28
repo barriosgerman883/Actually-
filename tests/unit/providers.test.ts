@@ -615,6 +615,19 @@ describe("pnpm global scan", () => {
       { severity: "error", source: "pnpm", message: "pnpm.version timed out" },
     ]);
   });
+  it("says how to get pnpm when Corepack may not download it (F-39)", async () => {
+    const scan = await scanPnpmGlobal(
+      fakeRunner({
+        "pnpm.version": {
+          ok: false,
+          reason: "failed",
+          message: "pnpm.version failed: Usage Error: Network access disabled by the environment",
+        },
+      }),
+      memoryFs({}),
+    );
+    expect(scan.diagnostics[0]?.message).toContain("run pnpm --version once outside any project");
+  });
 });
 
 describe("project scan", () => {
