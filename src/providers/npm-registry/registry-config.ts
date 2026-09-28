@@ -77,6 +77,13 @@ export function parsePnpmConfig(stdout: string): RegistryConfig {
   };
 }
 
+function unquote(text: string): string {
+  return text
+    .trim()
+    .replace(/^(["'])(.*)\1$/, "$2")
+    .trim();
+}
+
 /**
  * Adds a .npmrc that could apply to a project. A registry stays public only
  * while every source agrees: a public value never undoes a private one from
@@ -94,14 +101,21 @@ export function applyNpmrc(base: RegistryConfig, text: string, file: string): Re
     const line = rawLine.trim();
     if (line === "" || line.startsWith("#") || line.startsWith(";")) continue;
     const eq = line.indexOf("=");
-    if (eq < 0) continue;
-    const key = line.slice(0, eq).trim();
-    const value = line
-      .slice(eq + 1)
-      .trim()
-      .replace(/^["']|["']$/g, "");
-    const isRegistryKey = key === "registry" || /^@[^:]+:registry$/.test(key);
-    if (!isRegistryKey) continue;
+    // ini accepts quoted keys, such as "@corp:registry"=… (F-34).
+    const key = unquote(eq < 0 ? line : line.slice(0, eq));
+    const isRegistryKey = key === "registry" || /^@[^:\s]+:registry$/.test(key);
+    if (!isRegistryKey) {
+      // A key that names a registry but does not have a form npm reads the
+      // same way leaves the registry unknown instead of being ignored (F-34).
+      if (/(^|:)\s*registry$/i.test(key)) {
+        return { state: "unknown", reason: `${file} has a registry line that cannot be read` };
+      }
+      continue;
+    }
+    if (eq < 0) {
+      return { state: "unknown", reason: `${file} has a registry line that cannot be read` };
+    }
+    const value = unquote(line.slice(eq + 1));
     if (value.includes("${")) {
       return { state: "unknown", reason: `${file} sets ${key} through an environment variable` };
     }

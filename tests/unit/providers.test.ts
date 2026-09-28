@@ -116,6 +116,23 @@ describe("origin rule (architecture.md §8)", () => {
     const cfg = applyNpmrc(publicRegistry, "registry=https://mirror.corp/\n", "/p/.npmrc");
     expect(decideOrigin({ name: "semver", spec: "^7", registry: cfg }).query).toBe(false);
   });
+  it("reads quoted .npmrc keys as ini does (F-34)", () => {
+    const cfg = applyNpmrc(
+      publicRegistry,
+      '"@corp:registry"=https://npm.corp.example/\n\'registry\'="https://registry.npmjs.org/"\n',
+      "/p/.npmrc",
+    );
+    expect(decideOrigin({ name: "@corp/secret", spec: "^1", registry: cfg }).query).toBe(false);
+    expect(decideOrigin({ name: "semver", spec: "^7", registry: cfg }).query).toBe(true);
+  });
+  it.each(["@corp :registry=https://npm.corp/", "registry", "REGISTRY=https://npm.corp/"])(
+    "leaves the registry unknown for a registry line it cannot read: %s (F-34)",
+    (line) => {
+      expect(applyNpmrc(publicRegistry, `${line}\n`, "/p/.npmrc")).toMatchObject({
+        state: "unknown",
+      });
+    },
+  );
   it("never lets a public setting undo a private one from another source (F-32)", () => {
     const priv = parsePnpmConfig(
       JSON.stringify({ registry: "https://mirror.corp/", "@acme:registry": "https://npm.acme/" }),
