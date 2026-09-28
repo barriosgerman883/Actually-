@@ -36,7 +36,7 @@ None. See github.md.
 
 ## Failure modes
 
-A declared tool that is not a repository becomes an error record with a diagnostic. git refusing a repository (`safe.directory`) leaves the version unknown.
+A declared tool that is not a repository becomes an error record with a diagnostic. A `.git` file that cannot be read skips that repository with a warning; the rest of the run continues. git refusing a repository (`safe.directory`) leaves the version unknown.
 
 ## Security considerations
 

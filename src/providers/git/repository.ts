@@ -1,6 +1,6 @@
 import { isAbsolute, join, resolve } from "node:path";
 import semver from "semver";
-import type { Evidence } from "../../core/model.js";
+import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { CommandRunner, Filesystem } from "../../core/ports.js";
 import { parseGithubUrl, type GithubRepo } from "../github/url.js";
 
@@ -18,12 +18,26 @@ export interface GitRepository {
   github?: { repo: GithubRepo; remote: string; evidence: Evidence };
 }
 
-async function resolveGitDir(fs: Filesystem, root: string): Promise<string | undefined> {
+async function resolveGitDir(
+  fs: Filesystem,
+  root: string,
+  diagnostics: Diagnostic[],
+): Promise<string | undefined> {
   const dotGit = join(root, ".git");
   if (await fs.isDirectory(dotGit)) return dotGit;
   if (!(await fs.exists(dotGit))) return undefined;
-  // Worktrees and submodules: ".git" is a file with "gitdir: <path>".
-  const match = /^gitdir:\s*(.+)\s*$/m.exec(await fs.readText(dotGit));
+  // Worktrees and submodules: ".git" is a file with "gitdir: <path>". One
+  // that cannot be read skips this repository, not the run (RA-009, F-38).
+  const text = await readOptional(fs, dotGit);
+  if (text === undefined) {
+    diagnostics.push({
+      severity: "warning",
+      source: "git",
+      message: `${dotGit} could not be read`,
+    });
+    return undefined;
+  }
+  const match = /^gitdir:\s*(.+)\s*$/m.exec(text);
   if (!match?.[1]) return undefined;
   const target = match[1].trim();
   return isAbsolute(target) ? target : resolve(root, target);
@@ -65,8 +79,9 @@ export function parseRemotes(configText: string): GitRemote[] {
 export async function readRepository(
   fs: Filesystem,
   root: string,
+  diagnostics: Diagnostic[] = [],
 ): Promise<GitRepository | undefined> {
-  const gitDir = await resolveGitDir(fs, root);
+  const gitDir = await resolveGitDir(fs, root, diagnostics);
   if (!gitDir) return undefined;
   const commonDirText = await readOptional(fs, join(gitDir, "commondir"));
   const commonDir = commonDirText ? resolve(gitDir, commonDirText.trim()) : gitDir;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NetworkError } from "../../src/core/errors.js";
+import type { Diagnostic } from "../../src/core/model.js";
 import {
   installedFromTags,
   parseRemotes,
@@ -516,6 +517,24 @@ describe("git repository files", () => {
       "/main/.git/config": "",
     });
     expect(await readRepository(fs, "/w")).toMatchObject({ commit: "b".repeat(40), remotes: [] });
+  });
+});
+
+describe("unreadable .git file (F-38)", () => {
+  it("skips the repository with a warning instead of aborting the run", async () => {
+    const base = memoryFs({ "/w/.git": "gitdir: /main/.git/worktrees/w\n" });
+    const fs = {
+      ...base,
+      readText: async (path: string) => {
+        if (path === "/w/.git") throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+        return base.readText(path);
+      },
+    };
+    const diagnostics: Diagnostic[] = [];
+    expect(await readRepository(fs, "/w", diagnostics)).toBeUndefined();
+    expect(diagnostics).toEqual([
+      { severity: "warning", source: "git", message: "/w/.git could not be read" },
+    ]);
   });
 });
 

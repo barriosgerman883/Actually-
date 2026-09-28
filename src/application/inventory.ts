@@ -356,7 +356,7 @@ async function repoToolRecord(
   github: GithubRunState,
   diagnostics: Diagnostic[],
 ): Promise<ToolRecord> {
-  const repo = await readRepository(deps.fs, root);
+  const repo = await readRepository(deps.fs, root, diagnostics);
   const name = root.split(sep).filter(Boolean).pop() ?? root;
   if (!repo) {
     const record = buildRecord({
@@ -430,7 +430,7 @@ async function projectRecords(
   for (const file of scan.registryFiles) registry = applyRegistryFile(registry, file);
 
   const gitRoot = await findUpDir(fs, root, ".git", deps.env.homeDir);
-  const repo = gitRoot ? await readRepository(fs, gitRoot) : undefined;
+  const repo = gitRoot ? await readRepository(fs, gitRoot, diagnostics) : undefined;
   const packageManager: Claim<string> = scan.packageManager
     ? claimFrom(scan.packageManager.value, scan.packageManager.evidence)
     : scan.manifestPath
