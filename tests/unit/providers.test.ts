@@ -197,6 +197,33 @@ describe("origin rule (architecture.md §8)", () => {
       reason: `${file} could not be parsed`,
     });
     expect(applyYarnrcYml(publicRegistry, "- a\n", file)).toMatchObject({ state: "unknown" });
+    // Found by mutation testing: a list where a map belongs is unknown, not ignored.
+    for (const text of ["npmScopes: []\n", "npmScopes:\n  acme: []\n", "npmScopes:\n  acme: 3\n"]) {
+      expect(applyYarnrcYml(publicRegistry, text, file)).toMatchObject({
+        state: "unknown",
+        reason: `${file} has an npmScopes entry that cannot be read`,
+      });
+    }
+  });
+  it("keeps querying a scope that a file maps to the public registry", () => {
+    for (const cfg of [
+      applyNpmrc(publicRegistry, "@acme:registry=https://registry.npmjs.org/\n", "/p/.npmrc"),
+      applyYarnrcYml(
+        publicRegistry,
+        "npmScopes:\n  acme:\n    npmRegistryServer: https://registry.npmjs.org/\n",
+        "/p/.yarnrc.yml",
+      ),
+    ]) {
+      expect(decideOrigin({ name: "@acme/x", spec: "^1", registry: cfg }).query).toBe(true);
+    }
+  });
+  it("says pnpm config output that is not an object could not be parsed", () => {
+    for (const out of ["5", "[]", "null"]) {
+      expect(parsePnpmConfig(out)).toEqual({
+        state: "unknown",
+        reason: "pnpm config output could not be parsed",
+      });
+    }
   });
   it("reads registry lines from a yarn classic .yarnrc (F-52)", () => {
     const file = "/p/.yarnrc";
@@ -238,6 +265,12 @@ describe("npm latest resolver", () => {
     );
     expect(result.latest).toMatchObject({ state: "known", value: "7.8.5", confidence: "high" });
     expect(JSON.stringify(result.latest)).toContain('dist-tag \\"latest\\" is 7.8.5');
+  });
+  it("says when the answer came from the cache", async () => {
+    const cache = memoryCache({ [url]: { fetchedAt: 999_000, body: { version: "7.8.5" } } });
+    const result = await resolveNpmLatest("semver", origin, netContext(fakeHttp({}), { cache }));
+    expect(result.latest).toMatchObject({ state: "known", confidence: "high" });
+    expect(JSON.stringify(result.latest)).toContain("cached response from");
   });
   it("lowers confidence when the dist-tag points to a prerelease", async () => {
     const result = await resolveNpmLatest(
