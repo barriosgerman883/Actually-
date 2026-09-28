@@ -131,33 +131,40 @@ actually
 
 GLOBAL
 
-✓ pnpm
+✓ pnpm  up to date
   installed    12.0.0
   latest       12.0.0
 
-↑ gstack
+↑ gstack  update available (major, may break)
   installed    1.0.0
   latest       2.0.0
   installed by pnpm
+  confidence   high
 
-? custom-tool
-  installed    unknown
-  latest       unknown
-  provider     unknown
+? 1 executable with no known provider
+  custom-tool
+  use --verbose to list them one by one
 
 PROJECT · ~/projects/tokke
+  manager      pnpm
+  repository   https://github.com/me/tokke
+  dependencies 2 checked · 1 update available
 
-✓ typescript
-  requested    ^5.9.0
-  resolved     5.9.2
-  latest       5.9.2
-
-↑ biome
+↑ @biomejs/biome  update available (minor)
+  requested    ^2.1.0
   resolved     2.1.0
+  installed    2.1.0
   latest       2.3.1
+  installed by pnpm
+  confidence   high
+
+  1 dependency up to date (--verbose to list)
+
+2 updates available · 1 may include breaking changes · 1 unknown
+Run `actually explain <tool>` to see the evidence.
 ```
 
-`confidence` en `status` es un resumen. El detalle por afirmación está en `explain` (§9).
+`confidence` en `status` es un resumen, y solo aparece cuando la herramienta no está al día. El detalle por afirmación está en `explain` (§9). Sin `--verbose`, las dependencias al día se cuentan en una línea y los ejecutables sin provider se agrupan; con `--verbose` se listan uno por uno.
 
 ---
 
@@ -206,7 +213,7 @@ gstack
 Installed
 1.0.0
 
-Latest (npm dist-tag)
+Latest (source-declared)
 2.0.0
 
 Scope
@@ -216,10 +223,13 @@ Installation provider
 pnpm
 
 Source
-github.com/example/gstack
+https://github.com/example/gstack
 
 Status
-update available
+update available (major, may include breaking changes)
+
+Id
+global:pnpm:gstack
 ```
 
 `status` sin argumentos muestra la lista resumida (§5). Con el nombre de una herramienta, muestra este detalle. La evidencia de cada dato está en `explain` (§9).
@@ -236,28 +246,36 @@ actually explain gstack
 
 ```text
 gstack
+global:pnpm:gstack
 
-Installed version    1.0.0                        high
-  fact        pnpm list --global --json reports gstack@1.0.0
+Installed version    1.0.0                          high
+  fact       pnpm list --global --json: lists gstack@1.0.0 as a global package
 
-Installed by         pnpm                         high
-  fact        pnpm list --global --json includes gstack
-  fact        ~/.local/share/pnpm/gstack is inside pnpm's global bin directory
+Installed by         pnpm                           high
+  fact       pnpm list --global --json: lists gstack@1.0.0 as a global package
+  fact       ~/.local/share/pnpm: pnpm's global bin directory provides gstack
 
-Source               github.com/example/gstack    medium
-  inference   npm registry: "repository" points to github.com/example/gstack
-  inference   repository name matches the package name
+Source               github.com/example/gstack      medium
+  inference  ~/.local/share/pnpm/global/5/node_modules/.pnpm/gstack/node_modules/gstack/package.json: "repository" points to github.com/example/gstack
+  inference  name comparison: repository name matches the package name
 
-Latest (npm tag)     2.0.0                        high
-  fact        npm registry: dist-tag "latest" is 2.0.0
+Latest               2.0.0                          high
+  fact       GET https://registry.npmjs.org/gstack/latest: dist-tag "latest" is 2.0.0
 
-Not determined
-  requested, resolved    not applicable to global tools
+Updates through      pnpm                           high
+  fact       pnpm list --global --json: lists gstack@1.0.0 as a global package
+  fact       ~/.local/share/pnpm: pnpm's global bin directory provides gstack
+  inference  installation: the installer, pnpm, is what would update it
+
+Not applicable
+  requested, resolved
+
+Status               update available (major, may include breaking changes) high
 ```
 
 Cada afirmación muestra su propia confianza y su evidencia. Cada línea de evidencia dice si es un hecho (`fact`) o una inferencia (`inference`).
 
-Lo que no se pudo determinar aparece al final con su motivo. Nunca se omite.
+Lo que no se pudo determinar aparece con su motivo, y lo que no aplica, bajo "Not applicable". Nunca se omite.
 
 Si el nombre coincide con varias herramientas, por ejemplo la misma dependencia en dos proyectos, `explain` y `status <tool>` listan las coincidencias con su `id` y no eligen ninguna. En ese caso se puede pasar el `id` completo.
 
@@ -274,12 +292,12 @@ Error: ENOENT at Object.openSync...
 Preferir un diagnóstico por línea, en stderr, con su severidad, el componente que lo emitió y el motivo en lenguaje llano, seguido de una línea que aclara que la ejecución siguió:
 
 ```text
-error: git: ~/tools/gstack: git describe failed: not a git repository
-warning: github: GitHub rate limit reached; some versions are unknown
+error: git: ~/tools/gstack: git.describe.head failed: fatal: detected dubious ownership in repository
+warning: github: GitHub rate limit reached; remaining GitHub versions are unknown
 actually continued with the other sources.
 ```
 
-Las rutas dentro de home se muestran con `~`. Con `--json`, los mismos diagnósticos aparecen en `diagnostics` (§14) y stderr los muestra igual.
+Las rutas dentro de home se muestran con `~`. Con `--json`, los diagnósticos van solo en `diagnostics` (§14), dentro del JSON de stdout; stderr lleva solo el aviso de red.
 
 Con debug:
 
@@ -302,20 +320,10 @@ actually status --project
 Debe detectar root y mostrarlo.
 
 ```text
-PROJECT
-~/projects/tokke
-
-Package manager
-pnpm
-
-Repository
-GitHub
-
-Dependencies checked
-47
-
-Updates available
-3
+PROJECT · ~/projects/tokke
+  manager      pnpm
+  repository   https://github.com/me/tokke
+  dependencies 2 checked · 1 update available
 ```
 
 Luego el detalle.
@@ -603,22 +611,7 @@ Plantilla obligatoria:
 
 ## 18. AGENTS.md
 
-El repo debe incluir instrucciones explícitas para agentes.
-
-Ejemplo:
-
-```text
-- Never add destructive commands.
-- Never bypass CommandRunner.
-- Never add a command to the CommandRunner allowlist without an ADR.
-- Never run pnpm inside a detected project.
-- Never access the network outside HttpClient.
-- Never import node:fs outside infrastructure/filesystem.
-- Never introduce telemetry.
-- Never require elevated privileges.
-- Every provider requires tests and docs.
-- Security exceptions require an ADR.
-```
+El repo incluye instrucciones explícitas para agentes en `AGENTS.md`, en la raíz: no agregar comandos destructivos, no saltear el CommandRunner, no usar la red fuera de `src/infrastructure/http/`, no importar `node:fs` fuera de `src/infrastructure/{filesystem,cache,local-state}`, no registrar la salida de `pnpm config list`, no informar valores sin evidencia, y el protocolo de hallazgos. Ese archivo es la versión vigente; esta sección no la repite.
 
 Estas instrucciones no reemplazan controles automáticos.
 
@@ -639,10 +632,9 @@ pnpm check
 Incluye:
 
 - lint;
+- chequeo de formato;
 - typecheck;
-- tests;
-- security tests;
-- architecture tests.
+- todos los tests: unitarios, de integración, de seguridad y de arquitectura.
 
 ---
 
@@ -655,6 +647,8 @@ install
  ↓
 lint
  ↓
+format check
+ ↓
 typecheck
  ↓
 unit tests
@@ -664,6 +658,10 @@ integration tests
 security tests
  ↓
 architecture tests
+ ↓
+build
+ ↓
+smoke test of the built CLI
  ↓
 dependency audit
 ```
@@ -676,49 +674,20 @@ Branch protection debe impedir merge si falla cualquier check obligatorio.
 
 ```text
 docs/
-├─ architecture/
-│  ├─ overview.md
-│  ├─ core.md
-│  ├─ providers.md
-│  └─ data-flow.md
-│
-├─ concepts/
-│  ├─ inventory.md
-│  ├─ evidence.md
-│  ├─ confidence.md
-│  ├─ scope.md
-│  └─ source-vs-installation.md
-│
-├─ providers/
-│  ├─ pnpm.md
-│  ├─ npm-registry.md
-│  ├─ git.md
-│  └─ github.md
-│
-├─ security/
-│  ├─ threat-model.md
-│  ├─ command-execution.md
-│  ├─ filesystem.md
-│  └─ network.md
-│
-├─ commands/
-│  ├─ status.md
-│  └─ explain.md
-│
-└─ decisions/
-   ├─ 0001-use-typescript.md
-   ├─ 0002-use-pnpm.md
-   ├─ 0003-read-only-mvp.md
-   ├─ 0004-no-backend.md
-   ├─ 0005-command-runner-boundary.md
-   ├─ 0006-evidence-driven-detection.md
-   ├─ 0007-json-as-public-interface.md
-   └─ 0008-scoped-package-name.md
+├─ mvp.md, prd.md, architecture.md, design.md   planificación y decisiones
+├─ commands/        status.md, explain.md
+├─ concepts/        confidence.md
+├─ providers/       pnpm.md, npm-registry.md, git.md, github.md
+├─ security/        threat-model.md
+├─ decisions/       ADRs 0001 a 0008
+└─ review/          hallazgos, revisiones y aceptación del MVP
 ```
+
+Una página nueva de `docs/` se agrega cuando hay algo que documentar en ella, no antes.
 
 ### Idioma
 
-- **En inglés:** el código, los comentarios, la salida de la CLI, las claves del JSON, `README`, `CONTRIBUTING`, `AGENTS.md` y todo el árbol de `docs/` de arriba. Es lo que leen los contribuidores y los integradores.
+- **En inglés:** el código, los comentarios, la salida de la CLI, las claves del JSON, `README`, `CONTRIBUTING`, `AGENTS.md` y los subdirectorios `commands/`, `concepts/`, `providers/`, `security/` y `decisions/`. Es lo que leen los contribuidores y los integradores.
 - **En español por ahora:** los documentos de planificación (`docs/mvp.md`, `docs/prd.md`, `docs/architecture.md`, `docs/design.md`) y `docs/review/`. Se traducen antes de hacer público el proyecto.
 
 ---

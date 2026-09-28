@@ -111,7 +111,7 @@ actually explain <tool>
 - `status <tool>` muestra el detalle de una herramienta (design.md §8).
 - `explain <tool>` muestra la evidencia de cada afirmación (design.md §9).
 - Ambos comandos aceptan `--json` y `--offline`.
-- `status` acepta `--exit-code` para usarlo en scripts (architecture.md §3.1).
+- `status` y `explain` aceptan `--exit-code` para usarlos en scripts (architecture.md §3.1).
 
 Quedan fuera del MVP:
 
@@ -122,23 +122,7 @@ Quedan fuera del MVP:
 
 ### 4.2 Salida para humanos
 
-Ejemplo:
-
-```text
-actually
-
-GLOBAL
-
-✓ pnpm
-  installed  12.0.0
-  latest     12.0.0
-
-↑ gstack
-  installed  1.0.0
-  latest     2.0.0
-  provider   pnpm
-  confidence high
-```
+El formato está en design.md §5, §8 y §9, con ejemplos generados por la CLI.
 
 ### 4.3 Salida estructurada
 
