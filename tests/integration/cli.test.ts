@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { EXIT, run, type Io, type RuntimeFactory } from "../../src/cli/run.js";
 import { NETWORK_NOTICE, type Runtime } from "../../src/composition.js";
@@ -126,5 +127,27 @@ describe("cli", () => {
     expect(await h.go(["status", "--json"])).toBe(EXIT.fatal);
     expect(JSON.parse(h.out.join("")).diagnostics[0].severity).toBe("error");
     expect(h.err.join("")).toContain("cannot parse config file");
+  });
+});
+
+describe("agent skill (skills/actually/SKILL.md)", () => {
+  const skill = readFileSync("skills/actually/SKILL.md", "utf8");
+  const commands = [...skill.matchAll(/^actually (.+)$/gm)].map((m) =>
+    (m[1] ?? "").replace(/<tool>/g, "b").split(" "),
+  );
+
+  it("has the name and description an agent loads it by", () => {
+    const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(skill)?.[1] ?? "";
+    expect(frontmatter).toMatch(/^name: actually$/m);
+    expect(frontmatter).toMatch(/^description: \S/m);
+  });
+
+  it("only suggests commands the CLI accepts, each printing one JSON document", async () => {
+    expect(commands.length).toBeGreaterThanOrEqual(6);
+    for (const argv of commands) {
+      const h = harness(inventory);
+      expect(await h.go(argv), argv.join(" ")).toBe(EXIT.ok);
+      expect(JSON.parse(h.out.join("")).schemaVersion).toBe(1);
+    }
   });
 });
