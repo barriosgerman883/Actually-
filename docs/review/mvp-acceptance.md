@@ -23,4 +23,4 @@ Exit codes verificados con el binario instalado: `0` al completar, `1` con `--ex
 
 - ~~Probar el resolver de GitHub contra `api.github.com` real.~~ Hecho el 2026-09-28, desde Windows y sin token: release real y fallback a tags con la confianza esperada (findings.md, sección "Verificaciones").
 - Publicar `@getactually/cli@0.1.0` en npm, con la organización `getactually` y la verificación en dos pasos ya configuradas.
-- Probar en macOS. El código contempla sus directorios, pero no se ejecutó ahí.
+- macOS queda fuera del soporte anunciado para 0.1.0. El código contempla sus directorios, pero no se ejecutó ahí; validar en macOS antes de volver a anunciar esa plataforma.

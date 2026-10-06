@@ -5,7 +5,7 @@ description: Find out what is installed in this environment before guessing. Use
 
 # actually: what is on this machine
 
-`actually` inventories developer tools and dependencies and explains every conclusion with evidence. It only reads: it never installs, updates or removes anything.
+`actually` inventories developer tools and dependencies and explains every conclusion with evidence. It never installs, updates or removes tools. It may write its own response cache and local state.
 
 Use it instead of guessing, and instead of probing with one `which`, `--version` or `ls` after another.
 
@@ -43,7 +43,7 @@ Online, it sends package names to `registry.npmjs.org` and `owner/repo` names to
 
 ## Reading the JSON
 
-The document is `{ "schemaVersion", "tools", "projects", "diagnostics" }`.
+Every JSON response has `schemaVersion`, `tools` and `diagnostics`. `status --json` also has `projects`; `status <tool> --json` and `explain <tool> --json` omit it.
 
 - **`tools[]`:** one record per tool or dependency, with `name`, `id`, `scope` (`global` or `project`) and `status`: `current`, `outdated`, `unknown`, `warning` or `error`.
 - **`versions`:** `installed`, `latest`, `requested` and `resolved`. Each is a claim: `{ "state": "known", "value", "confidence" }`, `{ "state": "unknown", "reason" }` or `{ "state": "not-applicable" }`.
