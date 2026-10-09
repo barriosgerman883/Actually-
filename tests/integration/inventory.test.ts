@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildInventory } from "../../src/application/inventory.js";
 import { UsageError } from "../../src/core/errors.js";
@@ -981,6 +981,34 @@ describe("project registry (architecture.md §8)", () => {
       YARN_NPM_REGISTRY_SERVER: "https://npm.corp.example",
     });
     expect(env.http.calls).toEqual([]);
+  });
+
+  it("reads the yarn files in home for a project outside home (F-63)", async () => {
+    // As D:\code\p with home on C:, or /srv/p on Linux: the walk up from the
+    // project never reaches home, but yarn still reads the files there.
+    const home = resolve("/home/me");
+    const project = resolve("/srv/p");
+    for (const [file, text] of [
+      [".yarnrc.yml", "npmRegistryServer: https://npm.corp.example\n"],
+      [".yarnrc", 'registry "https://npm.corp.example"\n'],
+    ]) {
+      const http = fakeHttp(deps);
+      await buildInventory(
+        {
+          fs: memoryFs({
+            [join(project, "package.json")]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+            [join(home, file as string)]: text as string,
+          }),
+          runner: runner(),
+          env: fakeEnv(home),
+          net: netContext(http),
+          config: config(),
+          cwd: project,
+        },
+        { projectOnly: true },
+      );
+      expect(http.calls).toEqual([]);
+    }
   });
 
   it("never queries a local tarball spec or a dependency optionalDependencies makes local (F-33)", async () => {
