@@ -105,11 +105,39 @@ describe("CommandRunner allowlist (architecture.md §7)", () => {
     });
     expect("GIT_DIR" in (inv as { env: object }).env).toBe(false);
   });
+
+  it("points GIT_CONFIG_GLOBAL at /dev/null, which Git for Windows also accepts (F-61)", () => {
+    const inv = buildInvocation({ command: "git.tags.head", repository: "/repo" }, ctx);
+    expect(inv).toMatchObject({ env: { GIT_CONFIG_GLOBAL: "/dev/null" } });
+  });
+
+  it("drops GIT_* from the caller in any casing, as Windows names are (F-62)", () => {
+    const inv = buildInvocation(
+      { command: "git.tags.head", repository: "/repo" },
+      { ...ctx, baseEnv: { ...ctx.baseEnv, git_dir: "/evil", Git_Config_Global: "/evil" } },
+    ) as { env: Record<string, string> };
+    expect(
+      Object.keys(inv.env)
+        .filter((k) => k.toUpperCase().startsWith("GIT_"))
+        .sort(),
+    ).toEqual([
+      "GIT_ALLOW_PROTOCOL",
+      "GIT_CONFIG_GLOBAL",
+      "GIT_CONFIG_NOSYSTEM",
+      "GIT_NO_LAZY_FETCH",
+      "GIT_OPTIONAL_LOCKS",
+      "GIT_PAGER",
+      "GIT_TERMINAL_PROMPT",
+    ]);
+  });
 });
 
 describe("hardened git against a hostile repository", () => {
   const dir = mkdtempSync(join(tmpdir(), "actually-sec-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  /** A path for the planted shell command; Git for Windows runs it in sh, where \ escapes. */
+  const shPath = (path: string) => `'${path.split("\\").join("/")}'`;
 
   function hostileRepo(name: string, marker: string): string {
     const repo = join(dir, name);
@@ -129,7 +157,7 @@ describe("hardened git against a hostile repository", () => {
     ]);
     execFileSync("git", ["-C", repo, "tag", "v1.0.0"]);
     // A hostile repository config: fsmonitor runs a command on index reads.
-    execFileSync("git", ["-C", repo, "config", "core.fsmonitor", `touch ${marker}`]);
+    execFileSync("git", ["-C", repo, "config", "core.fsmonitor", `touch ${shPath(marker)}`]);
     return repo;
   }
 
@@ -180,7 +208,7 @@ describe("hardened git against a hostile repository", () => {
       ["extensions.partialClone", "origin"],
       ["remote.origin.url", "ssh://example.invalid/r.git"],
       ["remote.origin.promisor", "true"],
-      ["core.sshCommand", `touch ${marker}; false`],
+      ["core.sshCommand", `touch ${shPath(marker)}; false`],
     ] as const) {
       execFileSync("git", ["-C", repo, "config", key, value]);
     }

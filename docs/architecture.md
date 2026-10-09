@@ -513,7 +513,7 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 | Variable u opción | Efecto |
 |---|---|
 | `GIT_CONFIG_NOSYSTEM=1` | ignora la configuración del sistema |
-| `GIT_CONFIG_GLOBAL` apuntando a un archivo vacío | ignora la configuración global |
+| `GIT_CONFIG_GLOBAL=/dev/null` | ignora la configuración global. Git for Windows también acepta `/dev/null`; `\\.\nul`, el `os.devNull` de Windows, no (F-61) |
 | `-c core.fsmonitor=false` | impide que el repositorio lance un monitor propio |
 | `GIT_PAGER=cat` | no abre paginadores |
 | `GIT_TERMINAL_PROMPT=0` | nunca pide credenciales |
@@ -521,6 +521,7 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 | `GIT_NO_LAZY_FETCH=1` | un repositorio que se declara clon parcial no puede hacer que git traiga objetos faltantes del remote |
 | `GIT_ALLOW_PROTOCOL` vacío | git no puede usar ningún transporte, así que la configuración de transporte del repositorio, como `core.sshCommand`, nunca se ejecuta |
 
+- Del entorno heredado se quitan todas las variables `GIT_*`, sin distinguir mayúsculas, para que nunca lleven git a otro repositorio: en Windows, git lee `git_dir` como `GIT_DIR` (F-62).
 - Requiere Git 2.32 o posterior, la primera versión con `GIT_CONFIG_GLOBAL`.
 - `safe.directory` no se sobrescribe. Si Git rechaza un repositorio, los datos quedan `unknown` con ese motivo.
 

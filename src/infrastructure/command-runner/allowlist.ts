@@ -1,4 +1,3 @@
-import { devNull } from "node:os";
 import { isAbsolute } from "node:path";
 import type { AllowedCommand, CommandRequest } from "../../core/ports.js";
 
@@ -38,7 +37,9 @@ const GIT_HARDENING_ARGS = ["-c", "core.fsmonitor=false"] as const;
 function gitHardeningEnv(): Record<string, string> {
   return {
     GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: devNull,
+    // Not os.devNull: Git for Windows rejects \\.\nul but maps /dev/null
+    // to its null device (F-61).
+    GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_PAGER: "cat",
     GIT_TERMINAL_PROMPT: "0",
     GIT_OPTIONAL_LOCKS: "0",
@@ -101,7 +102,8 @@ export function buildInvocation(
   for (const [key, value] of Object.entries(context.baseEnv)) {
     if (value === undefined) continue;
     // Never let the caller's environment redirect git to another repository.
-    if (spec.binary === "git" && key.startsWith("GIT_")) continue;
+    // On Windows, git reads git_dir as GIT_DIR (F-62).
+    if (spec.binary === "git" && key.toUpperCase().startsWith("GIT_")) continue;
     env[key] = value;
   }
   env.LC_ALL = "C";

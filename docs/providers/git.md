@@ -24,7 +24,7 @@ Without a semver tag on `HEAD`, the version is unknown. The evidence records the
 
 ## Commands executed
 
-Only those two, with a hardened environment: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` set to the null device, `-c core.fsmonitor=false`, `GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `GIT_NO_LAZY_FETCH=1` and an empty `GIT_ALLOW_PROTOCOL`, so a repository that declares itself a partial clone cannot make git fetch through its own transport settings, and no `GIT_*` variable from the caller.
+Only those two, with a hardened environment: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null` (Git for Windows accepts it, but not `\\.\nul`), `-c core.fsmonitor=false`, `GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `GIT_NO_LAZY_FETCH=1` and an empty `GIT_ALLOW_PROTOCOL`, so a repository that declares itself a partial clone cannot make git fetch through its own transport settings, and no `GIT_*` variable from the caller, in any casing: on Windows, git reads `git_dir` as `GIT_DIR`.
 
 ## Files inspected
 
