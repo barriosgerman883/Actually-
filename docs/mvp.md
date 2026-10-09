@@ -405,11 +405,11 @@ El MVP es exitoso si un usuario puede instalar `actually?` con pnpm y obtener, d
 Un escenario mínimo válido:
 
 ```bash
-pnpm add -g @getactually/cli
+pnpm add -g @actually-cli/cli
 actually status
 ```
 
-El paquete se publica como `@getactually/cli` porque en npm el nombre `actually` y el scope `@actually` ya pertenecen a otras cuentas. El comando sigue siendo `actually`: lo define el campo `bin`, no el nombre del paquete (design.md §3).
+El paquete se publica como `@actually-cli/cli` porque en npm el nombre `actually` y el scope `@actually` ya pertenecen a otras cuentas. El comando sigue siendo `actually`: lo define el campo `bin`, no el nombre del paquete (design.md §3).
 
 Resultado esperado:
 

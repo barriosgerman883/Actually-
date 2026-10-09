@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-`actually?` is a local-first, read-only CLI that inventories developer tools, repositories and dependencies. It compares installed and latest versions and explains every conclusion with evidence. The npm package is `@getactually/cli` and the command is `actually`.
+`actually?` is a local-first, read-only CLI that inventories developer tools, repositories and dependencies. It compares installed and latest versions and explains every conclusion with evidence. The npm package is `@actually-cli/cli` and the command is `actually`.
 
 The MVP scope in `docs/prd.md` §13–14 is implemented, and open findings are listed in `docs/review/findings.md`: pnpm global packages, executables in allowed directories, Git repositories used as tools, projects (package.json, pnpm and npm lockfiles, node_modules), npm registry and GitHub resolvers, response cache, `status`, `status <tool>`, `explain`, `--json`.
 

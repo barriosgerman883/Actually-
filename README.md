@@ -5,7 +5,7 @@ Know what is on your machine, and why.
 `actually` is a local-first, read-only CLI. It inventories your developer tools, repositories and dependencies, compares installed and latest versions, and explains every conclusion with evidence. It never installs, updates or removes anything.
 
 ```bash
-pnpm add -g @getactually/cli
+pnpm add -g @actually-cli/cli
 actually status
 ```
 

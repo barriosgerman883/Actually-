@@ -4,11 +4,11 @@ Status: accepted
 
 ## Context
 
-On npm, the unscoped name `actually` and the scope `@actually` belong to other accounts.
+On npm, the unscoped name `actually` and the scope `@actually` belong to other accounts. The project first chose the scope `@getactually`, but access to the account that owns it was lost before anything was published there.
 
 ## Decision
 
-Publish as `@getactually/cli`. The `bin` field keeps the command as `actually`. The scope reserves `@getactually/core` for future integrations.
+Publish as `@actually-cli/cli`, from the npm organization `actually-cli`. The `bin` field keeps the command as `actually`. The scope reserves `@actually-cli/core` for future integrations.
 
 ## Consequences
 
