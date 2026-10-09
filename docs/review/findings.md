@@ -99,8 +99,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | resuelto: código corregido en `12392f2` |
 | F-61 | media | corrección | En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre | resuelto: código corregido en `e67f97a` |
 | F-62 | media | seguridad | En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no | resuelto: código corregido en `e67f97a` |
-| F-63 | alta | privacidad | En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público | abierto |
-| F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | abierto |
+| F-63 | alta | privacidad | En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `385af96` |
+| F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | resuelto: código corregido en `ec66643` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1318,7 +1318,7 @@ Propuesta: en el filtro, comparar el nombre en mayúsculas. Test en `tests/secur
 
 ### F-63 · En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `385af96`
 - **Severidad:** alta
 - **Tipo:** privacidad
 - **Ubicación:** `src/providers/project/project.ts` (`scanProject`, el recorrido de los archivos de registry)
@@ -1333,9 +1333,11 @@ architecture.md §8: "ante la duda, no se consulta".
 
 Propuesta: sumar siempre los archivos de yarn de home a las fuentes, aunque home no esté encima del proyecto. `~/.npmrc` ya está en la config de pnpm.
 
+**Corregido en `385af96`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable, según la propuesta. El test falla sin el cambio. Documentado en architecture.md §8 y docs/providers/npm-registry.md.
+
 ### F-64 · El directorio actual y home se comparan como texto, sin canonicalizar
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `ec66643`
 - **Severidad:** baja
 - **Tipo:** corrección
 - **Ubicación:** `src/composition.ts` (`cwd` y `env.homeDir` llegan tal cual), `src/providers/project/project.ts` (`findUpDir`, `dir === stopAt`), `src/providers/project/workspace.ts`, `src/cli/output/human.ts` (`tildify`)
@@ -1350,6 +1352,8 @@ Los recorridos hacia arriba cortan cuando el directorio es igual, como texto, a 
 En los dos casos el recorrido no reconoce home: sigue hasta la raíz, toma como raíz de proyecto un `package.json` o un `.git` que esté encima de home, y lee archivos de registry de afuera de home. Además, las rutas no se abrevian con `~`. `fs.promises.realpath` devuelve la ruta real con las mayúsculas del disco: `D:\actually-\src` → `D:\Actually-\src`.
 
 Propuesta: canonicalizar `cwd` y home con `realpath` en `createRuntime`, el único lugar donde entran. Test en `tests/integration/runtime.test.ts` con home y cwd que pasan por un enlace.
+
+**Corregido en `ec66643`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable, según la propuesta. `~` también abrevia rutas con `\`. Tests en `tests/integration/runtime.test.ts`, con home detrás de un enlace (junction en Windows) y un `package.json` encima de home que no debe tomarse, y en `tests/unit/config-output.test.ts`; los dos fallan sin el cambio. Documentado en architecture.md §9.
 
 ### Verificaciones
 
