@@ -101,7 +101,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-62 | media | seguridad | En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no | resuelto: código corregido en `e67f97a` |
 | F-63 | alta | privacidad | En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `385af96` |
 | F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | resuelto: código corregido en `ec66643` |
-| F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | abierto |
+| F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | resuelto: código corregido en `67c00bf` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1358,7 +1358,7 @@ Propuesta: canonicalizar `cwd` y home con `realpath` en `createRuntime`, el úni
 
 ### F-65 · En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `67c00bf`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts` (`readText`)
@@ -1370,6 +1370,8 @@ Desde F-46, `readText` rechaza lo que no es un archivo regular, para no quedar c
 Para llegar ahí desde un repositorio hace falta que uno de los archivos que `actually` lee, como un `.npmrc`, sea un symlink a una pipe abierta. Git for Windows crea symlinks del repositorio solo con `core.symlinks` y el Modo de desarrollador o permisos de administrador. No verificado: que un symlink a `\\.\pipe\…` se pueda crear y seguir así.
 
 Propuesta: en `readText`, resolver la ruta con `realpath` antes de `stat`. La pipe no tiene ruta real, así que la lectura falla como "no se pudo leer", que ya deja el registry indeterminado (F-04). En Linux no cambia nada: un FIFO tiene ruta real y sigue rechazado por `stat`. Test en `tests/unit/filesystem.test.ts` con una pipe real en Windows y un FIFO en los demás sistemas.
+
+**Corregido en `67c00bf`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable, según la propuesta. En Windows 11, sin el cambio el test se corta a los 5 segundos con la lectura bloqueada; con el cambio, la lectura falla enseguida. Documentado en architecture.md §9.
 
 ### Verificaciones
 
