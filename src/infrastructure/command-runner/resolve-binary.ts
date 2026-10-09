@@ -2,8 +2,8 @@ import { win32 } from "node:path";
 import { parseCmdShim } from "../../core/cmd-shim.js";
 import type { Filesystem } from "../../core/ports.js";
 
-/** What cmd tries when PATHEXT is not set. */
-const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
+/** What cmd tries when PATHEXT is not set; cmd never runs a .ps1. */
+const CMD_PATHEXT = ".COM;.EXE;.BAT;.CMD";
 
 export type ResolvedBinary =
   | { ok: true; file: string; args: string[] }
@@ -24,7 +24,7 @@ function searchDir(entry: string): string | undefined {
 
 /** The first `name` + extension in PATH, in PATHEXT order, as cmd finds it. */
 async function findInPath(name: string, options: ResolveOptions): Promise<string | undefined> {
-  const extensions = (options.pathext || DEFAULT_PATHEXT)
+  const extensions = (options.pathext || CMD_PATHEXT)
     .split(";")
     .map((e) => e.trim())
     .filter((e) => e.startsWith("."));

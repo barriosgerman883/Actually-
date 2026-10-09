@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { extname } from "node:path";
+import { DEFAULT_PATHEXT } from "../../core/cmd-shim.js";
 import type { DirEntry, Filesystem } from "../../core/ports.js";
 
 /**
@@ -9,9 +10,6 @@ import type { DirEntry, Filesystem } from "../../core/ports.js";
  * a file it should load into memory (F-46).
  */
 export const MAX_TEXT_BYTES = 64 * 1024 * 1024;
-
-/** What Windows runs without an extension when PATHEXT is not set. */
-const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.PS1";
 
 /**
  * Read-only filesystem. Nothing in this module writes to disk. On Windows,

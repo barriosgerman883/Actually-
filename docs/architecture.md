@@ -142,7 +142,10 @@ Un repositorio encontrado por `findProjects` es un proyecto salvo evidencia posi
 - `~/.local/bin`;
 - los directorios declarados en `[scan] bin_paths` (design.md §13).
 
-Un ejecutable es un archivo regular con permiso de ejecución. En Windows, donde ese permiso no distingue nada, es un archivo cuya extensión está en `PATHEXT` (`.COM;.EXE;.BAT;.CMD;.PS1` si la variable no está definida), sin distinguir mayúsculas.
+Un ejecutable es un archivo regular con permiso de ejecución. En Windows, donde ese permiso no distingue nada, es un archivo cuya extensión está en `PATHEXT` (`.COM;.EXE;.BAT;.CMD;.PS1` si la variable no está definida), sin distinguir mayúsculas. Ahí, además:
+
+- El nombre del comando es el del archivo sin esa extensión, y los nombres no distinguen mayúsculas. pnpm escribe `foo.CMD` y `foo.ps1` para cada comando: los dos son `foo`, y cuenta el de la extensión que aparece primero en `PATHEXT`, como hace cmd.
+- Un `.cmd` o `.bat` no es un symlink: lo que ejecuta se obtiene leyéndolo con las mismas plantillas que pnpm en Windows (§7, ADR 0009). Así, un repositorio enlazado con `pnpm link --global` se reconoce como herramienta, y la evidencia dice que el lanzador corre un archivo de ese repositorio. Un lanzador que no coincide con una plantilla se trata como el archivo en sí.
 
 Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando llegue su provider en la Fase 2.
 

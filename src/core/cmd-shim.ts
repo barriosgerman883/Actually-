@@ -9,6 +9,12 @@
  *
  * Paths are returned as written, relative to the launcher's directory.
  */
+/**
+ * The extensions that make a file a command on Windows when PATHEXT is not
+ * set, with .PS1 for PowerShell (docs/architecture.md §3.3, F-56).
+ */
+export const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.PS1";
+
 export type CmdShimTarget =
   /** An executable to run directly. */
   | { kind: "exe"; path: string }
