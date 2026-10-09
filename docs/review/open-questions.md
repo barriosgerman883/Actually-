@@ -19,7 +19,7 @@ Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. To
 | 13 | Allowlist | Resuelta en `a0c5ff6` | Comandos completos y exactos, elegidos por identificador | D6 |
 | 14 | Directorios de PATH escaneados | Resuelta en `24268c0` | Directorio global de pnpm, `~/.local/bin` y `scan.bin_paths` | D7 |
 | 15 | Exit codes | Resuelta en `2589804` | `0` ok, `1` updates solo con `--exit-code`, `2` uso inválido, `3` fatal. Se suma `diagnostics` al JSON | §3 |
-| 16 | Nombre del paquete npm | Resuelta en `cd79d75`; scope cambiado el 2026-10-09 | `@actually-cli/cli`, con el comando `actually`. Ver abajo | §4 |
+| 16 | Nombre del paquete npm | Resuelta en `cd79d75`; scope cambiado en `54728de` | `@actually-cli/cli`, con el comando `actually`. Ver abajo | §4 |
 | 17 | Idioma de los docs | Resuelta en `0337f0c` | Inglés para código y docs de contribuidores; planificación en español hasta el lanzamiento | §5 |
 | 18 | `info` como comando separado | Resuelta en `0bbf268` | Reemplazado por `status <tool>` | §5 |
 
