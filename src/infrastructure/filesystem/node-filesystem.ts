@@ -39,11 +39,14 @@ export function nodeFilesystem(
     },
     async readText(path) {
       // A FIFO or a device would block forever, and a huge file would
-      // exhaust memory; neither is a file actually needs (F-46).
-      const info = await stat(path);
+      // exhaust memory; neither is a file actually needs (F-46). On
+      // Windows, stat calls a named pipe a regular file, but it has no
+      // real path, so realpath rejects it first (F-65).
+      const real = await realpath(path);
+      const info = await stat(real);
       if (!info.isFile()) throw new Error(`${path} is not a regular file`);
       if (info.size > MAX_TEXT_BYTES) throw new Error(`${path} is too large to read`);
-      return readFile(path, "utf8");
+      return readFile(real, "utf8");
     },
     async readDir(path) {
       const entries = await readdir(path, { withFileTypes: true });
