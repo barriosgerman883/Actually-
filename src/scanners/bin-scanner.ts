@@ -30,7 +30,9 @@ async function launcherTarget(fs: Filesystem, path: string): Promise<string | un
   }
   if (!target) return undefined;
   const relative = target.kind === "exe" ? target.path : target.script;
-  return resolve(join(path, ".."), ...relative.split(/[\\/]/));
+  const file = resolve(join(path, ".."), ...relative.split(/[\\/]/));
+  // Compared with repositories by their real paths (F-64).
+  return fs.realpath(file).catch(() => file);
 }
 
 /**

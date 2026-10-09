@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   renderDiagnostics,
@@ -67,6 +68,14 @@ describe("config (design.md §13)", () => {
     expect(config.network.exclude).toEqual(["@corp/*"]);
     expect(config.cache.ttlMs).toBe(30 * 60_000);
     expect(warnings).toEqual([]);
+  });
+  it("expands ~\\ on Windows", async () => {
+    const home = resolve("/home/me");
+    const file = join(home, "c.toml");
+    const fs = memoryFs({ [file]: "[scan]\npaths = ['~\\projects']\n" });
+    const windows = { platform: "win32", homeDir: home, get: () => undefined };
+    const { config } = await loadConfig(file, fs, windows);
+    expect(config.scan.paths).toEqual([join(home, "projects")]);
   });
   it("warns about unknown keys", async () => {
     const { warnings } = await loadConfig(

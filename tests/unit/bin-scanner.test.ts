@@ -57,6 +57,17 @@ describe("listExecutables on Windows", () => {
     });
   });
 
+  it("gives the launcher's target by its real path, as repositories are compared (F-64)", async () => {
+    const target = resolve(bin, "..", "..", "..", "repo-tool", "cli.js");
+    const real = join(home, "Code", "repo-tool", "cli.js");
+    const linked = memoryFs(
+      { [join(bin, "repo-tool.CMD")]: fixture("pnpm-link-global.cmd") },
+      { executables: [join(bin, "repo-tool.CMD")], symlinks: { [target]: real } },
+    );
+    const [found] = await listExecutables(linked, [bin], windows);
+    expect(found).toMatchObject({ name: "repo-tool", realPath: real, viaLauncher: true });
+  });
+
   it("keeps the first directory's command when another has the same name in any case", async () => {
     const other = join(home, ".local", "bin");
     const twoDirs = memoryFs({}, { executables: [join(other, "Tool.exe"), join(bin, "tool.cmd")] });

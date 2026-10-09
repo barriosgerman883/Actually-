@@ -414,6 +414,8 @@ ttl = "6h"
 color = "auto"
 ```
 
+Una ruta puede empezar con `~/`, o con `~\` en Windows, que se reemplaza por home. En Windows, una ruta con `\` se escribe entre comillas simples, `'C:\code'`, porque TOML no interpreta escapes ahí.
+
 Los defaults deben ser conservadores. Solo un archivo que no existe usa los defaults: uno que existe pero no se puede leer, comprobar o interpretar es fatal (exit code 3), porque podría decir `enabled = false`.
 
 ---
