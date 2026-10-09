@@ -99,6 +99,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | resuelto: código corregido en `12392f2` |
 | F-61 | media | corrección | En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre | resuelto: código corregido en `e67f97a` |
 | F-62 | media | seguridad | En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no | resuelto: código corregido en `e67f97a` |
+| F-63 | alta | privacidad | En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público | abierto |
+| F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1313,6 +1315,41 @@ Reproducción, en Windows 11 con Git 2.55.0.windows: dos repositorios temporales
 Propuesta: en el filtro, comparar el nombre en mayúsculas. Test en `tests/security` con `git_dir` y `Git_Config_Global`.
 
 **Corregido en `e67f97a`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable. El filtro compara el nombre en mayúsculas en todas las plataformas; en Linux, quitar un `git_dir` no cambia nada. Test en `tests/security/security.test.ts`, que falla sin el cambio. Documentado en architecture.md §7 y docs/providers/git.md.
+
+### F-63 · En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público
+
+- **Estado:** abierto
+- **Severidad:** alta
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/project/project.ts` (`scanProject`, el recorrido de los archivos de registry)
+- **Detectado:** 2026-10-09, Claude Code, al planificar el port a Windows
+- **Verificación:** reproducido
+
+Desde F-52, `scanProject` lee cada `.npmrc`, `.yarnrc` y `.yarnrc.yml` desde el proyecto hacia arriba hasta home, incluido home, porque pnpm no refleja los archivos de yarn. El recorrido corta en home o en la raíz del disco. Para un proyecto que no está dentro de home, como `/srv/app` en Linux o `D:\code\app` en Windows con home en `C:`, nunca pasa por home: `~/.yarnrc.yml` y `~/.yarnrc` no se leen. Yarn sí los lee para cualquier proyecto. Un registry privado configurado solo ahí no impide consultar `registry.npmjs.org` con los nombres de las dependencias. En Windows es el caso común: los proyectos suelen estar en otra unidad.
+
+Reproducción: test en `tests/integration/inventory.test.ts`, un proyecto en `/srv/p` con home en `/home/me` y `npmRegistryServer` privado en `~/.yarnrc.yml`, y otro con `registry` en `~/.yarnrc`. Los dos consultaron `https://registry.npmjs.org/a/latest`.
+
+architecture.md §8: "ante la duda, no se consulta".
+
+Propuesta: sumar siempre los archivos de yarn de home a las fuentes, aunque home no esté encima del proyecto. `~/.npmrc` ya está en la config de pnpm.
+
+### F-64 · El directorio actual y home se comparan como texto, sin canonicalizar
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** corrección
+- **Ubicación:** `src/composition.ts` (`cwd` y `env.homeDir` llegan tal cual), `src/providers/project/project.ts` (`findUpDir`, `dir === stopAt`), `src/providers/project/workspace.ts`, `src/cli/output/human.ts` (`tildify`)
+- **Detectado:** 2026-10-09, Claude Code, al planificar el port a Windows
+- **Verificación:** reproducido (las rutas); el efecto, por lectura
+
+Los recorridos hacia arriba cortan cuando el directorio es igual, como texto, a home, y la salida abrevia home como `~` con la misma comparación. `cwd` sale de `process.cwd()` y home de `os.homedir()`, sin canonicalizar:
+
+- En Windows, `process.cwd()` conserva las mayúsculas que tipea el usuario. Desde PowerShell, `Set-Location c:\users\german\documents` dio `C:\users\german\documents`, y desde cmd `c:\Users\GERMAN`, con home `C:\Users\GERMAN`.
+- En Linux, `HOME` puede ser un symlink, mientras que `process.cwd()` es la ruta real.
+
+En los dos casos el recorrido no reconoce home: sigue hasta la raíz, toma como raíz de proyecto un `package.json` o un `.git` que esté encima de home, y lee archivos de registry de afuera de home. Además, las rutas no se abrevian con `~`. `fs.promises.realpath` devuelve la ruta real con las mayúsculas del disco: `D:\actually-\src` → `D:\Actually-\src`.
+
+Propuesta: canonicalizar `cwd` y home con `realpath` en `createRuntime`, el único lugar donde entran. Test en `tests/integration/runtime.test.ts` con home y cwd que pasan por un enlace.
 
 ### Verificaciones
 
