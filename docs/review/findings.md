@@ -97,8 +97,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-58 | baja | desvío de docs | CLAUDE.md quedó desactualizado en tres puntos | abierto |
 | F-59 | baja | desvío de docs | La skill describe mal el JSON y las escrituras locales | resuelto: docs actualizados en `d964a55` |
 | F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | resuelto: código corregido en `12392f2` |
-| F-61 | media | corrección | En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre | abierto |
-| F-62 | media | seguridad | En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no | abierto |
+| F-61 | media | corrección | En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre | resuelto: código corregido en `e67f97a` |
+| F-62 | media | seguridad | En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no | resuelto: código corregido en `e67f97a` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1282,7 +1282,7 @@ El hook de pre-commit ejecutó `pnpm lint` correctamente y luego `pnpm format:ch
 
 ### F-61 · En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `e67f97a`
 - **Severidad:** media
 - **Tipo:** corrección
 - **Ubicación:** `src/infrastructure/command-runner/allowlist.ts` (`gitHardeningEnv`, `GIT_CONFIG_GLOBAL: devNull`)
@@ -1295,9 +1295,11 @@ Reproducción, en Windows 11 con Git 2.55.0.windows: con `GIT_CONFIG_NOSYSTEM=1`
 
 Propuesta: usar el literal `/dev/null` en todas las plataformas. Test que verifique el valor, y que los tests del repositorio hostil corran en Windows.
 
+**Corregido en `e67f97a`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable. `GIT_CONFIG_GLOBAL=/dev/null` en todas las plataformas. Los tests del repositorio hostil ahora prueban algo en Windows: el comando plantado usaba la ruta del marcador con `\`, que el `sh` de Git for Windows interpreta como escape, así que los controles fallaban y la prueba endurecida pasaba sin demostrar nada. Con la ruta entre comillas y con `/`, los controles corren el comando. En Windows 11, sin el cambio fallan "the hardening options and environment stop it" y "allowlisted git commands work on that repository", porque git no arranca; con el cambio pasan los 14 tests de git real. Documentado en architecture.md §7 y docs/providers/git.md. No verificado: que `GIT_CONFIG_NOSYSTEM` también excluya `%PROGRAMDATA%\Git\config`, que no existe en esta máquina; sí excluye `C:/Program Files/Git/etc/gitconfig`.
+
 ### F-62 · En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `e67f97a`
 - **Severidad:** media
 - **Tipo:** seguridad
 - **Ubicación:** `src/infrastructure/command-runner/allowlist.ts` (`buildInvocation`, `key.startsWith("GIT_")`)
@@ -1309,6 +1311,8 @@ Propuesta: usar el literal `/dev/null` en todas las plataformas. Test que verifi
 Reproducción, en Windows 11 con Git 2.55.0.windows: dos repositorios temporales, git lanzado desde Node.js en uno con `git_dir` apuntando al otro.
 
 Propuesta: en el filtro, comparar el nombre en mayúsculas. Test en `tests/security` con `git_dir` y `Git_Config_Global`.
+
+**Corregido en `e67f97a`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable. El filtro compara el nombre en mayúsculas en todas las plataformas; en Linux, quitar un `git_dir` no cambia nada. Test en `tests/security/security.test.ts`, que falla sin el cambio. Documentado en architecture.md §7 y docs/providers/git.md.
 
 ### Verificaciones
 
