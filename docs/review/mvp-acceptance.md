@@ -22,5 +22,5 @@ Exit codes verificados con el binario instalado: `0` al completar, `1` con `--ex
 ## Pendiente fuera de este entorno
 
 - ~~Probar el resolver de GitHub contra `api.github.com` real.~~ Hecho el 2026-09-28, desde Windows y sin token: release real y fallback a tags con la confianza esperada (findings.md, sección "Verificaciones").
-- Publicar `@actually-cli/cli@0.1.0` en npm desde la organización `actually-cli`, con la verificación en dos pasos activa en la cuenta que publica.
+- ~~Publicar `@actually-cli/cli@0.1.0` en npm desde la organización `actually-cli`.~~ Hecho el 2026-10-09, desde `9660303`. El registry sirve el mismo tarball que pasó `pnpm check` en Docker (shasum `8320779c5b606759bca459513553ae8032b0eb5f`). `pnpm add -g @actually-cli/cli` en un contenedor limpio instala `actually` 0.1.0, que se reporta al día contra el registry. npm dejó además la versión `0.0.0-stage`, un stub sin código de su publicación en etapas, sin el dist-tag `latest`.
 - macOS queda fuera del soporte anunciado para 0.1.0. El código contempla sus directorios, pero no se ejecutó ahí; validar en macOS antes de volver a anunciar esa plataforma.
