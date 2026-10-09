@@ -501,6 +501,7 @@ La lista original incluía `node --version`. Ningún provider del MVP lo usa, as
 - pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
 - A ese entorno se le agregan `npm_config_update_notifier=false`, para que pnpm no consulte la red por su cuenta buscando actualizaciones, `COREPACK_ENABLE_AUTO_PIN=0` y `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, para que corepack no escriba `packageManager` ni espere una respuesta, y `COREPACK_ENABLE_NETWORK=0`, para que corepack nunca descargue pnpm: esa descarga saldría a la red fuera del cliente HTTP, del aviso de design.md §12 y de `--offline`. Si pnpm es un shim de corepack que todavía no descargó esa versión, pnpm falla, y el diagnóstico dice que hay que correr `pnpm --version` una vez fuera de un proyecto.
 - La salida de `pnpm.config.list` puede contener tokens. Solo se extraen las claves de registry (§8) y el resto nunca se guarda ni se registra.
+- En Windows, pnpm suele ser un lanzador `.cmd`, que Node.js no arranca sin shell. `actually?` lo busca en `PATH` como cmd, sin mirar el directorio actual. Un `.exe` corre directo. Un `.cmd` o `.bat` se lee y no se ejecuta: si todo su texto coincide con una plantilla de cmd-shim o de npm, corre lo que ese lanzador arrancaría, el `.exe` o node con el script, con los mismos argumentos. Cualquier otro lanzador no se ejecuta y pnpm queda como fallido, con un diagnóstico que lo nombra (docs/decisions/0009-pnpm-on-windows-without-a-shell.md).
 
 ### Git
 
@@ -881,6 +882,7 @@ Estas reglas deben ejecutarse en CI.
 0006-evidence-driven-detection.md
 0007-json-as-public-interface.md
 0008-scoped-package-name.md
+0009-pnpm-on-windows-without-a-shell.md
 ```
 
 ---

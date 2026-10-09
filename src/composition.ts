@@ -73,7 +73,9 @@ export async function createRuntime(
   const fs = nodeFilesystem({ pathext: env.get("PATHEXT") });
   const { config, warnings } = await loadConfig(dirs.configFile, fs, env);
   const state = fileLocalState(dirs.state);
-  const runner = deps.runner ?? nodeCommandRunner({ neutralDir: () => state.neutralDir() });
+  const runner =
+    deps.runner ??
+    nodeCommandRunner({ neutralDir: () => state.neutralDir(), platform: env.platform, fs });
 
   const online = config.network.enabled && !options.offline;
   const http = online
