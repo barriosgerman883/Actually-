@@ -97,6 +97,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-58 | baja | desvío de docs | CLAUDE.md quedó desactualizado en tres puntos | abierto |
 | F-59 | baja | desvío de docs | La skill describe mal el JSON y las escrituras locales | resuelto: docs actualizados en `d964a55` |
 | F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | resuelto: código corregido en `12392f2` |
+| F-61 | media | corrección | En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre | abierto |
+| F-62 | media | seguridad | En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1277,6 +1279,36 @@ La skill decía que toda respuesta JSON tiene `projects`, pero `src/cli/output/j
 El hook de pre-commit ejecutó `pnpm lint` correctamente y luego `pnpm format:check`, que informó diferencias de formato en estos 16 archivos y terminó con código 1. Los archivos no pertenecen a la preparación del lanzamiento; el hook detuvo el commit. No se reformatearon porque el hallazgo está fuera de la tarea.
 
 **Corregido en `12392f2`.** 2026-10-09, a pedido de la persona responsable, al aprobar el port a Windows. Los 15 archivos versionados no tenían diferencias de formato: la copia de trabajo de este clon de Windows tenía CRLF, de un checkout anterior a `.gitattributes` (`core.autocrlf=true`). Git no los reescribe porque los considera sin cambios, así que se borraron y se volvieron a sacar del commit, ya con LF; no hubo commit de contenido. `.codex/` no está versionado y tiene diferencias de formato además del CRLF: como `.claude`, ahora está en `.prettierignore`. Con eso, `prettier --check .` pasa en este clon y el hook de pre-commit corrió entero por primera vez. Quedan con CRLF en la copia de trabajo `.claude/settings.json`, `pnpm-lock.yaml` y el snapshot de la revisión, que están protegidos y Prettier no revisa: los vuelve a sacar la persona responsable.
+
+### F-61 · En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** corrección
+- **Ubicación:** `src/infrastructure/command-runner/allowlist.ts` (`gitHardeningEnv`, `GIT_CONFIG_GLOBAL: devNull`)
+- **Detectado:** 2026-10-09, Claude Code, al empezar el port a Windows
+- **Verificación:** reproducido
+
+El entorno endurecido de git (architecture.md §7) apunta `GIT_CONFIG_GLOBAL` a `os.devNull`, que en Windows es `\\.\nul`. Git for Windows no lo acepta: `git config --list` con ese valor termina con `fatal: unable to access '\\.\nul': Invalid argument` y código 128. Como todo comando git de `actually` usa ese entorno, en Windows fallan `git.tags.head` y `git.describe.head`, y cada repositorio usado como herramienta queda con error. Falla del lado seguro: git nunca corre sin endurecer.
+
+Reproducción, en Windows 11 con Git 2.55.0.windows: con `GIT_CONFIG_NOSYSTEM=1` y `GIT_CONFIG_GLOBAL` igual a `\\.\nul`, falla; con `/dev/null`, `nul`, `NUL` o un archivo vacío, funciona, y la única configuración que se lee es la del repositorio. Git for Windows trata `/dev/null` como un caso especial, y en Linux y macOS es el mismo valor que `os.devNull`.
+
+Propuesta: usar el literal `/dev/null` en todas las plataformas. Test que verifique el valor, y que los tests del repositorio hostil corran en Windows.
+
+### F-62 · En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** seguridad
+- **Ubicación:** `src/infrastructure/command-runner/allowlist.ts` (`buildInvocation`, `key.startsWith("GIT_")`)
+- **Detectado:** 2026-10-09, Claude Code, al empezar el port a Windows
+- **Verificación:** reproducido
+
+`buildInvocation` quita del entorno heredado las variables que empiezan con `GIT_`, para que el entorno de quien llama nunca lleve git a otro repositorio. La comparación distingue mayúsculas, pero en Windows los nombres de variables no, y Git tampoco. Con `git_dir` o `Git_Dir` apuntando a otro repositorio, `git rev-parse --absolute-git-dir` respondió el `.git` de ese otro repositorio, igual que con `GIT_DIR`. Por lectura, lo mismo pasa con las variables que el entorno endurecido fija, como `GIT_CONFIG_GLOBAL`: una copia con otras mayúsculas queda junto a la endurecida. No verificado: cuál de las dos lee git en ese caso.
+
+Reproducción, en Windows 11 con Git 2.55.0.windows: dos repositorios temporales, git lanzado desde Node.js en uno con `git_dir` apuntando al otro.
+
+Propuesta: en el filtro, comparar el nombre en mayúsculas. Test en `tests/security` con `git_dir` y `Git_Config_Global`.
 
 ### Verificaciones
 
