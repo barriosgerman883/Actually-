@@ -85,14 +85,14 @@ actually
 Paquete npm:
 
 ```text
-@getactually/cli
+@actually-cli/cli
 ```
 
 El signo `?` pertenece al branding, no al binario.
 
 En npm, el nombre `actually` y el scope `@actually` ya pertenecen a otras cuentas. El campo `bin` del `package.json` mapea el comando `actually`, así que el comando no depende del nombre del paquete.
 
-El scope `@getactually` agrupa los paquetes del proyecto. Queda reservado, por ejemplo, `@getactually/core` para que las integraciones de la Fase 3 consuman el core sin duplicarlo.
+El scope `@actually-cli`, de la organización `actually-cli` en npmjs.com, agrupa los paquetes del proyecto. Queda reservado, por ejemplo, `@actually-cli/core` para que las integraciones de la Fase 3 consuman el core sin duplicarlo.
 
 ---
 

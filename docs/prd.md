@@ -218,7 +218,7 @@ Transparencia de red: antes de la primera consulta, el usuario sabe qué se env�
 No recorrer todo el filesystem por defecto.
 
 ### RNF-004 — Portabilidad
-La arquitectura debe permitir soporte progresivo para Windows, macOS y Linux. El MVP soporta Linux y macOS. En Windows, pnpm es un shim `.cmd` que no se puede ejecutar sin shell, así que su soporte queda para después del MVP.
+La arquitectura debe permitir soporte progresivo para Windows, macOS y Linux. El lanzamiento 0.1.0 soporta Linux; macOS queda diferido hasta validar el paquete en esa plataforma. En Windows, pnpm es un shim `.cmd` que no se puede ejecutar sin shell, así que su soporte queda para después del MVP.
 
 ### RNF-005 — Testabilidad
 Filesystem, procesos y red deben estar abstraídos.
@@ -362,7 +362,7 @@ Estas integraciones deben consumir el core o salida estructurada, no duplicar l�
 
 El MVP puede considerarse completo cuando:
 
-1. se instala con pnpm como `@getactually/cli` y expone el comando `actually`;
+1. se instala con pnpm como `@actually-cli/cli` y expone el comando `actually`;
 2. funciona sin backend;
 3. puede inspeccionar entorno global y proyecto;
 4. identifica pnpm y Git correctamente en escenarios soportados;

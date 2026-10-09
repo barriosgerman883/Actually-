@@ -5,7 +5,7 @@ Know what is on your machine, and why.
 `actually` is a local-first, read-only CLI. It inventories your developer tools, repositories and dependencies, compares installed and latest versions, and explains every conclusion with evidence. It never installs, updates or removes anything.
 
 ```bash
-pnpm add -g @getactually/cli
+pnpm add -g @actually-cli/cli
 actually status
 ```
 
@@ -105,10 +105,21 @@ color = "auto"                      # "auto", "always" or "never"; NO_COLOR is r
 | 2    | Invalid usage, or a tool name that is missing or ambiguous |
 | 3    | Fatal error, such as an invalid config file                |
 
+## Agent skill
+
+`skills/actually/SKILL.md` teaches coding agents to ask `actually` what is installed instead of guessing. It runs offline by default, reports `unknown` as unknown and never updates anything on its own. To make it available to every Claude Code session, copy it from a clone of this repository:
+
+```bash
+mkdir -p ~/.claude/skills
+cp -r skills/actually ~/.claude/skills/
+```
+
+The skill needs the `actually` command on your `PATH`.
+
 ## Requirements and limits
 
 - Node.js 22.19 or later, pnpm, and Git 2.32 or later for repository tools.
-- Linux and macOS. Windows is not supported yet.
+- Linux. macOS support is deferred until it has been validated. Windows is not supported yet.
 - Yarn and Bun lockfiles are detected but not read yet.
 - Global packages are those of the pnpm that runs outside any project. A project whose `packageManager` pins another pnpm major keeps its own global packages elsewhere, and those are not listed; a warning says so when that project is checked.
 

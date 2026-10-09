@@ -247,7 +247,7 @@ describe("bash guard", () => {
     "find . -exec rm {} ;",
     "ls | xargs rm -rf",
     "mv src lib",
-    "pnpm add -g @getactually/cli",
+    "pnpm add -g @actually-cli/cli",
     "npm install -g x",
     "pnpm remove --global x",
     "pnpm add left-pad",

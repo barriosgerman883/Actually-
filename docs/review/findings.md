@@ -95,6 +95,8 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-56 | media | corrección | En Windows, cualquier archivo en un directorio escaneado cuenta como ejecutable | resuelto: código corregido en `b6743b4` |
 | F-57 | baja | evidencia | Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa | resuelto: código corregido en `13b88a5` |
 | F-58 | baja | desvío de docs | CLAUDE.md quedó desactualizado en tres puntos | abierto |
+| F-59 | baja | desvío de docs | La skill describe mal el JSON y las escrituras locales | resuelto: docs actualizados en `d964a55` |
+| F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1249,6 +1251,30 @@ Propuesta: sumarlo a "Known limitations" de `docs/providers/pnpm.md` y a "Requir
 CLAUDE.md está protegido: lo cambia solo la persona responsable.
 
 Propuesta: en "Registry queries", "every config source that could apply (pnpm's config, each `.npmrc`, `.yarnrc` and `.yarnrc.yml` up to home, and `YARN_NPM_REGISTRY_SERVER`)"; en la tabla, "Cache and LocalState directories | `docs/architecture.md` §3.5 (state), §14 (cache)"; en "Agent guardrails", sumar el ask de `.github/workflows/` y los patrones que faltan.
+
+### F-59 · La skill describe mal el JSON y las escrituras locales
+
+- **Estado:** resuelto: docs actualizados en `d964a55`
+- **Severidad:** baja
+- **Tipo:** desvío de docs
+- **Ubicación:** `skills/actually/SKILL.md`, introducida en `2922881`
+- **Detectado:** 2026-10-04, Codex, durante la revisión de la skill
+- **Verificación:** por lectura
+
+La skill decía que toda respuesta JSON tiene `projects`, pero `src/cli/output/json.ts` solo lo incluye en `status` sin herramienta: `status <tool>` y `explain <tool>` lo omiten. También decía que `actually` solo lee, aunque `src/infrastructure/cache/file-cache.ts` y `src/infrastructure/local-state/file-local-state.ts` escriben en sus propios directorios. Un agente que tome la lista de campos como obligatoria puede rechazar una respuesta válida.
+
+**Corregido en `d964a55`.** La skill ahora distingue los campos comunes de `projects` y nombra las escrituras de caché y estado.
+
+### F-60 · `pnpm format:check` falla en 16 archivos
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `pnpm format:check`; `.codex/hooks/guard-bash.mjs`, `.github/ISSUE_TEMPLATE/actually-was-wrong.yml`, `.prettierrc.json`, `package.json`, `src/cli/index.ts`, `src/core/versions.ts`, `src/infrastructure/environment/dirs.ts`, `src/infrastructure/environment/node-environment.ts`, `src/scanners/bin-scanner.ts`, `src/version.ts`, `tests/architecture/boundaries.test.ts`, `tests/helpers/fakes.ts`, `tests/unit/command-runner.test.ts`, `tests/unit/config-output.test.ts`, `tsconfig.build.json`, `vitest.config.ts`
+- **Detectado:** 2026-10-06, Codex, al intentar confirmar la preparación del lanzamiento
+- **Verificación:** reproducido
+
+El hook de pre-commit ejecutó `pnpm lint` correctamente y luego `pnpm format:check`, que informó diferencias de formato en estos 16 archivos y terminó con código 1. Los archivos no pertenecen a la preparación del lanzamiento; el hook detuvo el commit. No se reformatearon porque el hallazgo está fuera de la tarea.
 
 ### Verificaciones
 

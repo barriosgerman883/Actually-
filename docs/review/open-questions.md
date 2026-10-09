@@ -19,7 +19,7 @@ Cada punto remite a la sección correspondiente de `2026-09-cross-review.md`. To
 | 13 | Allowlist | Resuelta en `a0c5ff6` | Comandos completos y exactos, elegidos por identificador | D6 |
 | 14 | Directorios de PATH escaneados | Resuelta en `24268c0` | Directorio global de pnpm, `~/.local/bin` y `scan.bin_paths` | D7 |
 | 15 | Exit codes | Resuelta en `2589804` | `0` ok, `1` updates solo con `--exit-code`, `2` uso inválido, `3` fatal. Se suma `diagnostics` al JSON | §3 |
-| 16 | Nombre del paquete npm | Resuelta en `cd79d75` | `@getactually/cli`, con el comando `actually`. Ver abajo | §4 |
+| 16 | Nombre del paquete npm | Resuelta en `cd79d75`; scope cambiado en `54728de` | `@actually-cli/cli`, con el comando `actually`. Ver abajo | §4 |
 | 17 | Idioma de los docs | Resuelta en `0337f0c` | Inglés para código y docs de contribuidores; planificación en español hasta el lanzamiento | §5 |
 | 18 | `info` como comando separado | Resuelta en `0bbf268` | Reemplazado por `status <tool>` | §5 |
 
@@ -63,7 +63,7 @@ La implementación (`2e02740`) tomó estas decisiones, ya reflejadas en los docu
 
 ## #16: nombre del paquete
 
-Se eligió la alternativa B con el scope `@getactually`, porque `@actually` pertenece a otra cuenta. Las alternativas quedan como registro de la decisión.
+Se eligió la alternativa B con un scope propio, porque `@actually` pertenece a otra cuenta: primero `@getactually` y, desde el 2026-10-09, `@actually-cli`. Las alternativas quedan como registro de la decisión.
 
 ### Contexto
 
@@ -106,10 +106,12 @@ El nombre estaba libre en el registry el 2026-09-26. Es la opción más simple, 
 
 ### Decisión
 
-El scope `@actually` resultó pertenecer a otra cuenta de npm, sin paquetes públicos. Se usó el scope `@getactually`, que estaba libre.
+El scope `@actually` resultó pertenecer a otra cuenta de npm, sin paquetes públicos. Se usó el scope `@getactually`, que estaba libre; la organización `getactually` se creó en npmjs.com el 2026-09-26.
 
-- El paquete se publica como `@getactually/cli` y expone el comando `actually`.
-- El scope reserva `@getactually/core` para las integraciones de la Fase 3.
-- La organización `getactually` se creó en npmjs.com el 2026-09-26, con verificación en dos pasos activa en la cuenta que publica.
+El 2026-10-09 se perdieron las credenciales de la cuenta dueña de `getactually`, antes de publicar nada en ese scope: el registry respondía 404 para `@getactually/cli`. Se creó la organización `actually-cli` en otra cuenta, y el registry respondía 404 para `@actually-cli/cli` y `@actually-cli/core`.
 
-Pedir la transferencia del nombre `actually`, la alternativa A, sigue siendo posible más adelante. Si prospera, `actually` pasaría a ser el nombre principal y `@getactually/cli` se deprecaría con un mensaje que apunte al nuevo nombre.
+- El paquete se publica como `@actually-cli/cli` y expone el comando `actually`.
+- El scope reserva `@actually-cli/core` para las integraciones de la Fase 3.
+- La cuenta que publica debe tener la verificación en dos pasos activa.
+
+Pedir la transferencia del nombre `actually`, la alternativa A, sigue siendo posible más adelante. Si prospera, `actually` pasaría a ser el nombre principal y `@actually-cli/cli` se deprecaría con un mensaje que apunte al nuevo nombre.
