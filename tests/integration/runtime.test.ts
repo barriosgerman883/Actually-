@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -52,6 +53,30 @@ function world(name: string) {
   };
   return { home, events, runOnce };
 }
+
+describe("cwd and home (F-64)", () => {
+  it("compares them by their real paths, so the walk up stops at home", async () => {
+    // Home reached through a link, as a symlinked HOME on Linux; cwd is the
+    // real path, as process.cwd() gives it. A package.json above home must
+    // never be taken as the project.
+    const dir = join(base, "f64");
+    const real = join(dir, "real-home");
+    mkdirSync(join(real, "sub"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), "{}");
+    const link = join(base, "f64-home");
+    symlinkSync(real, link, "junction");
+    const runtime = await createRuntime(
+      { offline: true, noCache: true, cwd: join(real, "sub"), notice: () => {} },
+      {
+        env: fakeEnv(link, { XDG_STATE_HOME: join(dir, "state") }),
+        runner: fakeRunner({ "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC) }),
+        httpClient: () => fakeHttp({}),
+      },
+    );
+    expect(runtime.env.homeDir).toBe(await realpath(link));
+    await expect(runtime.inventory({ projectOnly: true })).rejects.toThrow("no project found");
+  });
+});
 
 describe("first-run network notice (design.md §12, F-49)", () => {
   it("shows the notice once, before the first request", async () => {

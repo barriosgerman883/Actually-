@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { renderExplain, renderStatus, summaryLine } from "../../src/cli/output/human.js";
+import {
+  renderDiagnostics,
+  renderExplain,
+  renderStatus,
+  summaryLine,
+} from "../../src/cli/output/human.js";
 import { documentJson } from "../../src/cli/output/json.js";
 import { createStyle } from "../../src/cli/output/style.js";
 import { claimFrom } from "../../src/core/confidence.js";
@@ -127,6 +132,13 @@ describe("human output", () => {
     );
     expect(text).toContain("↑ x  update available (major, may break)");
     expect(text.includes("\u001b[")).toBe(false);
+  });
+  it("abbreviates home as ~ in Windows paths too (F-64)", () => {
+    const text = renderDiagnostics(
+      [{ severity: "warning", source: "git", message: "C:\\Users\\me\\p\\.git could not be read" }],
+      "C:\\Users\\me",
+    );
+    expect(text).toContain("warning: git: ~\\p\\.git could not be read");
   });
   it("summarizes updates and breaking changes", () => {
     expect(

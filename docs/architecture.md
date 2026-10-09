@@ -651,6 +651,8 @@ interface Filesystem {
 }
 ```
 
+Las rutas se comparan como texto, así que el directorio actual y home entran por su ruta real (`realpath`) en el composition root: en Windows, `process.cwd()` conserva las mayúsculas que tipeó el usuario, y en Linux `HOME` puede ser un symlink. Sin eso, los recorridos hacia arriba no reconocen home (F-64).
+
 `exists` no confunde "no existe" con "no se pudo comprobar": un error de permisos se propaga y cada llamador decide. La configuración que no se puede comprobar es fatal, y un `.npmrc`, `.yarnrc` o marcador de workspace que no se puede comprobar deja el registry indeterminado. `readText` rechaza un FIFO o un dispositivo, que dejarían la ejecución colgada, y un archivo de más de 64 MiB.
 
 Esto permite:
