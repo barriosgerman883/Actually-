@@ -96,7 +96,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-57 | baja | evidencia | Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa | resuelto: código corregido en `13b88a5` |
 | F-58 | baja | desvío de docs | CLAUDE.md quedó desactualizado en tres puntos | abierto |
 | F-59 | baja | desvío de docs | La skill describe mal el JSON y las escrituras locales | resuelto: docs actualizados en `d964a55` |
-| F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | abierto |
+| F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | resuelto: código corregido en `12392f2` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1267,7 +1267,7 @@ La skill decía que toda respuesta JSON tiene `projects`, pero `src/cli/output/j
 
 ### F-60 · `pnpm format:check` falla en 16 archivos
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `12392f2`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `pnpm format:check`; `.codex/hooks/guard-bash.mjs`, `.github/ISSUE_TEMPLATE/actually-was-wrong.yml`, `.prettierrc.json`, `package.json`, `src/cli/index.ts`, `src/core/versions.ts`, `src/infrastructure/environment/dirs.ts`, `src/infrastructure/environment/node-environment.ts`, `src/scanners/bin-scanner.ts`, `src/version.ts`, `tests/architecture/boundaries.test.ts`, `tests/helpers/fakes.ts`, `tests/unit/command-runner.test.ts`, `tests/unit/config-output.test.ts`, `tsconfig.build.json`, `vitest.config.ts`
@@ -1275,6 +1275,8 @@ La skill decía que toda respuesta JSON tiene `projects`, pero `src/cli/output/j
 - **Verificación:** reproducido
 
 El hook de pre-commit ejecutó `pnpm lint` correctamente y luego `pnpm format:check`, que informó diferencias de formato en estos 16 archivos y terminó con código 1. Los archivos no pertenecen a la preparación del lanzamiento; el hook detuvo el commit. No se reformatearon porque el hallazgo está fuera de la tarea.
+
+**Corregido en `12392f2`.** 2026-10-09, a pedido de la persona responsable, al aprobar el port a Windows. Los 15 archivos versionados no tenían diferencias de formato: la copia de trabajo de este clon de Windows tenía CRLF, de un checkout anterior a `.gitattributes` (`core.autocrlf=true`). Git no los reescribe porque los considera sin cambios, así que se borraron y se volvieron a sacar del commit, ya con LF; no hubo commit de contenido. `.codex/` no está versionado y tiene diferencias de formato además del CRLF: como `.claude`, ahora está en `.prettierignore`. Con eso, `prettier --check .` pasa en este clon y el hook de pre-commit corrió entero por primera vez. Quedan con CRLF en la copia de trabajo `.claude/settings.json`, `pnpm-lock.yaml` y el snapshot de la revisión, que están protegidos y Prettier no revisa: los vuelve a sacar la persona responsable.
 
 ### Verificaciones
 
