@@ -103,6 +103,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | resuelto: código corregido en `ec66643` |
 | F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | resuelto: código corregido en `67c00bf` |
 | F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | resuelto: código corregido en `f3a80b6` |
+| F-67 | media | corrección | Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest` | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1391,7 +1392,22 @@ En la VM Windows de la persona responsable, el primer pnpm de `PATH` es un `pnpm
 
 Propuesta: atrapar la excepción de `execFile` y devolverla como un `CommandResult` fallido que nombre el archivo que no arrancó. Test con un `execFile` doble que lance en el momento, y la reproducción en Windows de punta a punta.
 
-**Corregido en `f3a80b6`.** 2026-10-10, como parte del port a Windows que aprobó la persona responsable, según la propuesta. Test en `tests/unit/command-runner.test.ts`, que falla sin el cambio. De punta a punta en Windows 11, con el mismo `pnpm.exe` inválido: exit code 0, un `error` de pnpm que nombra el archivo (`could not be started (UNKNOWN)`) y un `warning` que dice que no se consultó el registry. Documentado en architecture.md §7.
+**Corregido en `f3a80b6`.** 2026-10-10, como parte del port a Windows que aprobó la persona responsable, según la propuesta.
+
+### F-67 · Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest`
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** corrección
+- **Ubicación:** `src/providers/pnpm/global.ts` (`specManifests`, `dirname(dir) === rootDir`)
+- **Detectado:** 2026-10-10, Claude Code, probando el script de verificación de la VM con el pnpm 12.10.1 de Corepack
+- **Verificación:** reproducido
+
+En Windows, pnpm 12.10.1 informa en `pnpm list --global --json` el `path` de cada paquete con el prefijo de ruta larga, `\\?\C:\…\global\v11\6068-…\node_modules\is-number`, mientras que `pnpm root --global` da `C:\…\global\v11` sin prefijo. `specManifests` toma el `package.json` del directorio propio del paquete solo si su padre es igual, como texto, a `pnpm root --global` (F-50). Con el prefijo nunca lo es, así que ningún paquete tiene spec y todos quedan con `latest: unknown` ("origin could not be determined: no spec found"). Falla del lado seguro, sin enviar nada. La ruta con prefijo también aparece tal cual en `installation.path`.
+
+Reproducción, en Windows 11 con pnpm 12.10.1 por Corepack 0.34.6: `pnpm add -g is-number@6.0.0` y `actually status --global`. Con pnpm 11.22.0 standalone, sobre el mismo layout, `is-number` sí recibe 7.0.0. La CI de Windows no lo ve porque usa pnpm 10.33.0.
+
+Propuesta: quitar el prefijo `\\?\` (y convertir `\\?\UNC\` en `\\`) de las rutas que informa pnpm, en `pnpm root`, `pnpm bin` y cada `path` de `pnpm list`. Test con el layout de pnpm 12 y rutas con prefijo. Test en `tests/unit/command-runner.test.ts`, que falla sin el cambio. De punta a punta en Windows 11, con el mismo `pnpm.exe` inválido: exit code 0, un `error` de pnpm que nombra el archivo (`could not be started (UNKNOWN)`) y un `warning` que dice que no se consultó el registry. Documentado en architecture.md §7.
 
 ### Verificaciones
 
