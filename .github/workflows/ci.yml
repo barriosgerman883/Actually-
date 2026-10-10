@@ -10,7 +10,14 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -36,14 +43,31 @@ jobs:
       - name: Build
         run: pnpm build
       # Runs the compiled CLI, which no unit test does (F-49): offline, with
-      # empty home and XDG directories, so nothing leaves the runner.
+      # empty home, state, cache and config directories, so nothing leaves
+      # the runner. On Windows, Node.js needs Windows paths.
       - name: Smoke test of the built CLI
         run: |
-          export HOME="$(mktemp -d)" XDG_STATE_HOME="$(mktemp -d)" XDG_CACHE_HOME="$(mktemp -d)" XDG_CONFIG_HOME="$(mktemp -d)"
+          tmp() { local d; d="$(mktemp -d)"; if command -v cygpath >/dev/null; then cygpath -w "$d"; else echo "$d"; fi; }
+          export HOME="$(tmp)" USERPROFILE="$(tmp)" LOCALAPPDATA="$(tmp)" APPDATA="$(tmp)"
+          export XDG_STATE_HOME="$(tmp)" XDG_CACHE_HOME="$(tmp)" XDG_CONFIG_HOME="$(tmp)"
           node dist/cli/index.js status --offline --json > "$RUNNER_TEMP/status.json"
           jq -e '.schemaVersion == 1 and (.diagnostics | type == "array")' "$RUNNER_TEMP/status.json"
           set +e
           node dist/cli/index.js --no-such-flag
           test $? -eq 2
+      # On Windows, pnpm is a .cmd launcher that actually reads instead of
+      # running (ADR 0009). A real global package must show up.
+      - name: Global packages with a real pnpm on Windows
+        if: runner.os == 'Windows'
+        run: |
+          tmp() { cygpath -w "$(mktemp -d)"; }
+          export PNPM_HOME="$(tmp)" LOCALAPPDATA="$(tmp)" APPDATA="$(tmp)" USERPROFILE="$(tmp)"
+          export PATH="$(cygpath -u "$PNPM_HOME"):$PATH"
+          work="$(mktemp -d)"
+          (cd "$work" && pnpm add -g is-number@6.0.0)
+          (cd "$work" && node "$GITHUB_WORKSPACE/dist/cli/index.js" status --global --offline --json) > "$RUNNER_TEMP/global.json"
+          jq '.diagnostics' "$RUNNER_TEMP/global.json"
+          jq -e '[.tools[] | select(.id == "global:pnpm:is-number") | .versions.installed.value] == ["6.0.0"]' "$RUNNER_TEMP/global.json"
       - name: Dependency audit
+        if: runner.os == 'Linux'
         run: pnpm audit --prod
