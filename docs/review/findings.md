@@ -1392,7 +1392,7 @@ En la VM Windows de la persona responsable, el primer pnpm de `PATH` es un `pnpm
 
 Propuesta: atrapar la excepción de `execFile` y devolverla como un `CommandResult` fallido que nombre el archivo que no arrancó. Test con un `execFile` doble que lance en el momento, y la reproducción en Windows de punta a punta.
 
-**Corregido en `f3a80b6`.** 2026-10-10, como parte del port a Windows que aprobó la persona responsable, según la propuesta.
+**Corregido en `f3a80b6`.** 2026-10-10, como parte del port a Windows que aprobó la persona responsable, según la propuesta. Test en `tests/unit/command-runner.test.ts`, que falla sin el cambio. De punta a punta en Windows 11, con el mismo `pnpm.exe` inválido: exit code 0, un `error` de pnpm que nombra el archivo (`could not be started (UNKNOWN)`) y un `warning` que dice que no se consultó el registry. Documentado en architecture.md §7.
 
 ### F-67 · Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest`
 
@@ -1407,7 +1407,7 @@ En Windows, pnpm 12.10.1 informa en `pnpm list --global --json` el `path` de cad
 
 Reproducción, en Windows 11 con pnpm 12.10.1 por Corepack 0.34.6: `pnpm add -g is-number@6.0.0` y `actually status --global`. Con pnpm 11.22.0 standalone, sobre el mismo layout, `is-number` sí recibe 7.0.0. La CI de Windows no lo ve porque usa pnpm 10.33.0.
 
-Propuesta: quitar el prefijo `\\?\` (y convertir `\\?\UNC\` en `\\`) de las rutas que informa pnpm, en `pnpm root`, `pnpm bin` y cada `path` de `pnpm list`. Test con el layout de pnpm 12 y rutas con prefijo. Test en `tests/unit/command-runner.test.ts`, que falla sin el cambio. De punta a punta en Windows 11, con el mismo `pnpm.exe` inválido: exit code 0, un `error` de pnpm que nombra el archivo (`could not be started (UNKNOWN)`) y un `warning` que dice que no se consultó el registry. Documentado en architecture.md §7.
+Propuesta: quitar el prefijo `\\?\` (y convertir `\\?\UNC\` en `\\`) de las rutas que informa pnpm, en `pnpm root`, `pnpm bin` y cada `path` de `pnpm list`. Test con el layout de pnpm 12 y rutas con prefijo.
 
 ### Verificaciones
 
