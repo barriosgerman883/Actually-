@@ -102,6 +102,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-63 | alta | privacidad | En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `385af96` |
 | F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | resuelto: código corregido en `ec66643` |
 | F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | resuelto: código corregido en `67c00bf` |
+| F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1374,6 +1375,21 @@ Para llegar ahí desde un repositorio hace falta que uno de los archivos que `ac
 Propuesta: en `readText`, resolver la ruta con `realpath` antes de `stat`. La pipe no tiene ruta real, así que la lectura falla como "no se pudo leer", que ya deja el registry indeterminado (F-04). En Linux no cambia nada: un FIFO tiene ruta real y sigue rechazado por `stat`. Test en `tests/unit/filesystem.test.ts` con una pipe real en Windows y un FIFO en los demás sistemas.
 
 **Corregido en `67c00bf`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable, según la propuesta. En Windows 11, sin el cambio el test se corta a los 5 segundos con la lectura bloqueada; con el cambio, la lectura falla enseguida. Documentado en architecture.md §9.
+
+### F-66 · Un pnpm que no se puede lanzar aborta toda la ejecución
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** robustez
+- **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`execFile` dentro del ejecutor de la Promise)
+- **Detectado:** 2026-10-10, Claude Code, preparando la verificación en la VM Windows de la persona responsable
+- **Verificación:** reproducido
+
+Node.js informa por el evento `error`, en el tick siguiente, solo algunos errores de `spawn` (`EACCES`, `EAGAIN`, `EMFILE`, `ENFILE`, `ENOENT`); los demás los lanza en el momento. `nodeCommandRunner` llama a `execFile` dentro del ejecutor de una Promise, así que esa excepción la rechaza, nadie la atrapa y la ejecución termina como error fatal. architecture.md §13 y RA-009 piden lo contrario: un provider que falla se vuelve un diagnóstico y el resto sigue.
+
+En la VM Windows de la persona responsable, el primer pnpm de `PATH` es un `pnpm.exe` que no arranca (`os error 193`, "no es una aplicación Win32 válida"). Reproducido en Windows 11 con un `pnpm.exe` que no es un ejecutable primero en `PATH`: `actually status --global --json` respondió `{"tools":[],"diagnostics":[{"severity":"error","source":"actually","message":"unexpected error: spawn UNKNOWN"}]}` con exit code 3, en vez de un diagnóstico de pnpm y el resto del inventario.
+
+Propuesta: atrapar la excepción de `execFile` y devolverla como un `CommandResult` fallido que nombre el archivo que no arrancó. Test con un `execFile` doble que lance en el momento, y la reproducción en Windows de punta a punta.
 
 ### Verificaciones
 
