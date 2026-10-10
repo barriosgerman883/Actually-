@@ -58,8 +58,18 @@ La implementación (`2e02740`) tomó estas decisiones, ya reflejadas en los docu
 | Ubicación del archivo de config, `ACTUALLY_CONFIG` y `scan.depth` | No estaban definidos |
 | Un tag de GitHub sin release queda con confianza máxima `medium` | Un tag no es una release declarada por quien publica |
 | El provider de actualización nunca supera la confianza de la instalación | Se deriva de ella |
-| Windows queda fuera del MVP | pnpm es un shim `.cmd` que no se puede ejecutar sin shell |
+| Windows queda fuera del MVP | pnpm es un shim `.cmd` que no se puede ejecutar sin shell. Se soporta desde el port a Windows (ver la sección siguiente) |
 | El test del repo hostil incluye un control | Con `git tag` y `git describe` el ataque no se dispara ni sin endurecer; el control prueba que el endurecimiento sí lo detiene |
+
+## Port a Windows
+
+Decidido por la persona responsable el 2026-10-09, con la congelación de alcance levantada para el port:
+
+| Ajuste | Commit | Motivo |
+|---|---|---|
+| En Windows, pnpm se busca en `PATH` como cmd y su lanzador `.cmd` se lee, nunca se ejecuta | `f28cd2f` | Node.js no lanza un `.cmd` sin shell, y `actually?` nunca usa uno (ADR 0009) |
+| En Windows, un comando es el nombre del archivo sin su extensión de `PATHEXT`, y un lanzador se sigue leyéndolo | `e506902` | pnpm escribe `foo.CMD` y `foo.ps1` para cada comando, y un lanzador no es un symlink |
+| Se desarrolla también en Windows, sin WSL, y la CI corre en Windows | `342dbc3`, `e4f9f52` | La persona responsable desarrolla en Windows; revierte esa parte de F-48 |
 
 ## #16: nombre del paquete
 

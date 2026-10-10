@@ -427,6 +427,9 @@ export async function scanProject(
     dirs.unshift(dir);
     if (dir === stopAt || dirname(dir) === dir) break;
   }
+  // Yarn reads the files in home for every project, also one outside home,
+  // such as on another drive (F-63).
+  if (dirs[0] !== stopAt) dirs.unshift(stopAt);
   const registryFiles: [string, RegistryFile["format"]][] = [
     [".npmrc", "npmrc"],
     [".yarnrc", "yarnrc"],

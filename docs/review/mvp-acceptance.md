@@ -19,6 +19,22 @@ Exit codes verificados con el binario instalado: `0` al completar, `1` con `--ex
 
 `pnpm audit --prod`: sin vulnerabilidades conocidas.
 
+## Windows
+
+Verificado del 2026-10-09 al 2026-10-10 para el port a Windows (PR #14), con el paquete de la rama armado con `pnpm pack` en Docker. Entornos: la máquina de la persona responsable, con directorios temporales para todo; una VM Windows con nvm-windows, Node.js 22.23.2 y Git 2.55.0; y la CI en `windows-latest`.
+
+| # | Criterio | Resultado | Cómo se verificó |
+|---|---|---|---|
+| 1 | Se instala con pnpm | Cumple | En la VM, `pnpm add -g` del paquete con pnpm 12.6.0 (Corepack) deja `actually` en el directorio global de bins |
+| 3 | Inspecciona entorno global y proyecto | Cumple | `status --global` en la VM y en la máquina; un proyecto y un repositorio bajo `scan.paths` en la máquina |
+| 4 | Identifica pnpm y Git | Cumple | pnpm por cuatro lanzadores reales: el de su instalador (pnpm 11.22.0), Corepack sobre fnm y sobre nvm-windows (pnpm 12.6.0 y 12.10.1) y el de `pnpm/action-setup` en la CI (pnpm 10.33.0). Un repositorio enlazado con `pnpm link --global` sale como herramienta git, con su versión tomada del tag |
+| 6 | Salida humana y JSON | Cumple | En la VM: JSON con `diagnostics`, salida humana, `explain` con la evidencia, aviso de red una sola vez |
+| 8 | No ejecuta operaciones destructivas | Cumple | En la VM, tamaño y fecha de los 1106 archivos del directorio global y de bins de pnpm, antes y después de correr todos los comandos: idénticos |
+
+Además, en la VM el primer pnpm de `PATH` es un `pnpm.exe` que no arranca (`os error 193`): `actually` informa un `error` con la causa y lista el resto (F-66). Con pnpm 12.10 los globales reciben su `latest` (F-67).
+
+No verificado: los lanzadores de Volta, Scoop y winget, y `npm i -g pnpm` en una máquina real (su forma está en las fixtures). En la VM, `PNPM_HOME\bin` tiene shims `.exe` con un archivo `.pnpm-shim-v1-<nombre>-target` al lado, una forma que `actually` no lee: un `.exe` corre directo, pero un repositorio enlazado con un shim así no se reconoce como herramienta.
+
 ## Pendiente fuera de este entorno
 
 - ~~Probar el resolver de GitHub contra `api.github.com` real.~~ Hecho el 2026-09-28, desde Windows y sin token: release real y fallback a tags con la confianza esperada (findings.md, sección "Verificaciones").

@@ -9,7 +9,11 @@ export interface HumanOptions {
 }
 
 function tildify(path: string, home: string): string {
-  return path === home ? "~" : path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
+  if (path === home) return "~";
+  // Windows paths use \ (F-64).
+  return path.startsWith(`${home}/`) || path.startsWith(`${home}\\`)
+    ? `~${path.slice(home.length)}`
+    : path;
 }
 
 function field(label: string, value: string): string {

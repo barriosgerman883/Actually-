@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildInventory } from "../../src/application/inventory.js";
 import { UsageError } from "../../src/core/errors.js";
@@ -14,6 +14,7 @@ import {
   memoryFs,
   netContext,
   ok,
+  p,
   PNPM_CONFIG_PUBLIC,
 } from "../helpers/fakes.js";
 
@@ -62,34 +63,37 @@ function pnpmWorld(pnpmConfig = PNPM_CONFIG_PUBLIC) {
 // global/v11 and each package gets its own directory with its own package.json.
 const PNPM12_ROOT = `${PNPM_HOME}/global/v11`;
 
-function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC) {
+/** `listPrefix` is what pnpm 12.10 on Windows puts before each listed path (F-67). */
+function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC, listPrefix = "") {
   const isNumber = `${PNPM12_ROOT}/2c-18d9606f358acbc3-0`;
   const types = `${PNPM12_ROOT}/2c-18d9606f75c4749e-2`;
+  const listed = (path: string) => `${listPrefix}${p(path)}`;
+  // pnpm prints paths in the platform's own form.
   const runner = fakeRunner({
     "pnpm.version": ok("12.6.0\n"),
-    "pnpm.root.global": ok(`${PNPM12_ROOT}\n`),
-    "pnpm.bin.global": ok(`${PNPM_HOME}/bin\n`),
+    "pnpm.root.global": ok(`${p(PNPM12_ROOT)}\n`),
+    "pnpm.bin.global": ok(`${p(`${PNPM_HOME}/bin`)}\n`),
     "pnpm.config.list": ok(pnpmConfig),
     "pnpm.list.global": ok(
       JSON.stringify([
         {
-          path: PNPM12_ROOT,
+          path: p(PNPM12_ROOT),
           private: true,
           dependencies: {
             "@types/node": {
               from: "@types/node",
               version: "22.0.0",
-              path: `${types}/node_modules/@types/node`,
+              path: listed(`${types}/node_modules/@types/node`),
             },
             "is-number": {
               from: "is-number",
               version: "6.0.0",
-              path: `${isNumber}/node_modules/is-number`,
+              path: listed(`${isNumber}/node_modules/is-number`),
             },
             stray: {
               from: "stray",
               version: "1.0.0",
-              path: "/home/me/elsewhere/node_modules/stray",
+              path: listed("/home/me/elsewhere/node_modules/stray"),
             },
           },
         },
@@ -190,6 +194,23 @@ describe("global inventory with pnpm", () => {
     ]);
   });
 
+  it("reads specs when pnpm lists paths with the long-path prefix, as pnpm 12.10 on Windows does (F-67)", async () => {
+    const { runner, fs } = pnpm12World(PNPM_CONFIG_PUBLIC, "\\\\?\\");
+    const http = fakeHttp({
+      "https://registry.npmjs.org/is-number/latest": json({ version: "7.0.0" }),
+    });
+    const inv = await buildInventory(
+      { fs, runner, env: fakeEnv(HOME), net: netContext(http), config: config(), cwd: p("/tmp") },
+      { globalOnly: true },
+    );
+    expect(inv.tools.find((t) => t.name === "is-number")).toMatchObject({
+      status: "outdated",
+      installation: {
+        value: { path: p(`${PNPM12_ROOT}/2c-18d9606f358acbc3-0/node_modules/is-number`) },
+      },
+    });
+  });
+
   it("cites the pnpm 12 manifest that declares the spec (F-50)", async () => {
     const { runner, fs } = pnpm12World(JSON.stringify({ registry: "https://npm.corp.example/" }));
     const inv = await buildInventory(
@@ -206,7 +227,7 @@ describe("global inventory with pnpm", () => {
     const latest = inv.tools.find((t) => t.name === "is-number")?.versions.latest;
     expect(latest?.state === "unknown" ? latest.evidence : []).toContainEqual({
       kind: "fact",
-      source: `${PNPM12_ROOT}/2c-18d9606f358acbc3-0/package.json`,
+      source: p(`${PNPM12_ROOT}/2c-18d9606f358acbc3-0/package.json`),
       description: 'declared as "6.0.0"',
     });
   });
@@ -215,11 +236,12 @@ describe("global inventory with pnpm", () => {
     const { runner, fs: base } = pnpmWorld();
     const fs = {
       ...base,
-      exists: async (p: string) => p === `${HOME}/repo/package.json` || (await base.exists(p)),
-      readText: async (p: string) =>
-        p === `${HOME}/repo/package.json`
+      exists: async (q: string) =>
+        p(q) === p(`${HOME}/repo/package.json`) || (await base.exists(q)),
+      readText: async (q: string) =>
+        p(q) === p(`${HOME}/repo/package.json`)
           ? JSON.stringify({ packageManager: "pnpm@9.15.0+sha512.abc" })
-          : base.readText(p),
+          : base.readText(q),
     };
     const inv = await buildInventory({
       fs,
@@ -227,7 +249,7 @@ describe("global inventory with pnpm", () => {
       env: fakeEnv(HOME),
       net: netContext(undefined),
       config: config(),
-      cwd: `${HOME}/repo`,
+      cwd: p(`${HOME}/repo`),
     });
     expect(inv.diagnostics).toContainEqual(
       expect.objectContaining({
@@ -319,7 +341,7 @@ describe("projects and Git repositories", () => {
     const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
     const runner = fakeRunner({
       "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
-      "git.tags.head": (repo) => ok(repo === "/home/me/tools/t" ? "v0.3.0\nlatest\n" : ""),
+      "git.tags.head": (repo) => ok(repo === p("/home/me/tools/t") ? "v0.3.0\nlatest\n" : ""),
       "git.describe.head": { ok: false, reason: "failed", message: "no tags" },
     });
     const http = fakeHttp({
@@ -327,7 +349,7 @@ describe("projects and Git repositories", () => {
       "https://api.github.com/repos/me/t/releases/latest": json({ tag_name: "v0.4.0" }),
     });
     const cfg = config((c) => {
-      c.scan.paths = ["/home/me/dev", "/home/me/tools"];
+      c.scan.paths = [p("/home/me/dev"), p("/home/me/tools")];
     });
     const inv = await buildInventory({
       fs,
@@ -340,24 +362,24 @@ describe("projects and Git repositories", () => {
 
     const t = inv.tools.find((x) => x.name === "t");
     expect(t).toMatchObject({
-      id: "global:git:/home/me/tools/t",
+      id: `global:git:${p("/home/me/tools/t")}`,
       status: "outdated",
       updateType: "minor",
       mayBreak: true,
       installation: { state: "known", confidence: "low" },
       versions: { installed: { value: "0.3.0" }, latest: { value: "0.4.0" } },
     });
-    expect(inv.projects.map((p) => p.root).sort()).toEqual([
-      "/home/me/dev/app",
-      "/home/me/tools/other",
+    expect(inv.projects.map((x) => x.root).sort()).toEqual([
+      p("/home/me/dev/app"),
+      p("/home/me/tools/other"),
     ]);
-    const app = inv.projects.find((p) => p.root === "/home/me/dev/app");
+    const app = inv.projects.find((x) => x.root === p("/home/me/dev/app"));
     expect(app).toMatchObject({
       dependenciesChecked: 1,
       updatesAvailable: 1,
       repository: { state: "known" },
     });
-    const dep = inv.tools.find((x) => x.id === "project:/home/me/dev/app:gstack");
+    const dep = inv.tools.find((x) => x.id === `project:${p("/home/me/dev/app")}:gstack`);
     expect(dep).toMatchObject({
       status: "outdated",
       versions: { requested: { value: "^1.0.0" }, installed: { value: "1.5.0" } },
@@ -370,7 +392,7 @@ describe("projects and Git repositories", () => {
       "git.tags.head": ok("v1.0.0\n"),
     });
     const cfg = config((c) => {
-      c.scan.paths = [scanPath];
+      c.scan.paths = [p(scanPath)];
     });
     return { fs, runner, env: fakeEnv(HOME), net: netContext(undefined), config: cfg, cwd: "/tmp" };
   }
@@ -382,7 +404,7 @@ describe("projects and Git repositories", () => {
       "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
       "git.tags.head": { ok: false, reason: "timeout", message: "git.tags.head timed out" },
     });
-    world.config.tools.git = [{ path: "/home/me/missing" }];
+    world.config.tools.git = [{ path: p("/home/me/missing") }];
     const inv = await buildInventory(world, { globalOnly: true });
     const t = inv.tools.find((x) => x.name === "t");
     const missing = inv.tools.find((x) => x.name === "missing");
@@ -400,7 +422,7 @@ describe("projects and Git repositories", () => {
     const fs = memoryFs(files, { symlinks: { "/home/me/.local/bin/t": "/home/me/tools/t/bin/t" } });
     const inv = await buildInventory(toolWorld(fs, "/home/me/tools"), { globalOnly: true });
     expect(inv.tools.find((x) => x.name === "t")).toMatchObject({
-      id: "global:git:/home/me/tools/t",
+      id: `global:git:${p("/home/me/tools/t")}`,
       versions: { installed: { value: "1.0.0" } },
     });
     expect(inv.projects).toEqual([]);
@@ -415,9 +437,10 @@ describe("projects and Git repositories", () => {
       mkdirSync(join(repo, "bin"));
       mkdirSync(join(home, ".local", "bin"), { recursive: true });
       writeFileSync(join(repo, ".git", "HEAD"), `${"c".repeat(40)}\n`);
-      writeFileSync(join(repo, "bin", "t"), "#!/bin/sh\n", { mode: 0o755 });
+      // Executable by its mode, or on Windows by its extension.
+      writeFileSync(join(repo, "bin", "t.cmd"), "#!/bin/sh\n", { mode: 0o755 });
       symlinkSync(join(base, "data", "tools"), join(home, "tools"));
-      symlinkSync(join(repo, "bin", "t"), join(home, ".local", "bin", "t"));
+      symlinkSync(join(repo, "bin", "t.cmd"), join(home, ".local", "bin", "t.cmd"));
       const runner = fakeRunner({
         "pnpm.config.list": ok(PNPM_CONFIG_PUBLIC),
         "git.tags.head": ok("v1.0.0\n"),
@@ -450,7 +473,7 @@ describe("projects and Git repositories", () => {
       "git.describe.head": ok("v1.0.0-2-gabc123\n"),
     });
     const cfg = config((c) => {
-      c.tools.git = [{ path: "/home/me/tools/other" }];
+      c.tools.git = [{ path: p("/home/me/tools/other") }];
     });
     const inv = await buildInventory(
       { fs, runner, env: fakeEnv(HOME), net: netContext(undefined), config: cfg, cwd: "/tmp" },
@@ -486,7 +509,7 @@ describe("ids (design.md §14)", () => {
       "/home/me/vendor-b/tool/.git/HEAD": `${"b".repeat(40)}\n`,
     });
     const cfg = config((c) => {
-      c.tools.git = [{ path: "/home/me/vendor-a/tool" }, { path: "/home/me/vendor-b/tool" }];
+      c.tools.git = [{ path: p("/home/me/vendor-a/tool") }, { path: p("/home/me/vendor-b/tool") }];
     });
     const inv = await buildInventory(
       {
@@ -503,8 +526,8 @@ describe("ids (design.md §14)", () => {
       { globalOnly: true },
     );
     expect(inv.tools.map((t) => t.id).sort()).toEqual([
-      "global:git:/home/me/vendor-a/tool",
-      "global:git:/home/me/vendor-b/tool",
+      `global:git:${p("/home/me/vendor-a/tool")}`,
+      `global:git:${p("/home/me/vendor-b/tool")}`,
     ]);
   });
   it("keeps one pnpm record when a pnpm executable is also found elsewhere (F-37)", async () => {
@@ -533,7 +556,7 @@ describe("ids (design.md §14)", () => {
     expect(pnpm).toHaveLength(1);
     expect(pnpm[0]?.installation).toMatchObject({
       state: "unknown",
-      evidence: [expect.objectContaining({ source: `${HOME}/.local/bin/pnpm` })],
+      evidence: [expect.objectContaining({ source: p(`${HOME}/.local/bin/pnpm`) })],
     });
     const ids = inv.tools.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -662,7 +685,7 @@ describe("project registry (architecture.md §8)", () => {
         env: fakeEnv(HOME, vars),
         net: netContext(http),
         config: config(),
-        cwd,
+        cwd: p(cwd),
       },
       { projectOnly: true },
     );
@@ -752,12 +775,12 @@ describe("project registry (architecture.md §8)", () => {
     expect(a?.versions.resolved).toMatchObject({
       state: "known",
       value: "1.0.0",
-      evidence: [{ source: `${HOME}/ws/package-lock.json` }],
+      evidence: [{ source: p(`${HOME}/ws/package-lock.json`) }],
     });
     expect(a?.versions.installed).toMatchObject({
       state: "known",
       value: "1.0.0",
-      evidence: [{ source: `${HOME}/ws/node_modules/a/package.json` }],
+      evidence: [{ source: p(`${HOME}/ws/node_modules/a/package.json`) }],
     });
   });
 
@@ -914,7 +937,7 @@ describe("project registry (architecture.md §8)", () => {
     expect(http.calls).toEqual([]);
     expect(inv.tools[0]?.versions.latest).toMatchObject({
       state: "unknown",
-      reason: `origin could not be determined: ${HOME}/p/.npmrc could not be read`,
+      reason: `origin could not be determined: ${p(`${HOME}/p/.npmrc`)} could not be read`,
     });
   });
 
@@ -975,12 +998,40 @@ describe("project registry (architecture.md §8)", () => {
     );
     expect(unreadable.http.calls).toEqual([]);
     expect(unreadable.inv.tools[0]?.versions.latest).toMatchObject({
-      reason: `origin could not be determined: ${HOME}/p/.yarnrc.yml could not be read`,
+      reason: `origin could not be determined: ${p(`${HOME}/p/.yarnrc.yml`)} could not be read`,
     });
     const env = await projectInventory({ [`${HOME}/p/package.json`]: manifest }, `${HOME}/p`, {
       YARN_NPM_REGISTRY_SERVER: "https://npm.corp.example",
     });
     expect(env.http.calls).toEqual([]);
+  });
+
+  it("reads the yarn files in home for a project outside home (F-63)", async () => {
+    // As D:\code\p with home on C:, or /srv/p on Linux: the walk up from the
+    // project never reaches home, but yarn still reads the files there.
+    const home = resolve("/home/me");
+    const project = resolve("/srv/p");
+    for (const [file, text] of [
+      [".yarnrc.yml", "npmRegistryServer: https://npm.corp.example\n"],
+      [".yarnrc", 'registry "https://npm.corp.example"\n'],
+    ]) {
+      const http = fakeHttp(deps);
+      await buildInventory(
+        {
+          fs: memoryFs({
+            [join(project, "package.json")]: JSON.stringify({ dependencies: { a: "^1.0.0" } }),
+            [join(home, file as string)]: text as string,
+          }),
+          runner: runner(),
+          env: fakeEnv(home),
+          net: netContext(http),
+          config: config(),
+          cwd: project,
+        },
+        { projectOnly: true },
+      );
+      expect(http.calls).toEqual([]);
+    }
   });
 
   it("never queries a local tarball spec or a dependency optionalDependencies makes local (F-33)", async () => {

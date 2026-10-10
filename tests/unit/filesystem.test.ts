@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -36,10 +37,31 @@ describe("nodeFilesystem (F-46)", () => {
   });
 
   it("throws any other error instead of calling the path missing", async () => {
-    await expect(fs.exists(loop("loop"))).rejects.toMatchObject({ code: "ELOOP" });
+    const path = loop("loop");
+    if (process.platform === "win32") {
+      // Windows checks the link itself, which exists; the loop shows up when
+      // the file is read, which then fails instead of reading nothing.
+      await expect(fs.exists(path)).resolves.toBe(true);
+      await expect(fs.readText(path)).rejects.toThrow();
+      return;
+    }
+    await expect(fs.exists(path)).rejects.toMatchObject({ code: "ELOOP" });
   });
 
-  it("never blocks on a FIFO", async () => {
+  it("never blocks on a FIFO, or on a named pipe on Windows (F-65)", async () => {
+    if (process.platform === "win32") {
+      // Windows has no FIFOs in the filesystem; its blocking file is a pipe
+      // with a server listening, which stat calls a regular file.
+      const pipe = `\\\\.\\pipe\\actually-test-${process.pid}`;
+      const server = createServer(() => {});
+      await new Promise<void>((done) => server.listen(pipe, done));
+      try {
+        await expect(fs.readText(pipe)).rejects.toThrow();
+      } finally {
+        server.close();
+      }
+      return;
+    }
     const fifo = join(dir, "fifo");
     execFileSync("mkfifo", [fifo]);
     await expect(fs.readText(fifo)).rejects.toThrow(/not a regular file/);

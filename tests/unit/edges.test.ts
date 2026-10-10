@@ -15,7 +15,7 @@ import { parseGithubUrl } from "../../src/providers/github/url.js";
 import { findProjectRoot, scanProject } from "../../src/providers/project/project.js";
 import { findWorkspace } from "../../src/providers/project/workspace.js";
 import { cachedGet } from "../../src/providers/shared/cached-get.js";
-import { fakeHttp, json, memoryCache, memoryFs, netContext } from "../helpers/fakes.js";
+import { fakeHttp, json, memoryCache, memoryFs, netContext, p } from "../helpers/fakes.js";
 
 // Edge cases found by mutation testing (docs/review/2026-09-28-mutation.md):
 // each test fails when the condition it names is flipped or shifted by one.
@@ -23,9 +23,9 @@ import { fakeHttp, json, memoryCache, memoryFs, netContext } from "../helpers/fa
 function throwingExists(base: Filesystem, path: string): Filesystem {
   return {
     ...base,
-    exists: async (p) => {
-      if (p === path) throw Object.assign(new Error("EACCES"), { code: "EACCES" });
-      return base.exists(p);
+    exists: async (q) => {
+      if (p(q) === p(path)) throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+      return base.exists(q);
     },
   };
 }
@@ -284,12 +284,13 @@ describe("filesystem edges", () => {
   it("does not count a directory, a plain file or a missing path as executable", async () => {
     mkdirSync(join(dir, "d"));
     writeFileSync(join(dir, "plain"), "x", { mode: 0o644 });
-    writeFileSync(join(dir, "run"), "x", { mode: 0o755 });
+    // Executable by its mode on Linux and macOS, by its extension on Windows.
+    writeFileSync(join(dir, "run.cmd"), "x", { mode: 0o755 });
     expect(await fs.isDirectory(join(dir, "d"))).toBe(true);
     expect(await fs.isDirectory(join(dir, "missing"))).toBe(false);
     expect(await fs.isExecutableFile(join(dir, "d"))).toBe(false);
     expect(await fs.isExecutableFile(join(dir, "missing"))).toBe(false);
-    expect(await fs.isExecutableFile(join(dir, "run"))).toBe(true);
+    expect(await fs.isExecutableFile(join(dir, "run.cmd"))).toBe(true);
     // Root passes X_OK checks on any file with an execute bit, and only then.
     expect(await fs.isExecutableFile(join(dir, "plain"))).toBe(false);
   });

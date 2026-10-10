@@ -43,8 +43,13 @@ export async function loadConfig(
     throw new FatalError(`invalid config in ${file}: ${key} must be ${expected}`);
   };
   const expand = (p: string) => {
+    // ~\ too on Windows, where paths are written with \.
     const withHome =
-      p === "~" ? env.homeDir : p.startsWith("~/") ? join(env.homeDir, p.slice(2)) : p;
+      p === "~"
+        ? env.homeDir
+        : p.startsWith("~/") || (env.platform === "win32" && p.startsWith("~\\"))
+          ? join(env.homeDir, p.slice(2))
+          : p;
     return isAbsolute(withHome) ? withHome : resolve(withHome);
   };
   const table = (key: string, value: unknown): Record<string, unknown> => {

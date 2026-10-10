@@ -29,6 +29,7 @@ import {
   memoryFs,
   netContext,
   ok,
+  p,
   PNPM_CONFIG_PUBLIC,
 } from "../helpers/fakes.js";
 
@@ -579,14 +580,14 @@ describe("unreadable .git file (F-38)", () => {
     const fs = {
       ...base,
       readText: async (path: string) => {
-        if (path === "/w/.git") throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+        if (p(path) === p("/w/.git")) throw Object.assign(new Error("EACCES"), { code: "EACCES" });
         return base.readText(path);
       },
     };
     const diagnostics: Diagnostic[] = [];
-    expect(await readRepository(fs, "/w", diagnostics)).toBeUndefined();
+    expect(await readRepository(fs, p("/w"), diagnostics)).toBeUndefined();
     expect(diagnostics).toEqual([
-      { severity: "warning", source: "git", message: "/w/.git could not be read" },
+      { severity: "warning", source: "git", message: `${p("/w/.git")} could not be read` },
     ]);
   });
 });
@@ -721,11 +722,11 @@ describe("project scan", () => {
         packages: { "": {}, "node_modules/a": { version: "1.2.0" } },
       }),
     });
-    const scan = await scanProject(fs, "/ws/app", "/");
+    const scan = await scanProject(fs, p("/ws/app"), p("/"));
     expect(scan.packageManager?.value).toBe("npm");
     expect(scan.dependencies[0]?.resolved).toMatchObject({
       version: "1.2.0",
-      evidence: { source: "/ws/app/package-lock.json" },
+      evidence: { source: p("/ws/app/package-lock.json") },
     });
   });
   it("ignores a pnpm-lock.yaml above the project unless it lists the project (F-08)", async () => {

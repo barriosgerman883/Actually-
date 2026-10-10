@@ -1,4 +1,4 @@
-import { dirname } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { defaultConfig, type Config } from "../../src/core/config.js";
 import { NetworkError } from "../../src/core/errors.js";
 import type {
@@ -15,17 +15,26 @@ import type {
 } from "../../src/core/ports.js";
 import type { NetContext } from "../../src/providers/shared/cached-get.js";
 
-/** In-memory read-only filesystem. Keys are absolute file paths. */
+/**
+ * A test path in the platform's own form: `/home/me/x` stays as it is on
+ * Linux and macOS, and becomes `D:\home\me\x` on Windows, as node:path
+ * would build it. Write paths in tests as p("/home/me/x").
+ */
+export const p = (posix: string): string => resolve(posix);
+
+/**
+ * In-memory read-only filesystem. Keys are absolute file paths; keys and
+ * queries both go through p(), so "/home/me/x" works on every platform.
+ */
 export function memoryFs(
   files: Record<string, string>,
   extra: { executables?: string[]; symlinks?: Record<string, string> } = {},
 ): Filesystem {
+  const contents = new Map(Object.entries(files).map(([path, text]) => [p(path), text]));
+  const exes = new Set((extra.executables ?? []).map(p));
+  const links = new Map(Object.entries(extra.symlinks ?? {}).map(([from, to]) => [p(from), p(to)]));
+  const all = [...contents.keys(), ...exes, ...links.keys()];
   const dirs = new Set<string>();
-  const all = [
-    ...Object.keys(files),
-    ...(extra.executables ?? []),
-    ...Object.keys(extra.symlinks ?? {}),
-  ];
   for (const path of all) {
     let dir = dirname(path);
     while (!dirs.has(dir)) {
@@ -35,33 +44,38 @@ export function memoryFs(
       dir = parent;
     }
   }
-  const exes = new Set(extra.executables ?? []);
-  const links = extra.symlinks ?? {};
-  const isFile = (p: string) => p in files || exes.has(p) || p in links;
+  const isFile = (path: string) => contents.has(path) || exes.has(path) || links.has(path);
   return {
-    exists: async (p) => isFile(p) || dirs.has(p),
-    readText: async (p) => {
-      const content = files[p];
-      if (content === undefined) throw Object.assign(new Error(`ENOENT: ${p}`), { code: "ENOENT" });
+    exists: async (path) => isFile(p(path)) || dirs.has(p(path)),
+    readText: async (path) => {
+      const content = contents.get(p(path));
+      if (content === undefined) {
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
+      }
       return content;
     },
-    readDir: async (p): Promise<DirEntry[]> => {
-      if (!dirs.has(p)) throw new Error(`ENOENT: ${p}`);
+    readDir: async (path): Promise<DirEntry[]> => {
+      const dir = p(path);
+      if (!dirs.has(dir)) throw new Error(`ENOENT: ${path}`);
       const names = new Map<string, DirEntry["kind"]>();
-      for (const path of [...all, ...dirs]) {
-        if (dirname(path) !== p || path === p) continue;
-        const name = path.slice(p.length + 1);
-        names.set(name, path in links ? "symlink" : dirs.has(path) ? "directory" : "file");
+      for (const entry of [...all, ...dirs]) {
+        if (dirname(entry) !== dir || entry === dir) continue;
+        names.set(
+          basename(entry),
+          links.has(entry) ? "symlink" : dirs.has(entry) ? "directory" : "file",
+        );
       }
       return [...names].map(([name, kind]) => ({ name, kind }));
     },
-    realpath: async (p) => {
-      if (p in links) return links[p] as string;
-      if (!isFile(p) && !dirs.has(p)) throw new Error(`ENOENT: ${p}`);
-      return p;
+    realpath: async (path) => {
+      const full = p(path);
+      const target = links.get(full);
+      if (target !== undefined) return target;
+      if (!isFile(full) && !dirs.has(full)) throw new Error(`ENOENT: ${path}`);
+      return full;
     },
-    isDirectory: async (p) => dirs.has(p),
-    isExecutableFile: async (p) => exes.has(p) || p in links,
+    isDirectory: async (path) => dirs.has(p(path)),
+    isExecutableFile: async (path) => exes.has(p(path)) || links.has(p(path)),
   };
 }
 
@@ -138,8 +152,9 @@ export function netContext(
   };
 }
 
+/** Home goes through p(), as memoryFs keys do. */
 export function fakeEnv(home = "/home/me", vars: Record<string, string> = {}): Environment {
-  return { platform: "linux", homeDir: home, get: (name) => vars[name] };
+  return { platform: "linux", homeDir: p(home), get: (name) => vars[name] };
 }
 
 export function config(patch: (c: Config) => void = () => {}): Config {

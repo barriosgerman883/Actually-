@@ -130,7 +130,10 @@ export async function buildInventory(
       join(home, ".local", "bin"),
       ...config.scan.binPaths,
     ];
-    const executables = await listExecutables(fs, binDirs);
+    const executables = await listExecutables(fs, binDirs, {
+      platform: env.platform,
+      pathext: env.get("PATHEXT"),
+    });
     const binsInPnpmDir = new Set(
       executables.filter((e) => e.dir === pnpm.binDir).map((e) => e.name),
     );
@@ -163,7 +166,9 @@ export async function buildInventory(
         list.push({
           kind: "inference",
           source: exe.path,
-          description: `executable resolves to ${exe.realPath}, inside this repository`,
+          description: exe.viaLauncher
+            ? `its .cmd launcher runs ${exe.realPath}, inside this repository`
+            : `executable resolves to ${exe.realPath}, inside this repository`,
         });
         repoToolEvidence.set(repo, list);
         continue;

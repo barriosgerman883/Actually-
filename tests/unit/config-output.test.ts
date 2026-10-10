@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { renderExplain, renderStatus, summaryLine } from "../../src/cli/output/human.js";
+import {
+  renderDiagnostics,
+  renderExplain,
+  renderStatus,
+  summaryLine,
+} from "../../src/cli/output/human.js";
 import { documentJson } from "../../src/cli/output/json.js";
 import { createStyle } from "../../src/cli/output/style.js";
 import { claimFrom } from "../../src/core/confidence.js";
@@ -10,7 +16,7 @@ import { buildRecord } from "../../src/core/record.js";
 import { appDirs } from "../../src/infrastructure/environment/dirs.js";
 import { loadConfig, parseDuration } from "../../src/infrastructure/config/toml-config.js";
 import { VERSION } from "../../src/version.js";
-import { fakeEnv, memoryFs } from "../helpers/fakes.js";
+import { fakeEnv, memoryFs, p } from "../helpers/fakes.js";
 
 const fact = {
   kind: "fact" as const,
@@ -44,7 +50,7 @@ describe("version", () => {
 });
 
 describe("config (design.md §13)", () => {
-  const env = fakeEnv("/home/me");
+  const env = fakeEnv(p("/home/me"));
   it("uses defaults when the file does not exist", async () => {
     const { config } = await loadConfig("/home/me/.config/actually/config.toml", memoryFs({}), env);
     expect(config.network).toEqual({ enabled: true, exclude: [], githubToken: false });
@@ -56,12 +62,20 @@ describe("config (design.md §13)", () => {
         '[scan]\npaths = ["~/projects"]\nbin_paths = ["~/bin"]\n[[tools.git]]\npath = "~/tools/x"\n[network]\nexclude = ["@corp/*"]\n[cache]\nttl = "30m"\n',
     });
     const { config, warnings } = await loadConfig("/c.toml", fs, env);
-    expect(config.scan.paths).toEqual(["/home/me/projects"]);
-    expect(config.scan.binPaths).toEqual(["/home/me/bin"]);
-    expect(config.tools.git).toEqual([{ path: "/home/me/tools/x" }]);
+    expect(config.scan.paths).toEqual([p("/home/me/projects")]);
+    expect(config.scan.binPaths).toEqual([p("/home/me/bin")]);
+    expect(config.tools.git).toEqual([{ path: p("/home/me/tools/x") }]);
     expect(config.network.exclude).toEqual(["@corp/*"]);
     expect(config.cache.ttlMs).toBe(30 * 60_000);
     expect(warnings).toEqual([]);
+  });
+  it("expands ~\\ on Windows", async () => {
+    const home = resolve("/home/me");
+    const file = join(home, "c.toml");
+    const fs = memoryFs({ [file]: "[scan]\npaths = ['~\\projects']\n" });
+    const windows = { platform: "win32", homeDir: home, get: () => undefined };
+    const { config } = await loadConfig(file, fs, windows);
+    expect(config.scan.paths).toEqual([join(home, "projects")]);
   });
   it("warns about unknown keys", async () => {
     const { warnings } = await loadConfig(
@@ -85,11 +99,11 @@ describe("config (design.md §13)", () => {
     expect(parseDuration("soon")).toBeUndefined();
   });
   it("keeps cache and local state in separate directories", () => {
-    const dirs = appDirs(fakeEnv("/home/me"));
+    const dirs = appDirs(fakeEnv(p("/home/me")));
     expect(dirs).toEqual({
-      cache: "/home/me/.cache/actually",
-      state: "/home/me/.local/state/actually",
-      configFile: "/home/me/.config/actually/config.toml",
+      cache: p("/home/me/.cache/actually"),
+      state: p("/home/me/.local/state/actually"),
+      configFile: p("/home/me/.config/actually/config.toml"),
     });
     expect(appDirs(fakeEnv("/home/me", { ACTUALLY_CONFIG: "/x.toml" })).configFile).toBe("/x.toml");
   });
@@ -127,6 +141,13 @@ describe("human output", () => {
     );
     expect(text).toContain("↑ x  update available (major, may break)");
     expect(text.includes("\u001b[")).toBe(false);
+  });
+  it("abbreviates home as ~ in Windows paths too (F-64)", () => {
+    const text = renderDiagnostics(
+      [{ severity: "warning", source: "git", message: "C:\\Users\\me\\p\\.git could not be read" }],
+      "C:\\Users\\me",
+    );
+    expect(text).toContain("warning: git: ~\\p\\.git could not be read");
   });
   it("summarizes updates and breaking changes", () => {
     expect(

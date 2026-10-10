@@ -142,7 +142,10 @@ Un repositorio encontrado por `findProjects` es un proyecto salvo evidencia posi
 - `~/.local/bin`;
 - los directorios declarados en `[scan] bin_paths` (design.md §13).
 
-Un ejecutable es un archivo regular con permiso de ejecución. En Windows, donde ese permiso no distingue nada, es un archivo cuya extensión está en `PATHEXT` (`.COM;.EXE;.BAT;.CMD;.PS1` si la variable no está definida), sin distinguir mayúsculas.
+Un ejecutable es un archivo regular con permiso de ejecución. En Windows, donde ese permiso no distingue nada, es un archivo cuya extensión está en `PATHEXT` (`.COM;.EXE;.BAT;.CMD;.PS1` si la variable no está definida), sin distinguir mayúsculas. Ahí, además:
+
+- El nombre del comando es el del archivo sin esa extensión, y los nombres no distinguen mayúsculas. pnpm escribe `foo.CMD` y `foo.ps1` para cada comando: los dos son `foo`, y cuenta el de la extensión que aparece primero en `PATHEXT`, como hace cmd.
+- Un `.cmd` o `.bat` no es un symlink: lo que ejecuta se obtiene leyéndolo con las mismas plantillas que pnpm en Windows (§7, ADR 0009). Así, un repositorio enlazado con `pnpm link --global` se reconoce como herramienta, y la evidencia dice que el lanzador corre un archivo de ese repositorio. Un lanzador que no coincide con una plantilla se trata como el archivo en sí.
 
 Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando llegue su provider en la Fase 2.
 
@@ -501,6 +504,7 @@ La lista original incluía `node --version`. Ningún provider del MVP lo usa, as
 - pnpm hereda el entorno del usuario, porque ahí se define dónde vive su instalación global (`PNPM_HOME`). Es configuración del propio usuario, no de un proyecto.
 - A ese entorno se le agregan `npm_config_update_notifier=false`, para que pnpm no consulte la red por su cuenta buscando actualizaciones, `COREPACK_ENABLE_AUTO_PIN=0` y `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, para que corepack no escriba `packageManager` ni espere una respuesta, y `COREPACK_ENABLE_NETWORK=0`, para que corepack nunca descargue pnpm: esa descarga saldría a la red fuera del cliente HTTP, del aviso de design.md §12 y de `--offline`. Si pnpm es un shim de corepack que todavía no descargó esa versión, pnpm falla, y el diagnóstico dice que hay que correr `pnpm --version` una vez fuera de un proyecto.
 - La salida de `pnpm.config.list` puede contener tokens. Solo se extraen las claves de registry (§8) y el resto nunca se guarda ni se registra.
+- En Windows, pnpm suele ser un lanzador `.cmd`, que Node.js no arranca sin shell. `actually?` lo busca en `PATH` como cmd, sin mirar el directorio actual. Un `.exe` corre directo. Un `.cmd` o `.bat` se lee y no se ejecuta: si todo su texto coincide con una plantilla de cmd-shim o de npm, corre lo que ese lanzador arrancaría, el `.exe` o node con el script, con los mismos argumentos. Cualquier otro lanzador no se ejecuta y pnpm queda como fallido, con un diagnóstico que lo nombra (docs/decisions/0009-pnpm-on-windows-without-a-shell.md).
 
 ### Git
 
@@ -513,7 +517,7 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 | Variable u opción | Efecto |
 |---|---|
 | `GIT_CONFIG_NOSYSTEM=1` | ignora la configuración del sistema |
-| `GIT_CONFIG_GLOBAL` apuntando a un archivo vacío | ignora la configuración global |
+| `GIT_CONFIG_GLOBAL=/dev/null` | ignora la configuración global. Git for Windows también acepta `/dev/null`; `\\.\nul`, el `os.devNull` de Windows, no (F-61) |
 | `-c core.fsmonitor=false` | impide que el repositorio lance un monitor propio |
 | `GIT_PAGER=cat` | no abre paginadores |
 | `GIT_TERMINAL_PROMPT=0` | nunca pide credenciales |
@@ -521,6 +525,7 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 | `GIT_NO_LAZY_FETCH=1` | un repositorio que se declara clon parcial no puede hacer que git traiga objetos faltantes del remote |
 | `GIT_ALLOW_PROTOCOL` vacío | git no puede usar ningún transporte, así que la configuración de transporte del repositorio, como `core.sshCommand`, nunca se ejecuta |
 
+- Del entorno heredado se quitan todas las variables `GIT_*`, sin distinguir mayúsculas, para que nunca lleven git a otro repositorio: en Windows, git lee `git_dir` como `GIT_DIR` (F-62).
 - Requiere Git 2.32 o posterior, la primera versión con `GIT_CONFIG_GLOBAL`.
 - `safe.directory` no se sobrescribe. Si Git rechaza un repositorio, los datos quedan `unknown` con ese motivo.
 
@@ -530,6 +535,7 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 - `LC_ALL=C`, para que la salida sea estable al interpretarla.
 - Timeout de 10 segundos por comando.
 - La salida se valida antes de usarla. Una salida inesperada produce un diagnóstico (§13), no una excepción.
+- Un programa que no se puede lanzar, como un `pnpm.exe` que no es un ejecutable válido, da un resultado fallido que nombra el archivo, no una excepción: Node.js lanza algunos errores de `spawn` en el momento en vez de informarlos (F-66).
 
 No debe aceptar:
 
@@ -602,7 +608,7 @@ Cómo se determina el registry efectivo:
 - **Un spec que es una URL también puede llevar una credencial**, por ejemplo `https://user:TOKEN@files.corp.example/a.tgz` en `package.json`, o la versión que pnpm informa para un global instalado desde un tarball. En `requested`, en la evidencia y en los motivos se muestra solo el esquema y el host (`https://files.corp.example/…`). Un spec así nunca se consulta.
 - Si el comando falla o su salida no se puede interpretar, el origen de todos los paquetes queda indeterminado y no se consulta ninguno.
 - En los proyectos, donde pnpm nunca se lanza, se suman como archivos todos los `.npmrc` desde el directorio del proyecto hasta home, sin incluir `~/.npmrc`, que ya está en la config de pnpm. Leerlos no ejecuta nada. Cuál aplica depende del gestor: npm usa el de la raíz del workspace, pnpm el de la raíz y el del proyecto, yarn classic los de todos los ancestros. Por eso se leen todos, y un registry cuenta como público solo si ninguno dice otra cosa. Un valor público nunca deshace uno privado de otra fuente. El costo: si la config de usuario apunta a un mirror y un proyecto vuelve al registry público, ese proyecto no se consulta. Las claves se leen como en ini, también entre comillas (`"@corp:registry"=…`). Si un `.npmrc` existe pero no se puede leer, si fija un registry con `${VAR}` o si tiene una línea de registry con una forma que npm no lee igual (sin `=`, con espacios en el scope o en mayúsculas), el registry queda indeterminado. Las variables `npm_config_registry` y `npm_config_@scope:registry` llegan por la config de pnpm, y un `.npmrc` público del proyecto no las deshace.
-- Yarn no lee lo mismo que pnpm, así que sus fuentes se suman con la misma regla. Yarn berry (2 en adelante) ignora `.npmrc`: su registry sale de `npmRegistryServer` y de `npmScopes.<scope>.npmRegistryServer` en cada `.yarnrc.yml` desde el proyecto hasta home, esta vez incluido `~/.yarnrc.yml`, y de la variable `YARN_NPM_REGISTRY_SERVER`. Yarn classic lee además `registry` y `"@scope:registry"` de cada `.yarnrc`. Un `.yarnrc.yml` que no se puede leer o interpretar, o un valor que no es una URL o usa `${VAR}`, deja el registry indeterminado. Solo `https://registry.npmjs.org/` cuenta como público: un `npmRegistryServer` que apunte a `registry.yarnpkg.com` no se consulta, aunque sea un espejo.
+- Yarn no lee lo mismo que pnpm, así que sus fuentes se suman con la misma regla. Yarn berry (2 en adelante) ignora `.npmrc`: su registry sale de `npmRegistryServer` y de `npmScopes.<scope>.npmRegistryServer` en cada `.yarnrc.yml` desde el proyecto hasta home, esta vez incluido `~/.yarnrc.yml`, y de la variable `YARN_NPM_REGISTRY_SERVER`. Yarn classic lee además `registry` y `"@scope:registry"` de cada `.yarnrc`. Los archivos de yarn de home se leen siempre, también para un proyecto fuera de home, como uno en otra unidad en Windows: yarn los lee igual (F-63). Un `.yarnrc.yml` que no se puede leer o interpretar, o un valor que no es una URL o usa `${VAR}`, deja el registry indeterminado. Solo `https://registry.npmjs.org/` cuenta como público: un `npmRegistryServer` que apunte a `registry.yarnpkg.com` no se consulta, aunque sea un espejo.
 
 Cómo se reconoce un workspace y sus paquetes:
 
@@ -646,7 +652,9 @@ interface Filesystem {
 }
 ```
 
-`exists` no confunde "no existe" con "no se pudo comprobar": un error de permisos se propaga y cada llamador decide. La configuración que no se puede comprobar es fatal, y un `.npmrc`, `.yarnrc` o marcador de workspace que no se puede comprobar deja el registry indeterminado. `readText` rechaza un FIFO o un dispositivo, que dejarían la ejecución colgada, y un archivo de más de 64 MiB.
+Las rutas se comparan como texto, así que el directorio actual y home entran por su ruta real (`realpath`) en el composition root: en Windows, `process.cwd()` conserva las mayúsculas que tipeó el usuario, y en Linux `HOME` puede ser un symlink. Sin eso, los recorridos hacia arriba no reconocen home (F-64).
+
+`exists` no confunde "no existe" con "no se pudo comprobar" (en Windows, un symlink en bucle cuenta como existente, porque Windows comprueba el enlace; el error aparece al leerlo): un error de permisos se propaga y cada llamador decide. La configuración que no se puede comprobar es fatal, y un `.npmrc`, `.yarnrc` o marcador de workspace que no se puede comprobar deja el registry indeterminado. `readText` rechaza un FIFO o un dispositivo, que dejarían la ejecución colgada, y un archivo de más de 64 MiB. En Windows, `stat` informa una named pipe como archivo regular; como no tiene ruta real, `readText` pasa primero por `realpath` y la rechaza ahí (F-65).
 
 Esto permite:
 
@@ -880,6 +888,7 @@ Estas reglas deben ejecutarse en CI.
 0006-evidence-driven-detection.md
 0007-json-as-public-interface.md
 0008-scoped-package-name.md
+0009-pnpm-on-windows-without-a-shell.md
 ```
 
 ---

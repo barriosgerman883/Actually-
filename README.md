@@ -119,7 +119,8 @@ The skill needs the `actually` command on your `PATH`.
 ## Requirements and limits
 
 - Node.js 22.19 or later, pnpm, and Git 2.32 or later for repository tools.
-- Linux. macOS support is deferred until it has been validated. Windows is not supported yet.
+- Linux and Windows. macOS support is deferred until it has been validated.
+- On Windows, pnpm is found through its `.cmd` launcher, which actually reads instead of running. The launchers of pnpm's installer, Corepack and `npm install -g pnpm` are recognized; any other is reported, not run.
 - Yarn and Bun lockfiles are detected but not read yet.
 - Global packages are those of the pnpm that runs outside any project. A project whose `packageManager` pins another pnpm major keeps its own global packages elsewhere, and those are not listed; a warning says so when that project is checked.
 

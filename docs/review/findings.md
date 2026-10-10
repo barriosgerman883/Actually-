@@ -96,7 +96,14 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-57 | baja | evidencia | Los globales que instaló un pnpm fijado por un proyecto no se ven, y nada lo avisa | resuelto: código corregido en `13b88a5` |
 | F-58 | baja | desvío de docs | CLAUDE.md quedó desactualizado en tres puntos | abierto |
 | F-59 | baja | desvío de docs | La skill describe mal el JSON y las escrituras locales | resuelto: docs actualizados en `d964a55` |
-| F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | abierto |
+| F-60 | baja | robustez | `pnpm format:check` falla en 16 archivos | resuelto: código corregido en `12392f2` |
+| F-61 | media | corrección | En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre | resuelto: código corregido en `e67f97a` |
+| F-62 | media | seguridad | En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no | resuelto: código corregido en `e67f97a` |
+| F-63 | alta | privacidad | En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `385af96` |
+| F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | resuelto: código corregido en `ec66643` |
+| F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | resuelto: código corregido en `67c00bf` |
+| F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | resuelto: código corregido en `f3a80b6` |
+| F-67 | media | corrección | Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest` | resuelto: código corregido en `2a2e276` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1059,6 +1066,8 @@ Propuesta: `.gitattributes` con `* text=auto eol=lf`, que es barato y no ambiguo
 
 **Corregido en `1838d63`.** 2026-09-28, a pedido de la persona responsable. Según la decisión de la persona responsable: `.gitattributes` con `* text=auto eol=lf`, y CONTRIBUTING.md pide WSL para desarrollar en Windows.
 
+**Actualización 2026-10-09.** El port a Windows revierte el requisito de WSL: los dobles arman las rutas con `p()` (`342dbc3`), los tests del repositorio hostil corren en Windows (`e67f97a`) y la CI corre en `windows-latest` (`e4f9f52`).
+
 ### F-49 · Ni el composition root ni el aviso de primera ejecución tienen tests
 
 - **Estado:** resuelto: código corregido en `ef0d1e5`
@@ -1267,7 +1276,7 @@ La skill decía que toda respuesta JSON tiene `projects`, pero `src/cli/output/j
 
 ### F-60 · `pnpm format:check` falla en 16 archivos
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `12392f2`
 - **Severidad:** baja
 - **Tipo:** robustez
 - **Ubicación:** `pnpm format:check`; `.codex/hooks/guard-bash.mjs`, `.github/ISSUE_TEMPLATE/actually-was-wrong.yml`, `.prettierrc.json`, `package.json`, `src/cli/index.ts`, `src/core/versions.ts`, `src/infrastructure/environment/dirs.ts`, `src/infrastructure/environment/node-environment.ts`, `src/scanners/bin-scanner.ts`, `src/version.ts`, `tests/architecture/boundaries.test.ts`, `tests/helpers/fakes.ts`, `tests/unit/command-runner.test.ts`, `tests/unit/config-output.test.ts`, `tsconfig.build.json`, `vitest.config.ts`
@@ -1275,6 +1284,132 @@ La skill decía que toda respuesta JSON tiene `projects`, pero `src/cli/output/j
 - **Verificación:** reproducido
 
 El hook de pre-commit ejecutó `pnpm lint` correctamente y luego `pnpm format:check`, que informó diferencias de formato en estos 16 archivos y terminó con código 1. Los archivos no pertenecen a la preparación del lanzamiento; el hook detuvo el commit. No se reformatearon porque el hallazgo está fuera de la tarea.
+
+**Corregido en `12392f2`.** 2026-10-09, a pedido de la persona responsable, al aprobar el port a Windows. Los 15 archivos versionados no tenían diferencias de formato: la copia de trabajo de este clon de Windows tenía CRLF, de un checkout anterior a `.gitattributes` (`core.autocrlf=true`). Git no los reescribe porque los considera sin cambios, así que se borraron y se volvieron a sacar del commit, ya con LF; no hubo commit de contenido. `.codex/` no está versionado y tiene diferencias de formato además del CRLF: como `.claude`, ahora está en `.prettierignore`. Con eso, `prettier --check .` pasa en este clon y el hook de pre-commit corrió entero por primera vez. Quedan con CRLF en la copia de trabajo `.claude/settings.json`, `pnpm-lock.yaml` y el snapshot de la revisión, que están protegidos y Prettier no revisa: los vuelve a sacar la persona responsable.
+
+### F-61 · En Windows, Git rechaza el `GIT_CONFIG_GLOBAL` del entorno endurecido y ningún comando git corre
+
+- **Estado:** resuelto: código corregido en `e67f97a`
+- **Severidad:** media
+- **Tipo:** corrección
+- **Ubicación:** `src/infrastructure/command-runner/allowlist.ts` (`gitHardeningEnv`, `GIT_CONFIG_GLOBAL: devNull`)
+- **Detectado:** 2026-10-09, Claude Code, al empezar el port a Windows
+- **Verificación:** reproducido
+
+El entorno endurecido de git (architecture.md §7) apunta `GIT_CONFIG_GLOBAL` a `os.devNull`, que en Windows es `\\.\nul`. Git for Windows no lo acepta: `git config --list` con ese valor termina con `fatal: unable to access '\\.\nul': Invalid argument` y código 128. Como todo comando git de `actually` usa ese entorno, en Windows fallan `git.tags.head` y `git.describe.head`, y cada repositorio usado como herramienta queda con error. Falla del lado seguro: git nunca corre sin endurecer.
+
+Reproducción, en Windows 11 con Git 2.55.0.windows: con `GIT_CONFIG_NOSYSTEM=1` y `GIT_CONFIG_GLOBAL` igual a `\\.\nul`, falla; con `/dev/null`, `nul`, `NUL` o un archivo vacío, funciona, y la única configuración que se lee es la del repositorio. Git for Windows trata `/dev/null` como un caso especial, y en Linux y macOS es el mismo valor que `os.devNull`.
+
+Propuesta: usar el literal `/dev/null` en todas las plataformas. Test que verifique el valor, y que los tests del repositorio hostil corran en Windows.
+
+**Corregido en `e67f97a`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable. `GIT_CONFIG_GLOBAL=/dev/null` en todas las plataformas. Los tests del repositorio hostil ahora prueban algo en Windows: el comando plantado usaba la ruta del marcador con `\`, que el `sh` de Git for Windows interpreta como escape, así que los controles fallaban y la prueba endurecida pasaba sin demostrar nada. Con la ruta entre comillas y con `/`, los controles corren el comando. En Windows 11, sin el cambio fallan "the hardening options and environment stop it" y "allowlisted git commands work on that repository", porque git no arranca; con el cambio pasan los 14 tests de git real. Documentado en architecture.md §7 y docs/providers/git.md. No verificado: que `GIT_CONFIG_NOSYSTEM` también excluya `%PROGRAMDATA%\Git\config`, que no existe en esta máquina; sí excluye `C:/Program Files/Git/etc/gitconfig`.
+
+### F-62 · En Windows, el filtro de variables `GIT_*` distingue mayúsculas y Git no
+
+- **Estado:** resuelto: código corregido en `e67f97a`
+- **Severidad:** media
+- **Tipo:** seguridad
+- **Ubicación:** `src/infrastructure/command-runner/allowlist.ts` (`buildInvocation`, `key.startsWith("GIT_")`)
+- **Detectado:** 2026-10-09, Claude Code, al empezar el port a Windows
+- **Verificación:** reproducido
+
+`buildInvocation` quita del entorno heredado las variables que empiezan con `GIT_`, para que el entorno de quien llama nunca lleve git a otro repositorio. La comparación distingue mayúsculas, pero en Windows los nombres de variables no, y Git tampoco. Con `git_dir` o `Git_Dir` apuntando a otro repositorio, `git rev-parse --absolute-git-dir` respondió el `.git` de ese otro repositorio, igual que con `GIT_DIR`. Por lectura, lo mismo pasa con las variables que el entorno endurecido fija, como `GIT_CONFIG_GLOBAL`: una copia con otras mayúsculas queda junto a la endurecida. No verificado: cuál de las dos lee git en ese caso.
+
+Reproducción, en Windows 11 con Git 2.55.0.windows: dos repositorios temporales, git lanzado desde Node.js en uno con `git_dir` apuntando al otro.
+
+Propuesta: en el filtro, comparar el nombre en mayúsculas. Test en `tests/security` con `git_dir` y `Git_Config_Global`.
+
+**Corregido en `e67f97a`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable. El filtro compara el nombre en mayúsculas en todas las plataformas; en Linux, quitar un `git_dir` no cambia nada. Test en `tests/security/security.test.ts`, que falla sin el cambio. Documentado en architecture.md §7 y docs/providers/git.md.
+
+### F-63 · En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público
+
+- **Estado:** resuelto: código corregido en `385af96`
+- **Severidad:** alta
+- **Tipo:** privacidad
+- **Ubicación:** `src/providers/project/project.ts` (`scanProject`, el recorrido de los archivos de registry)
+- **Detectado:** 2026-10-09, Claude Code, al planificar el port a Windows
+- **Verificación:** reproducido
+
+Desde F-52, `scanProject` lee cada `.npmrc`, `.yarnrc` y `.yarnrc.yml` desde el proyecto hacia arriba hasta home, incluido home, porque pnpm no refleja los archivos de yarn. El recorrido corta en home o en la raíz del disco. Para un proyecto que no está dentro de home, como `/srv/app` en Linux o `D:\code\app` en Windows con home en `C:`, nunca pasa por home: `~/.yarnrc.yml` y `~/.yarnrc` no se leen. Yarn sí los lee para cualquier proyecto. Un registry privado configurado solo ahí no impide consultar `registry.npmjs.org` con los nombres de las dependencias. En Windows es el caso común: los proyectos suelen estar en otra unidad.
+
+Reproducción: test en `tests/integration/inventory.test.ts`, un proyecto en `/srv/p` con home en `/home/me` y `npmRegistryServer` privado en `~/.yarnrc.yml`, y otro con `registry` en `~/.yarnrc`. Los dos consultaron `https://registry.npmjs.org/a/latest`.
+
+architecture.md §8: "ante la duda, no se consulta".
+
+Propuesta: sumar siempre los archivos de yarn de home a las fuentes, aunque home no esté encima del proyecto. `~/.npmrc` ya está en la config de pnpm.
+
+**Corregido en `385af96`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable, según la propuesta. El test falla sin el cambio. Documentado en architecture.md §8 y docs/providers/npm-registry.md.
+
+### F-64 · El directorio actual y home se comparan como texto, sin canonicalizar
+
+- **Estado:** resuelto: código corregido en `ec66643`
+- **Severidad:** baja
+- **Tipo:** corrección
+- **Ubicación:** `src/composition.ts` (`cwd` y `env.homeDir` llegan tal cual), `src/providers/project/project.ts` (`findUpDir`, `dir === stopAt`), `src/providers/project/workspace.ts`, `src/cli/output/human.ts` (`tildify`)
+- **Detectado:** 2026-10-09, Claude Code, al planificar el port a Windows
+- **Verificación:** reproducido (las rutas); el efecto, por lectura
+
+Los recorridos hacia arriba cortan cuando el directorio es igual, como texto, a home, y la salida abrevia home como `~` con la misma comparación. `cwd` sale de `process.cwd()` y home de `os.homedir()`, sin canonicalizar:
+
+- En Windows, `process.cwd()` conserva las mayúsculas que tipea el usuario. Desde PowerShell, `Set-Location c:\users\german\documents` dio `C:\users\german\documents`, y desde cmd `c:\Users\GERMAN`, con home `C:\Users\GERMAN`.
+- En Linux, `HOME` puede ser un symlink, mientras que `process.cwd()` es la ruta real.
+
+En los dos casos el recorrido no reconoce home: sigue hasta la raíz, toma como raíz de proyecto un `package.json` o un `.git` que esté encima de home, y lee archivos de registry de afuera de home. Además, las rutas no se abrevian con `~`. `fs.promises.realpath` devuelve la ruta real con las mayúsculas del disco: `D:\actually-\src` → `D:\Actually-\src`.
+
+Propuesta: canonicalizar `cwd` y home con `realpath` en `createRuntime`, el único lugar donde entran. Test en `tests/integration/runtime.test.ts` con home y cwd que pasan por un enlace.
+
+**Corregido en `ec66643`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable, según la propuesta. `~` también abrevia rutas con `\`. Tests en `tests/integration/runtime.test.ts`, con home detrás de un enlace (junction en Windows) y un `package.json` encima de home que no debe tomarse, y en `tests/unit/config-output.test.ts`; los dos fallan sin el cambio. Documentado en architecture.md §9.
+
+### F-65 · En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular
+
+- **Estado:** resuelto: código corregido en `67c00bf`
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts` (`readText`)
+- **Detectado:** 2026-10-09, Claude Code, al hacer correr en Windows el test de FIFO de F-46
+- **Verificación:** reproducido (la pipe); por lectura (llegar a ella desde un repositorio)
+
+Desde F-46, `readText` rechaza lo que no es un archivo regular, para no quedar colgado en un FIFO. En Windows no hay FIFOs en el filesystem, pero sí named pipes (`\\.\pipe\<nombre>`), y `stat` las informa como archivo regular (`isFile()` verdadero, tamaño 0). `readFile` sobre una pipe con un servidor escuchando no vuelve: se probó con Node.js 22.23.2 en Windows 11, y a los 2 segundos seguía pendiente. `realpath` de la pipe falla con `EISDIR`.
+
+Para llegar ahí desde un repositorio hace falta que uno de los archivos que `actually` lee, como un `.npmrc`, sea un symlink a una pipe abierta. Git for Windows crea symlinks del repositorio solo con `core.symlinks` y el Modo de desarrollador o permisos de administrador. No verificado: que un symlink a `\\.\pipe\…` se pueda crear y seguir así.
+
+Propuesta: en `readText`, resolver la ruta con `realpath` antes de `stat`. La pipe no tiene ruta real, así que la lectura falla como "no se pudo leer", que ya deja el registry indeterminado (F-04). En Linux no cambia nada: un FIFO tiene ruta real y sigue rechazado por `stat`. Test en `tests/unit/filesystem.test.ts` con una pipe real en Windows y un FIFO en los demás sistemas.
+
+**Corregido en `67c00bf`.** 2026-10-09, como parte del port a Windows que aprobó la persona responsable, según la propuesta. En Windows 11, sin el cambio el test se corta a los 5 segundos con la lectura bloqueada; con el cambio, la lectura falla enseguida. Documentado en architecture.md §9.
+
+### F-66 · Un pnpm que no se puede lanzar aborta toda la ejecución
+
+- **Estado:** resuelto: código corregido en `f3a80b6`
+- **Severidad:** media
+- **Tipo:** robustez
+- **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`execFile` dentro del ejecutor de la Promise)
+- **Detectado:** 2026-10-10, Claude Code, preparando la verificación en la VM Windows de la persona responsable
+- **Verificación:** reproducido
+
+Node.js informa por el evento `error`, en el tick siguiente, solo algunos errores de `spawn` (`EACCES`, `EAGAIN`, `EMFILE`, `ENFILE`, `ENOENT`); los demás los lanza en el momento. `nodeCommandRunner` llama a `execFile` dentro del ejecutor de una Promise, así que esa excepción la rechaza, nadie la atrapa y la ejecución termina como error fatal. architecture.md §13 y RA-009 piden lo contrario: un provider que falla se vuelve un diagnóstico y el resto sigue.
+
+En la VM Windows de la persona responsable, el primer pnpm de `PATH` es un `pnpm.exe` que no arranca (`os error 193`, "no es una aplicación Win32 válida"). Reproducido en Windows 11 con un `pnpm.exe` que no es un ejecutable primero en `PATH`: `actually status --global --json` respondió `{"tools":[],"diagnostics":[{"severity":"error","source":"actually","message":"unexpected error: spawn UNKNOWN"}]}` con exit code 3, en vez de un diagnóstico de pnpm y el resto del inventario.
+
+Propuesta: atrapar la excepción de `execFile` y devolverla como un `CommandResult` fallido que nombre el archivo que no arrancó. Test con un `execFile` doble que lance en el momento, y la reproducción en Windows de punta a punta.
+
+**Corregido en `f3a80b6`.** 2026-10-10, como parte del port a Windows que aprobó la persona responsable, según la propuesta. Test en `tests/unit/command-runner.test.ts`, que falla sin el cambio. De punta a punta en Windows 11, con el mismo `pnpm.exe` inválido: exit code 0, un `error` de pnpm que nombra el archivo (`could not be started (UNKNOWN)`) y un `warning` que dice que no se consultó el registry. Documentado en architecture.md §7.
+
+### F-67 · Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest`
+
+- **Estado:** resuelto: código corregido en `2a2e276`
+- **Severidad:** media
+- **Tipo:** corrección
+- **Ubicación:** `src/providers/pnpm/global.ts` (`specManifests`, `dirname(dir) === rootDir`)
+- **Detectado:** 2026-10-10, Claude Code, probando el script de verificación de la VM con el pnpm 12.10.1 de Corepack
+- **Verificación:** reproducido
+
+En Windows, pnpm 12.10.1 informa en `pnpm list --global --json` el `path` de cada paquete con el prefijo de ruta larga, `\\?\C:\…\global\v11\6068-…\node_modules\is-number`, mientras que `pnpm root --global` da `C:\…\global\v11` sin prefijo. `specManifests` toma el `package.json` del directorio propio del paquete solo si su padre es igual, como texto, a `pnpm root --global` (F-50). Con el prefijo nunca lo es, así que ningún paquete tiene spec y todos quedan con `latest: unknown` ("origin could not be determined: no spec found"). Falla del lado seguro, sin enviar nada. La ruta con prefijo también aparece tal cual en `installation.path`.
+
+Reproducción, en Windows 11 con pnpm 12.10.1 por Corepack 0.34.6: `pnpm add -g is-number@6.0.0` y `actually status --global`. Con pnpm 11.22.0 standalone, sobre el mismo layout, `is-number` sí recibe 7.0.0. La CI de Windows no lo ve porque usa pnpm 10.33.0.
+
+Propuesta: quitar el prefijo `\\?\` (y convertir `\\?\UNC\` en `\\`) de las rutas que informa pnpm, en `pnpm root`, `pnpm bin` y cada `path` de `pnpm list`. Test con el layout de pnpm 12 y rutas con prefijo.
+
+**Corregido en `2a2e276`.** 2026-10-10, como parte del port a Windows que aprobó la persona responsable, según la propuesta. Test en `tests/integration/inventory.test.ts`, que falla sin el cambio. Documentado en docs/providers/pnpm.md.
 
 ### Verificaciones
 

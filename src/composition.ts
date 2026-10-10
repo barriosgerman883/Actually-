@@ -68,12 +68,19 @@ export async function createRuntime(
   options: RuntimeOptions,
   deps: RuntimeDeps = nodeDeps(),
 ): Promise<Runtime> {
-  const { env } = deps;
+  const fs = nodeFilesystem({ pathext: deps.env.get("PATHEXT") });
+  // Paths are compared as text, so cwd and home take the spelling realpath
+  // gives: the real path, with the casing on disk on Windows. process.cwd()
+  // keeps what the user typed, and HOME can be a symlink (F-64).
+  const canonical = (path: string) => fs.realpath(path).catch(() => path);
+  const env: Environment = { ...deps.env, homeDir: await canonical(deps.env.homeDir) };
+  const cwd = await canonical(options.cwd);
   const dirs = appDirs(env);
-  const fs = nodeFilesystem({ pathext: env.get("PATHEXT") });
   const { config, warnings } = await loadConfig(dirs.configFile, fs, env);
   const state = fileLocalState(dirs.state);
-  const runner = deps.runner ?? nodeCommandRunner({ neutralDir: () => state.neutralDir() });
+  const runner =
+    deps.runner ??
+    nodeCommandRunner({ neutralDir: () => state.neutralDir(), platform: env.platform, fs });
 
   const online = config.network.enabled && !options.offline;
   const http = online
@@ -115,6 +122,6 @@ export async function createRuntime(
     configWarnings: warnings,
     env,
     inventory: (inventoryOptions) =>
-      buildInventory({ fs, runner, env, net, config, cwd: options.cwd }, inventoryOptions),
+      buildInventory({ fs, runner, env, net, config, cwd }, inventoryOptions),
   };
 }
