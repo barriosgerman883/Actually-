@@ -37,7 +37,15 @@ describe("nodeFilesystem (F-46)", () => {
   });
 
   it("throws any other error instead of calling the path missing", async () => {
-    await expect(fs.exists(loop("loop"))).rejects.toMatchObject({ code: "ELOOP" });
+    const path = loop("loop");
+    if (process.platform === "win32") {
+      // Windows checks the link itself, which exists; the loop shows up when
+      // the file is read, which then fails instead of reading nothing.
+      await expect(fs.exists(path)).resolves.toBe(true);
+      await expect(fs.readText(path)).rejects.toThrow();
+      return;
+    }
+    await expect(fs.exists(path)).rejects.toMatchObject({ code: "ELOOP" });
   });
 
   it("never blocks on a FIFO, or on a named pipe on Windows (F-65)", async () => {
