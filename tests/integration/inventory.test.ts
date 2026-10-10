@@ -418,7 +418,8 @@ describe("projects and Git repositories", () => {
       mkdirSync(join(repo, "bin"));
       mkdirSync(join(home, ".local", "bin"), { recursive: true });
       writeFileSync(join(repo, ".git", "HEAD"), `${"c".repeat(40)}\n`);
-      writeFileSync(join(repo, "bin", "t"), "#!/bin/sh\n", { mode: 0o755 });
+      // Executable by its mode, or on Windows by its extension.
+      writeFileSync(join(repo, "bin", "t.cmd"), "#!/bin/sh\n", { mode: 0o755 });
       symlinkSync(join(base, "data", "tools"), join(home, "tools"));
       symlinkSync(join(repo, "bin", "t.cmd"), join(home, ".local", "bin", "t.cmd"));
       const runner = fakeRunner({
