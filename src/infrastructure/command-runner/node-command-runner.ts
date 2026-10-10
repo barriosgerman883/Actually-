@@ -48,8 +48,11 @@ export function nodeCommandRunner(options: {
   platform?: string;
   /** Reads pnpm's launcher on Windows. */
   fs?: Filesystem;
+  /** Tests replace it to reproduce spawn failures. */
+  execFile?: typeof execFile;
 }): CommandRunner {
   const windows = (options.platform ?? process.platform) === "win32";
+  const spawnFile = options.execFile ?? execFile;
   let pnpmOnWindows: Promise<ResolvedBinary> | undefined;
   return {
     async run(request): Promise<CommandResult> {
@@ -89,25 +92,36 @@ export function nodeCommandRunner(options: {
         args = [...resolved.args, ...invocation.args];
       }
       return new Promise((resolve) => {
-        execFile(
-          file,
-          args,
-          {
-            cwd: invocation.cwd,
-            env: invocation.env,
-            timeout: TIMEOUT_MS,
-            maxBuffer: MAX_BUFFER,
-            windowsHide: true,
-            shell: false,
-          },
-          (error, stdout, stderr) => {
-            if (!error) {
-              resolve({ ok: true, stdout: String(stdout) });
-              return;
-            }
-            resolve(failureResult(error, String(stderr), request.command, invocation.binary));
-          },
-        );
+        try {
+          spawnFile(
+            file,
+            args,
+            {
+              cwd: invocation.cwd,
+              env: invocation.env,
+              timeout: TIMEOUT_MS,
+              maxBuffer: MAX_BUFFER,
+              windowsHide: true,
+              shell: false,
+            },
+            (error, stdout, stderr) => {
+              if (!error) {
+                resolve({ ok: true, stdout: String(stdout) });
+                return;
+              }
+              resolve(failureResult(error, String(stderr), request.command, invocation.binary));
+            },
+          );
+        } catch (error) {
+          // Node.js throws some spawn errors at once instead of reporting
+          // them, such as a pnpm.exe that is not a valid program (F-66).
+          const code = (error as NodeJS.ErrnoException).code ?? "unknown error";
+          resolve({
+            ok: false,
+            reason: "failed",
+            message: `${request.command} failed: ${file} could not be started (${code})`,
+          });
+        }
       });
     },
   };

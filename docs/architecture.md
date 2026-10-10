@@ -535,6 +535,7 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 - `LC_ALL=C`, para que la salida sea estable al interpretarla.
 - Timeout de 10 segundos por comando.
 - La salida se valida antes de usarla. Una salida inesperada produce un diagnóstico (§13), no una excepción.
+- Un programa que no se puede lanzar, como un `pnpm.exe` que no es un ejecutable válido, da un resultado fallido que nombra el archivo, no una excepción: Node.js lanza algunos errores de `spawn` en el momento en vez de informarlos (F-66).
 
 No debe aceptar:
 

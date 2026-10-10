@@ -1,5 +1,9 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { failureResult } from "../../src/infrastructure/command-runner/node-command-runner.js";
+import {
+  failureResult,
+  nodeCommandRunner,
+} from "../../src/infrastructure/command-runner/node-command-runner.js";
 
 describe("command runner failures", () => {
   const fail = (fields: object) =>
@@ -16,5 +20,21 @@ describe("command runner failures", () => {
   it("still reports a killed process as a timeout and a missing binary as not found", () => {
     expect(fail({ killed: true })).toMatchObject({ reason: "timeout" });
     expect(fail({ code: "ENOENT" })).toMatchObject({ reason: "not-found" });
+  });
+
+  it("returns a failure when the program cannot even start, instead of throwing (F-66)", async () => {
+    // As Node.js does on Windows with a pnpm.exe that is not a valid program.
+    const runner = nodeCommandRunner({
+      neutralDir: async () => resolve("/tmp/neutral"),
+      platform: "linux",
+      execFile: (() => {
+        throw Object.assign(new Error("spawn UNKNOWN"), { code: "UNKNOWN" });
+      }) as never,
+    });
+    await expect(runner.run({ command: "pnpm.version" })).resolves.toEqual({
+      ok: false,
+      reason: "failed",
+      message: "pnpm.version failed: pnpm could not be started (UNKNOWN)",
+    });
   });
 });
