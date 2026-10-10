@@ -102,7 +102,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-63 | alta | privacidad | En un proyecto fuera de home, un registry privado en `~/.yarnrc.yml` no impide consultar el público | resuelto: código corregido en `385af96` |
 | F-64 | baja | corrección | El directorio actual y home se comparan como texto, sin canonicalizar | resuelto: código corregido en `ec66643` |
 | F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | resuelto: código corregido en `67c00bf` |
-| F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | abierto |
+| F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | resuelto: código corregido en `f3a80b6` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1378,7 +1378,7 @@ Propuesta: en `readText`, resolver la ruta con `realpath` antes de `stat`. La pi
 
 ### F-66 · Un pnpm que no se puede lanzar aborta toda la ejecución
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `f3a80b6`
 - **Severidad:** media
 - **Tipo:** robustez
 - **Ubicación:** `src/infrastructure/command-runner/node-command-runner.ts` (`execFile` dentro del ejecutor de la Promise)
@@ -1390,6 +1390,8 @@ Node.js informa por el evento `error`, en el tick siguiente, solo algunos errore
 En la VM Windows de la persona responsable, el primer pnpm de `PATH` es un `pnpm.exe` que no arranca (`os error 193`, "no es una aplicación Win32 válida"). Reproducido en Windows 11 con un `pnpm.exe` que no es un ejecutable primero en `PATH`: `actually status --global --json` respondió `{"tools":[],"diagnostics":[{"severity":"error","source":"actually","message":"unexpected error: spawn UNKNOWN"}]}` con exit code 3, en vez de un diagnóstico de pnpm y el resto del inventario.
 
 Propuesta: atrapar la excepción de `execFile` y devolverla como un `CommandResult` fallido que nombre el archivo que no arrancó. Test con un `execFile` doble que lance en el momento, y la reproducción en Windows de punta a punta.
+
+**Corregido en `f3a80b6`.** 2026-10-10, como parte del port a Windows que aprobó la persona responsable, según la propuesta. Test en `tests/unit/command-runner.test.ts`, que falla sin el cambio. De punta a punta en Windows 11, con el mismo `pnpm.exe` inválido: exit code 0, un `error` de pnpm que nombra el archivo (`could not be started (UNKNOWN)`) y un `warning` que dice que no se consultó el registry. Documentado en architecture.md §7.
 
 ### Verificaciones
 
