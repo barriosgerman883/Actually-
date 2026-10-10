@@ -62,7 +62,8 @@ jobs:
         run: |
           tmp() { cygpath -w "$(mktemp -d)"; }
           export PNPM_HOME="$(tmp)" LOCALAPPDATA="$(tmp)" APPDATA="$(tmp)" USERPROFILE="$(tmp)"
-          export PATH="$(cygpath -u "$PNPM_HOME"):$PATH"
+          # pnpm 10 puts global bins in PNPM_HOME, pnpm 11 and later in PNPM_HOME\bin.
+          export PATH="$(cygpath -u "$PNPM_HOME")/bin:$(cygpath -u "$PNPM_HOME"):$PATH"
           work="$(mktemp -d)"
           (cd "$work" && pnpm add -g is-number@6.0.0)
           (cd "$work" && node "$GITHUB_WORKSPACE/dist/cli/index.js" status --global --offline --json) > "$RUNNER_TEMP/global.json"
