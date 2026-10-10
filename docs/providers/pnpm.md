@@ -11,6 +11,7 @@ Detect pnpm itself and the packages installed globally with pnpm, and read proje
 - `pnpm list --global --json --depth=0` lists global packages with their versions and paths. pnpm 10 also reports tarball URLs; pnpm 12 does not.
 - The global `package.json` that declares each package gives its spec. With pnpm 10, that is the one next to the `pnpm root --global` directory. With pnpm 12, each package has its own directory directly inside `pnpm root --global`, with its own `package.json`. No other `package.json` is used, because it could belong to a project.
 - Each package's own `package.json` gives its `bin` names and `repository` field.
+- On Windows, pnpm 12.10 reports package paths with the long-path prefix (`\\?\C:\…`) and `pnpm root --global` without it. The prefix is dropped from every path pnpm reports, so they compare as the same directory (F-67).
 
 ## Evidence used
 

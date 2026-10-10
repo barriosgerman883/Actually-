@@ -61,6 +61,16 @@ async function readJson(
 }
 
 /**
+ * pnpm 12.10 on Windows reports package paths with the long-path prefix
+ * (`\\?\C:\…`), while `pnpm root --global` has none, so the two never match
+ * as text (F-67). The prefix is dropped from every path pnpm reports.
+ */
+function withoutLongPathPrefix(path: string): string {
+  if (path.startsWith("\\\\?\\UNC\\")) return `\\\\${path.slice(8)}`;
+  return path.startsWith("\\\\?\\") ? path.slice(4) : path;
+}
+
+/**
  * The package.json files that can declare a global package's spec. pnpm 10
  * keeps one for every global package next to `pnpm root --global`; pnpm 12
  * gives each package its own directory directly inside that root. A
@@ -130,9 +140,9 @@ export async function scanPnpmGlobal(
   }
 
   const root = await runner.run({ command: "pnpm.root.global" });
-  if (root.ok && root.stdout.trim()) scan.rootDir = root.stdout.trim();
+  if (root.ok && root.stdout.trim()) scan.rootDir = withoutLongPathPrefix(root.stdout.trim());
   const bin = await runner.run({ command: "pnpm.bin.global" });
-  if (bin.ok && bin.stdout.trim()) scan.binDir = bin.stdout.trim();
+  if (bin.ok && bin.stdout.trim()) scan.binDir = withoutLongPathPrefix(bin.stdout.trim());
 
   const list = await runner.run({ command: "pnpm.list.global" });
   if (!list.ok) {
@@ -173,6 +183,7 @@ export async function scanPnpmGlobal(
 
   for (const [name, dep] of Object.entries(deps)) {
     const pkg: PnpmGlobalPackage = { name, bins: [], evidence: [] };
+    const packagePath = typeof dep.path === "string" ? withoutLongPathPrefix(dep.path) : undefined;
     if (typeof dep.version === "string" && semver.valid(dep.version)) {
       pkg.installedVersion = dep.version;
       pkg.evidence.push({
@@ -188,7 +199,7 @@ export async function scanPnpmGlobal(
       });
     }
     if (typeof dep.resolved === "string") pkg.resolved = dep.resolved;
-    const declared = await declaredSpec(name, dep.path);
+    const declared = await declaredSpec(name, packagePath);
     if (declared) {
       pkg.spec = declared.spec;
       pkg.specSource = declared.source;
@@ -196,9 +207,9 @@ export async function scanPnpmGlobal(
       pkg.spec = dep.version;
       pkg.specSource = "pnpm list --global --json";
     }
-    if (typeof dep.path === "string") {
-      pkg.dir = dep.path;
-      const manifest = await readJson(fs, join(dep.path, "package.json"));
+    if (packagePath) {
+      pkg.dir = packagePath;
+      const manifest = await readJson(fs, join(packagePath, "package.json"));
       if (manifest) {
         pkg.bins = binNames(manifest, name);
         pkg.repository = repositoryField(manifest);

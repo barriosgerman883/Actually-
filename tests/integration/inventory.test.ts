@@ -63,9 +63,11 @@ function pnpmWorld(pnpmConfig = PNPM_CONFIG_PUBLIC) {
 // global/v11 and each package gets its own directory with its own package.json.
 const PNPM12_ROOT = `${PNPM_HOME}/global/v11`;
 
-function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC) {
+/** `listPrefix` is what pnpm 12.10 on Windows puts before each listed path (F-67). */
+function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC, listPrefix = "") {
   const isNumber = `${PNPM12_ROOT}/2c-18d9606f358acbc3-0`;
   const types = `${PNPM12_ROOT}/2c-18d9606f75c4749e-2`;
+  const listed = (path: string) => `${listPrefix}${p(path)}`;
   // pnpm prints paths in the platform's own form.
   const runner = fakeRunner({
     "pnpm.version": ok("12.6.0\n"),
@@ -81,17 +83,17 @@ function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC) {
             "@types/node": {
               from: "@types/node",
               version: "22.0.0",
-              path: p(`${types}/node_modules/@types/node`),
+              path: listed(`${types}/node_modules/@types/node`),
             },
             "is-number": {
               from: "is-number",
               version: "6.0.0",
-              path: p(`${isNumber}/node_modules/is-number`),
+              path: listed(`${isNumber}/node_modules/is-number`),
             },
             stray: {
               from: "stray",
               version: "1.0.0",
-              path: p("/home/me/elsewhere/node_modules/stray"),
+              path: listed("/home/me/elsewhere/node_modules/stray"),
             },
           },
         },
@@ -190,6 +192,23 @@ describe("global inventory with pnpm", () => {
       "https://registry.npmjs.org/is-number/latest",
       "https://registry.npmjs.org/pnpm/latest",
     ]);
+  });
+
+  it("reads specs when pnpm lists paths with the long-path prefix, as pnpm 12.10 on Windows does (F-67)", async () => {
+    const { runner, fs } = pnpm12World(PNPM_CONFIG_PUBLIC, "\\\\?\\");
+    const http = fakeHttp({
+      "https://registry.npmjs.org/is-number/latest": json({ version: "7.0.0" }),
+    });
+    const inv = await buildInventory(
+      { fs, runner, env: fakeEnv(HOME), net: netContext(http), config: config(), cwd: p("/tmp") },
+      { globalOnly: true },
+    );
+    expect(inv.tools.find((t) => t.name === "is-number")).toMatchObject({
+      status: "outdated",
+      installation: {
+        value: { path: p(`${PNPM12_ROOT}/2c-18d9606f358acbc3-0/node_modules/is-number`) },
+      },
+    });
   });
 
   it("cites the pnpm 12 manifest that declares the spec (F-50)", async () => {
