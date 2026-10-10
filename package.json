@@ -1,6 +1,6 @@
 {
   "name": "@actually-cli/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local-first, read-only inventory of your developer tools, with evidence for every conclusion.",
   "keywords": [
     "cli",
