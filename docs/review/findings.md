@@ -1064,6 +1064,8 @@ Propuesta: `.gitattributes` con `* text=auto eol=lf`, que es barato y no ambiguo
 
 **Corregido en `1838d63`.** 2026-09-28, a pedido de la persona responsable. Según la decisión de la persona responsable: `.gitattributes` con `* text=auto eol=lf`, y CONTRIBUTING.md pide WSL para desarrollar en Windows.
 
+**Actualización 2026-10-09.** El port a Windows revierte el requisito de WSL: los dobles arman las rutas con `p()` (`342dbc3`), los tests del repositorio hostil corren en Windows (`e67f97a`) y la CI corre en `windows-latest` (`e4f9f52`).
+
 ### F-49 · Ni el composition root ni el aviso de primera ejecución tienen tests
 
 - **Estado:** resuelto: código corregido en `ef0d1e5`

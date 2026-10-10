@@ -8,7 +8,7 @@ pnpm build
 node dist/cli/index.js status
 ```
 
-Development is supported on Linux and macOS. On Windows, use WSL: the test doubles use POSIX paths and the hostile-repository tests run `sh`, so the checks, and therefore the git hooks, do not pass on native Windows. `.gitattributes` keeps every file LF in any clone.
+Development is supported on Linux, macOS and Windows. Tests write paths as `p("/home/me/x")` (`tests/helpers/fakes.ts`), which gives the platform's own form. On Windows, five tests create symlinks, which take Developer Mode or an administrator; without them those tests fail with `EPERM`. `.gitattributes` keeps every file LF in any clone, except the real Windows launchers in `tests/fixtures/windows/`.
 
 ## Checks
 
