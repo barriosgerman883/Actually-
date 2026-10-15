@@ -106,6 +106,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-67 | media | corrección | Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest` | resuelto: código corregido en `2a2e276` |
 | F-72 | baja | seguridad | `source-map-js` 1.2.1 es vulnerable y Dependabot no lo puede actualizar | abierto |
 | F-73 | baja | seguridad | La salida humana no escapa los caracteres de etiqueta ni los selectores de variación | resuelto: código corregido en `7daa400` |
+| F-74 | baja | robustez | El guard de Bash toma los patrones de `case` como rutas a los frenos | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1498,6 +1499,19 @@ Propuesta: llevar el lockfile a `source-map-js@1.2.2` sin tocar `package.json`, 
 Reproducción: `sanitize("pnpm\u{e0049}\u{e0047}\u{e004e}x\u{fe0f}y\u{ad}z")` devuelve el texto sin cambios, con los invisibles adentro.
 
 Propuesta: tratar como invisible todo carácter con la propiedad `Default_Ignorable_Code_Point`, más U+2028 y U+2029, que no la tienen. Exportar ese predicado para que la salida humana y el futuro servidor MCP usen la misma definición.
+
+### F-74 · El guard de Bash toma los patrones de `case` como rutas a los frenos
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `.claude/hooks/guard-bash.mjs:220` (`namesGuards`) y `:722`
+- **Detectado:** 2026-10-15, Claude, leyendo ejemplos de la spec de MCP
+- **Verificación:** reproducido
+
+`p="a/"; case "$p" in */) echo barra;; esac` se rechaza con "only the user changes the agent guardrails in .claude/". El guard trata `case` como un comando y su patrón `*/` como un argumento con glob; `namesGuards` lo convierte en una expresión que coincide con `.claude/hooks/`, y como `case` no es un comando de solo lectura, lo bloquea. El comando no nombra ningún archivo. Es de la misma familia que F-28: no debilita la protección, pero obliga a reescribir comandos válidos.
+
+Propuesta: no evaluar como rutas los patrones de un `case … in`, o considerar los globs solo en los argumentos de comandos que reciben rutas. Lo aplica la persona responsable, porque el archivo está protegido.
 
 ### Verificaciones
 
