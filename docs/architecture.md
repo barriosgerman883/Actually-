@@ -526,6 +526,7 @@ Un repositorio encontrado en disco no es confiable: su `.git/config` puede defin
 | `GIT_ALLOW_PROTOCOL` vacío | git no puede usar ningún transporte, así que la configuración de transporte del repositorio, como `core.sshCommand`, nunca se ejecuta |
 
 - Del entorno heredado se quitan todas las variables `GIT_*`, sin distinguir mayúsculas, para que nunca lleven git a otro repositorio: en Windows, git lee `git_dir` como `GIT_DIR` (F-62).
+- El entorno de cada proceso se construye como un diccionario sin prototipo: nombres heredados como `__proto__` o `constructor` son datos, no propiedades especiales de un objeto (F-69).
 - Requiere Git 2.32 o posterior, la primera versión con `GIT_CONFIG_GLOBAL`.
 - `safe.directory` no se sobrescribe. Si Git rechaza un repositorio, los datos quedan `unknown` con ese motivo.
 
@@ -655,6 +656,8 @@ interface Filesystem {
 Las rutas se comparan como texto, así que el directorio actual y home entran por su ruta real (`realpath`) en el composition root: en Windows, `process.cwd()` conserva las mayúsculas que tipeó el usuario, y en Linux `HOME` puede ser un symlink. Sin eso, los recorridos hacia arriba no reconocen home (F-64).
 
 `exists` no confunde "no existe" con "no se pudo comprobar" (en Windows, un symlink en bucle cuenta como existente, porque Windows comprueba el enlace; el error aparece al leerlo): un error de permisos se propaga y cada llamador decide. La configuración que no se puede comprobar es fatal, y un `.npmrc`, `.yarnrc` o marcador de workspace que no se puede comprobar deja el registry indeterminado. `readText` rechaza un FIFO o un dispositivo, que dejarían la ejecución colgada, y un archivo de más de 64 MiB. En Windows, `stat` informa una named pipe como archivo regular; como no tiene ruta real, `readText` pasa primero por `realpath` y la rechaza ahí (F-65).
+
+Tras resolver la ruta, `readText` abre una sola vez en modo de solo lectura y comprueba el tipo y tamaño mediante ese descriptor; todas las lecturas usan el mismo descriptor (F-70). En POSIX agrega `O_NONBLOCK` para no esperar un escritor si se sustituye el archivo por un FIFO, y `O_NOFOLLOW` para rechazar un enlace final sustituido después de `realpath`. El límite de 64 MiB también se aplica a los bytes efectivamente leídos, aunque el archivo crezca después de comprobar su tamaño. El descriptor se cierra tanto al terminar como ante errores. Esto no ofrece una instantánea inmutable del contenido ni garantiza que los directorios de la ruta no cambien mientras se abre.
 
 Esto permite:
 

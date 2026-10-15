@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, readdir, readFile, realpath, stat } from "node:fs/promises";
+import { access, open, readdir, realpath, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import { DEFAULT_PATHEXT } from "../../core/cmd-shim.js";
 import type { DirEntry, Filesystem } from "../../core/ports.js";
@@ -43,10 +43,29 @@ export function nodeFilesystem(
       // Windows, stat calls a named pipe a regular file, but it has no
       // real path, so realpath rejects it first (F-65).
       const real = await realpath(path);
-      const info = await stat(real);
-      if (!info.isFile()) throw new Error(`${path} is not a regular file`);
-      if (info.size > MAX_TEXT_BYTES) throw new Error(`${path} is too large to read`);
-      return readFile(real, "utf8");
+      // Nonblocking open prevents a substituted FIFO from hanging on POSIX.
+      // NOFOLLOW rejects a newly substituted final symlink after realpath.
+      const flags =
+        constants.O_RDONLY |
+        (process.platform === "win32" ? 0 : constants.O_NONBLOCK | constants.O_NOFOLLOW);
+      const handle = await open(real, flags);
+      try {
+        const info = await handle.stat();
+        if (!info.isFile()) throw new Error(`${path} is not a regular file`);
+        if (info.size > MAX_TEXT_BYTES) throw new Error(`${path} is too large to read`);
+        const chunks: Buffer[] = [];
+        let total = 0;
+        for (;;) {
+          const chunk = Buffer.alloc(Math.min(64 * 1024, MAX_TEXT_BYTES - total + 1));
+          const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
+          if (bytesRead === 0) return Buffer.concat(chunks, total).toString("utf8");
+          total += bytesRead;
+          if (total > MAX_TEXT_BYTES) throw new Error(`${path} is too large to read`);
+          chunks.push(chunk.subarray(0, bytesRead));
+        }
+      } finally {
+        await handle.close();
+      }
     },
     async readDir(path) {
       const entries = await readdir(path, { withFileTypes: true });
