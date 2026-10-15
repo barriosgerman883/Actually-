@@ -18,6 +18,8 @@ Use it instead of guessing, and instead of probing with one `which`, `--version`
 
 ## Commands
 
+If the `actually` MCP server is connected, call its `status` and `explain` tools instead of these commands: they return the same JSON and follow the same offline-first rule.
+
 Start offline. Offline, it still reports what is installed and its installed version, and it sends nothing over the network:
 
 ```bash

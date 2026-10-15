@@ -77,6 +77,16 @@ Decidido por la persona responsable el 2026-10-15: npm es el único método de i
 
 La persona responsable confirmó que npm instala el paquete en su VM. El error 193 del lanzador de pnpm ocurre antes de instalarlo y no demuestra una incompatibilidad del paquete.
 
+## Servidor MCP
+
+Decidido por la persona responsable el 2026-10-15, con la congelación de alcance recordada y levantada para este cambio:
+
+| Ajuste | Commit | Motivo |
+|---|---|---|
+| `actually mcp` sobre stdio, con el protocolo implementado en `src/mcp/` y sin el SDK oficial | `2dd187c`, `7ff402e` | El SDK suma 17 dependencias directas para todos los usuarios de la CLI; el servidor solo necesita tools sobre stdio (ADR 0010) |
+| Las llamadas corren offline salvo que pidan `offline: false`; `actually mcp --offline` cierra la red para todas | `2dd187c`, `7ff402e` | Es la misma regla que la skill les da a los agentes, y el aviso de red va en stderr, que la persona no ve en un cliente MCP |
+| Toda la salida que muestra texto no confiable escapa los caracteres ignorables por defecto | `7daa400` | Los caracteres de etiqueta esconden texto que un modelo sí lee (F-73) |
+
 ## #16: nombre del paquete
 
 Se eligió la alternativa B con un scope propio, porque `@actually` pertenece a otra cuenta: primero `@getactually` y, desde el 2026-10-09, `@actually-cli`. Las alternativas quedan como registro de la decisión.
