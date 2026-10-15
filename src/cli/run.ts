@@ -35,6 +35,7 @@ Usage:
   actually status [--global | --project]   Summary of tools and dependencies
   actually status <tool>                   Detail of one tool
   actually explain <tool>                  Evidence behind every conclusion
+  actually mcp                             Serve these commands to an agent (MCP)
 
 Options:
   --json         Machine-readable output on stdout
