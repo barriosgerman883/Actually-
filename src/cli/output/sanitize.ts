@@ -4,20 +4,26 @@ function isControl(code: number): boolean {
 }
 
 /**
- * Unicode format characters that reorder or hide text without being
- * controls: bidi marks, embeddings, overrides and isolates, zero-width
- * characters, line and paragraph separators, and the byte order mark (F-45).
+ * Characters that do not show but reorder or hide text: every code point
+ * Unicode marks as default-ignorable (bidi marks, embeddings, overrides and
+ * isolates, zero-width characters, tag characters, variation selectors, the
+ * soft hyphen, the byte order mark), plus the line and paragraph separators,
+ * which are not default-ignorable but break a line (F-45, F-73). Tag
+ * characters can spell whole ASCII text that a terminal hides and a
+ * language model still reads.
  */
+const INVISIBLE = /^[\p{Default_Ignorable_Code_Point}\u{2028}\u{2029}]$/u;
+
 function isInvisibleFormat(code: number): boolean {
-  return (
-    code === 0x061c ||
-    code === 0x180e ||
-    (code >= 0x200b && code <= 0x200f) ||
-    (code >= 0x2028 && code <= 0x202e) ||
-    (code >= 0x2060 && code <= 0x2064) ||
-    (code >= 0x2066 && code <= 0x2069) ||
-    code === 0xfeff
-  );
+  return INVISIBLE.test(String.fromCodePoint(code));
+}
+
+/**
+ * Whether a code point must never reach a reader as itself. Every output
+ * that shows untrusted text uses this one definition.
+ */
+export function isUnsafeCodePoint(code: number): boolean {
+  return isControl(code) || isInvisibleFormat(code);
 }
 
 /**
