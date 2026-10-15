@@ -16,7 +16,7 @@
 | Shell injection | No shell; no argument comes from user or repository data |
 | Private names leak to public services | Origin rule: query only registry specs on a public default registry, with no private scope mapping; `exclude`; `--offline` |
 | Tokens leak | Only registry keys are read from `pnpm config list`; the GitHub token is off by default and sent only to api.github.com |
-| Escape sequences in names, tags or messages rewrite the terminal output, or bidi and zero-width characters make a line read differently | Human output shows control characters from data as `\xNN`, and bidi, zero-width and line-separator characters as `\u{NNNN}`; JSON escapes control characters |
+| Escape sequences in names, tags or messages rewrite the terminal output, or invisible characters make a line read differently or hide text in it | Human output shows control characters from data as `\xNN`, and every default-ignorable character (bidi, zero-width, tag characters, variation selectors) and the line separators as `\u{NNNN}`; JSON escapes control characters |
 | Network data misleads the user | Every value carries its evidence; prereleases and stale cache lower confidence; unknown instead of guesses |
 | Scan walks the whole disk | Explicit scan paths, bounded depth, hidden directories, `node_modules` and symlinks skipped |
 

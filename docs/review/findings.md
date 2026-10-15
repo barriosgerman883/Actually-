@@ -105,7 +105,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | resuelto: código corregido en `f3a80b6` |
 | F-67 | media | corrección | Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest` | resuelto: código corregido en `2a2e276` |
 | F-72 | baja | seguridad | `source-map-js` 1.2.1 es vulnerable y Dependabot no lo puede actualizar | abierto |
-| F-73 | baja | seguridad | La salida humana no escapa los caracteres de etiqueta ni los selectores de variación | abierto |
+| F-73 | baja | seguridad | La salida humana no escapa los caracteres de etiqueta ni los selectores de variación | resuelto: código corregido en `7daa400` |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1486,7 +1486,7 @@ Propuesta: llevar el lockfile a `source-map-js@1.2.2` sin tocar `package.json`, 
 
 ### F-73 · La salida humana no escapa los caracteres de etiqueta ni los selectores de variación
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `7daa400`
 - **Severidad:** baja
 - **Tipo:** seguridad
 - **Ubicación:** `src/cli/output/sanitize.ts:11`
