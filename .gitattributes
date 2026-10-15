@@ -1,0 +1,6 @@
+# LF everywhere, also in a Windows clone (F-48): format:check and the
+# pre-commit hook compare line endings.
+* text=auto eol=lf
+
+# Real Windows launchers, kept byte for byte with their CRLF.
+tests/fixtures/windows/** -text
