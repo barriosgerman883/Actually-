@@ -98,7 +98,8 @@ export function buildInvocation(
     return { rejected: `${request.command} requires the neutral directory` };
   }
 
-  const env: Record<string, string> = {};
+  // Environment names are data, including __proto__ and constructor (F-69).
+  const env: Record<string, string> = Object.create(null);
   for (const [key, value] of Object.entries(context.baseEnv)) {
     if (value === undefined) continue;
     // Never let the caller's environment redirect git to another repository.

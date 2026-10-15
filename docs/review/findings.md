@@ -1424,6 +1424,47 @@ Lint pasa, pero Prettier reporta problemas de formato en los dos JSON de `.gstac
 
 Propuesta: excluir el estado local de `.gstack/` del formateador y de Git. La persona responsable debe aplicar el cambio a `.prettierignore`, sujeto a las reglas de protección del repositorio. No se modificaron las exclusiones ni los JSON.
 
+**Verificación posterior (2026-10-15, Codex):** `.gstack/` ya figura en `.gitignore` y `.prettierignore`. `git check-ignore -v --no-index -- .gstack/browse.json` confirma la exclusión de Git; el último `pnpm check` completó formato, tipos y 547 tests. La descripción anterior refleja el estado previo a esos cambios; queda pendiente reconciliar el estado abierto de F-68 con esta evidencia por indicación de la persona responsable.
+
+### F-69 · CodeQL alerta sobre escritura de propiedades con nombres externos
+
+- **Estado:** abierto
+- **Severidad:** alta
+- **Tipo:** seguridad
+- **Ubicación:** `src/infrastructure/command-runner/allowlist.ts:107`
+- **Detectado:** 2026-10-15, Codex, al activar CodeQL en GitHub
+- **Verificación:** por lectura del resultado de análisis estático; explotabilidad no verificada
+
+CodeQL reporta `js/remote-property-injection`: el nombre de una propiedad escrita depende de un valor externo. Alerta: https://github.com/barriosgerman883/Actually-/security/code-scanning/3. La severidad corresponde a CodeQL, no a una explotación reproducida. Propuesta: revisar el flujo de datos y las validaciones existentes antes de decidir una corrección o justificar un falso positivo.
+
+**Corrección implementada (2026-10-15), pendiente de integrar y verificar en CodeQL:** el entorno usa un diccionario sin prototipo. Una prueba comprueba que `__proto__` y `constructor` se preservan como datos propios, que no hay prototipo y que se conserva el filtrado de variables de Git. No se agregaron comandos a la allowlist.
+
+### F-70 · CodeQL alerta sobre una carrera entre comprobación y lectura de archivo
+
+- **Estado:** abierto
+- **Severidad:** alta
+- **Tipo:** seguridad
+- **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts:49`
+- **Detectado:** 2026-10-15, Codex, al activar CodeQL en GitHub
+- **Verificación:** por lectura del resultado de análisis estático; explotabilidad no verificada
+
+CodeQL reporta `js/file-system-race`: el archivo puede cambiar después de comprobarlo y antes de leerlo. Alerta: https://github.com/barriosgerman883/Actually-/security/code-scanning/2. La severidad corresponde a CodeQL. Propuesta: contrastar la alerta con las garantías documentadas de filesystem, evaluar una reproducción y, si corresponde, diseñar una lectura y validación sobre el mismo descriptor.
+
+**Corrección implementada (2026-10-15), pendiente de integrar y verificar en CodeQL:** apertura única de solo lectura, `stat` y lecturas sobre el mismo descriptor, cierre en `finally` y límite de bytes acumulados durante la lectura. En POSIX se agregan `O_NONBLOCK` y `O_NOFOLLOW`. Pruebas cubren sustitución de ruta después de validar, crecimiento sobre el límite, cierre tras error, UTF-8 entre bloques y FIFO sustituido en POSIX. Se mantiene la prueba de named pipes en Windows. Garantías y límites documentados en architecture.md §9.
+
+### F-71 · La Action de pnpm usa un tag mutable
+
+- **Estado:** abierto
+- **Severidad:** media
+- **Tipo:** seguridad
+- **Ubicación:** `.github/workflows/ci.yml:23`
+- **Detectado:** 2026-10-15, Codex, al activar CodeQL en GitHub
+- **Verificación:** por lectura del workflow y del resultado de CodeQL
+
+CodeQL reporta `actions/unpinned-tag` por `pnpm/action-setup@v4`. Alerta: https://github.com/barriosgerman883/Actually-/security/code-scanning/1. Si el tag se mueve, la CI puede ejecutar otro contenido sin modificar el workflow. Propuesta: fijar las Actions a SHAs completos verificados y mantener un mecanismo de actualización revisada. No se modificó el workflow ni se activó una política de SHA obligatoria que bloquearía la configuración actual.
+
+**Corrección implementada (2026-10-15), pendiente de integrar y verificar en CodeQL:** las tres Actions del workflow se fijaron a los SHAs de sus tags `v4`, consultados directamente en los repositorios oficiales mediante `git ls-remote`. La configuración de Dependabot incluye actualizaciones semanales de GitHub Actions para proponer futuros cambios mediante PR.
+
 ### Verificaciones
 
 - **Resolver de GitHub contra `api.github.com` real.** Estaba pendiente en mvp-acceptance.md. El 2026-09-28, desde Windows y sin token: `pnpm/pnpm` da `12.6.0` con confianza `high` por su última release, y `git/git`, sin releases, da `2.55.0` con confianza `medium` por el tag semver más alto, con la evidencia esperada.
