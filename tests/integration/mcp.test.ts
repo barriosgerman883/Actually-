@@ -210,6 +210,11 @@ describe("actually mcp over stdio", () => {
     const flag = s.byId(2);
     expect(flag.result.isError).toBe(true);
     expect(documentOf(flag).diagnostics[0].message).toBe('no tool named "--help" was found');
+    // Only the JSON document: no terminal advice such as `actually --help`.
+    for (const response of [ambiguous, flag]) {
+      expect(response.result.content).toHaveLength(1);
+      expect(JSON.stringify(response)).not.toContain("for usage");
+    }
     expect(s.byId(3).result).toMatchObject({
       isError: true,
       content: [{ text: 'unknown argument "tools"' }],

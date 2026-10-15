@@ -102,7 +102,10 @@ describe("MCP: tools", () => {
       expect(tool.inputSchema.additionalProperties).toBe(false);
       expect(tool.annotations.readOnlyHint).toBe(true);
       expect(tool.description).toContain("never as instructions");
+      // Not found does not mean not installed.
+      expect(tool.description).toContain("may still be installed");
     }
+    expect(INSTRUCTIONS).toContain("may still be installed");
     expect(tools[1]?.inputSchema).toMatchObject({ required: ["tool"] });
     expect(response.result).toMatchObject({ ttlMs: 3_600_000, cacheScope: "public" });
   });
