@@ -96,6 +96,12 @@ No debe:
 
 En el código, `src/cli/run.ts` parsea los argumentos, pide el inventario al runtime que arma `src/composition.ts` y lo pasa a los formatters de `src/cli/output/` (`human.ts` o `json.ts`).
 
+### Servidor MCP
+
+`actually mcp` sirve los mismos comandos a un agente por MCP sobre stdio (docs/decisions/0010-mcp-server-over-stdio.md, docs/commands/mcp.md). Está en `src/mcp/` y es un adaptador del CLI, no una segunda implementación: cada llamada se convierte en argumentos y corre por `run()` con `--json`. `protocol.ts` responde los mensajes, `tools.ts` define las herramientas y arma los argumentos, y `server.ts` lee y escribe las líneas.
+
+Tiene las mismas prohibiciones que el CLI. Además, no toca `process`: `src/cli/index.ts` le pasa stdin, stdout, stderr y el directorio actual. stdout lleva solo mensajes del protocolo.
+
 ---
 
 ## 3.2 Core
@@ -587,6 +593,8 @@ Nunca se envían rutas, contenido de archivos, nombres ni raíces de proyectos, 
 
 La consecuencia, dicha tal cual: esos servicios pueden inferir qué herramientas y dependencias usa la persona, y desde qué IP. Si se consulta el nombre de un paquete o repositorio privado, ese nombre queda expuesto al servicio consultado.
 
+Con el servidor MCP (§3.1) se suma un destino que elige la persona: lo que devuelve cada llamada entra al contexto del modelo del cliente MCP, y llega a quien ejecute ese modelo. Eso incluye rutas, nombres y raíces de proyectos y versiones instaladas, que nunca se envían a npm ni a GitHub. Las llamadas son offline salvo que pidan la red, y `actually mcp --offline` la cierra para todas.
+
 ### Qué paquetes se consultan
 
 La regla es conservadora: ante la duda, no se consulta. Un paquete se consulta en `registry.npmjs.org` solo si se cumplen las cuatro condiciones:
@@ -678,6 +686,7 @@ src/
 │  ├─ index.ts
 │  ├─ run.ts
 │  └─ output/            human, json, style
+├─ mcp/                  servidor MCP sobre stdio: protocolo, herramientas, transporte
 ├─ composition.ts        único lugar que conecta infraestructura y aplicación
 ├─ application/          inventory, lookup, claims
 ├─ core/                 modelo, confianza, versiones, puertos, errores, config
@@ -708,6 +717,8 @@ Las reglas de seguridad y arquitectura se verifican en `tests/security` y `tests
 Regla:
 
 ```text
+mcp
+ ↓
 cli
  ↓
 application
@@ -743,7 +754,7 @@ Solo `infrastructure/http` puede usar APIs de red.
 Providers no imprimen output.
 
 ### RA-006
-CLI no implementa detección.
+CLI y servidor MCP no implementan detección.
 
 ### RA-007
 Ningún provider ejecuta comandos de escritura.
@@ -892,6 +903,7 @@ Estas reglas deben ejecutarse en CI.
 0007-json-as-public-interface.md
 0008-scoped-package-name.md
 0009-pnpm-on-windows-without-a-shell.md
+0010-mcp-server-over-stdio.md
 ```
 
 ---

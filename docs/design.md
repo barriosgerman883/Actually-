@@ -361,6 +361,7 @@ Reglas:
 - Borrar el marcador vuelve a mostrar el aviso. Si el marcador no se puede escribir, el aviso se muestra en cada ejecución: es preferible repetirlo a omitirlo.
 - No se muestra con `--offline` ni con la red desactivada.
 - Nombra solo los hosts que la versión instalada realmente consulta.
+- Con el servidor MCP, stderr va a los logs del cliente, que la persona no suele leer. Por eso el aviso viaja también en el resultado de la llamada que lo produjo, como un segundo bloque de texto, y llega a la conversación.
 
 El detalle completo está en architecture.md §8.
 
@@ -526,6 +527,8 @@ actually explain <tool> --json
 ```
 
 Una extensión de VS Code no debe replicar detección.
+
+Los agentes tienen además `actually mcp`, un servidor MCP cuyas herramientas `status` y `explain` devuelven esos mismos documentos (architecture.md §3.1, docs/commands/mcp.md).
 
 Ejemplo visual futuro:
 
