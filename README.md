@@ -35,6 +35,7 @@ PROJECT · ~/projects/app
 | `actually status --project` | The current project only                                  |
 | `actually status <tool>`    | Detail of one tool                                        |
 | `actually explain <tool>`   | Every fact and inference behind each conclusion           |
+| `actually mcp`              | Serves `status` and `explain` to agents over MCP          |
 
 Options: `--json`, `--offline`, `--no-cache`, `--exit-code`, `--verbose`, `--no-color`, `--debug`.
 

@@ -104,9 +104,14 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | resuelto: código corregido en `67c00bf` |
 | F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | resuelto: código corregido en `f3a80b6` |
 | F-67 | media | corrección | Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest` | resuelto: código corregido en `2a2e276` |
+| F-68 | baja | tooling | El estado local de gstack bloquea format:check | abierto |
+| F-69 | alta | seguridad | CodeQL alerta sobre escritura de propiedades con nombres externos | abierto |
+| F-70 | alta | seguridad | CodeQL alerta sobre una carrera entre comprobación y lectura de archivo | resuelto: código corregido en `97ad6d8` |
+| F-71 | media | seguridad | La Action de pnpm usa un tag mutable | resuelto: código corregido en `97ad6d8` |
 | F-72 | baja | seguridad | `source-map-js` 1.2.1 es vulnerable y Dependabot no lo puede actualizar | abierto |
 | F-73 | baja | seguridad | La salida humana no escapa los caracteres de etiqueta ni los selectores de variación | resuelto: código corregido en `7daa400` |
 | F-74 | baja | robustez | El guard de Bash toma los patrones de `case` como rutas a los frenos | abierto |
+| F-75 | baja | robustez | Dependabot no puede actualizar `pnpm/action-setup` | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1442,9 +1447,11 @@ CodeQL reporta `js/remote-property-injection`: el nombre de una propiedad escrit
 
 **Corrección implementada (2026-10-15), pendiente de integrar y verificar en CodeQL:** el entorno usa un diccionario sin prototipo. Una prueba comprueba que `__proto__` y `constructor` se preservan como datos propios, que no hay prototipo y que se conserva el filtrado de variables de Git. No se agregaron comandos a la allowlist.
 
+**Verificación posterior (2026-10-15, Claude):** la corrección está en `main` desde `97ad6d8`, pero CodeQL mantiene abierta la alerta #3, ahora en `allowlist.ts:108` (`env[key] = value`). Por lectura, no es explotable: `env` es un `Object.create(null)`, así que una clave `__proto__` o `constructor` queda como propiedad propia y no toca ningún prototipo. Además, las claves son los nombres de las variables del entorno de la persona, y quien controla ese entorno ya controla el proceso, algo que threat-model.md deja fuera de alcance. CodeQL no reconoce el diccionario sin prototipo como barrera. Hay dos salidas, y elegir es de la persona responsable: descartar la alerta en GitHub como falso positivo, con este análisis, o construir el entorno con un `Map` y `Object.fromEntries`, que CodeQL sí reconoce.
+
 ### F-70 · CodeQL alerta sobre una carrera entre comprobación y lectura de archivo
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `97ad6d8`
 - **Severidad:** alta
 - **Tipo:** seguridad
 - **Ubicación:** `src/infrastructure/filesystem/node-filesystem.ts:49`
@@ -1455,9 +1462,11 @@ CodeQL reporta `js/file-system-race`: el archivo puede cambiar después de compr
 
 **Corrección implementada (2026-10-15), pendiente de integrar y verificar en CodeQL:** apertura única de solo lectura, `stat` y lecturas sobre el mismo descriptor, cierre en `finally` y límite de bytes acumulados durante la lectura. En POSIX se agregan `O_NONBLOCK` y `O_NOFOLLOW`. Pruebas cubren sustitución de ruta después de validar, crecimiento sobre el límite, cierre tras error, UTF-8 entre bloques y FIFO sustituido en POSIX. Se mantiene la prueba de named pipes en Windows. Garantías y límites documentados en architecture.md §9.
 
+**Cierre (2026-10-15, Claude):** CodeQL marcó la alerta #2 como corregida a las 20:33 UTC, al analizar `main` con `97ad6d8`.
+
 ### F-71 · La Action de pnpm usa un tag mutable
 
-- **Estado:** abierto
+- **Estado:** resuelto: código corregido en `97ad6d8`
 - **Severidad:** media
 - **Tipo:** seguridad
 - **Ubicación:** `.github/workflows/ci.yml:23`
@@ -1468,7 +1477,9 @@ CodeQL reporta `actions/unpinned-tag` por `pnpm/action-setup@v4`. Alerta: https:
 
 **Corrección implementada (2026-10-15), pendiente de integrar y verificar en CodeQL:** las tres Actions del workflow se fijaron a los SHAs de sus tags `v4`, consultados directamente en los repositorios oficiales mediante `git ls-remote`. La configuración de Dependabot incluye actualizaciones semanales de GitHub Actions para proponer futuros cambios mediante PR.
 
-**Verificación posterior (2026-10-15, Claude):** el SHA fijado para `pnpm/action-setup`, `f40ffcd`, no es de un commit sino del objeto del tag anotado `v4`: la API de GitHub devuelve `type: tag` para `refs/tags/v4`, y ese objeto apunta al commit `b906aff`. `git ls-remote` sin `^{}` devuelve el objeto del tag. `actions/checkout` y `actions/setup-node` no se vieron afectadas porque sus `v4` eran tags livianos; desde los PR #19 y #20 están en v7.0.1 y v7.1.0. GitHub resuelve el objeto y la CI pasa, pero Dependabot no lo reconoce como versión: el PR #18 propone pasar de `f40ffcd` a `b906aff`, con el mismo código, en vez de ofrecer la v6.1.0. Además, la política de Actions del repositorio solo permite `pnpm/action-setup@f40ffcd…` y `pnpm/action-setup@v4`, así que el #18 termina en `startup_failure` sin ejecutar jobs. El patrón `@v4` vuelve a habilitar el tag mutable que este hallazgo busca evitar. Propuesta: agregar `b906aff` a la política, integrar el #18 y después dejar en la política solo ese SHA, sin `@v4`.
+**Verificación posterior (2026-10-15, Claude):** el SHA fijado para `pnpm/action-setup`, `f40ffcd`, no es de un commit sino del objeto del tag anotado `v4`: la API de GitHub devuelve `type: tag` para `refs/tags/v4`, y ese objeto apunta al commit `b906aff`. `git ls-remote` sin `^{}` devuelve el objeto del tag. `actions/checkout` y `actions/setup-node` no se vieron afectadas porque sus `v4` eran tags livianos; desde los PR #19 y #20 están en v7.0.1 y v7.1.0. GitHub resuelve el objeto y la CI pasa, pero Dependabot no lo reconoce como versión: el PR #18 propone pasar de `f40ffcd` a `b906aff`, con el mismo código, en vez de ofrecer la v6.1.0. Además, la política de Actions del repositorio solo permite `pnpm/action-setup@f40ffcd…` y `pnpm/action-setup@v4`, así que el #18 termina en `startup_failure` sin ejecutar jobs. El patrón `@v4` vuelve a habilitar el tag mutable que este hallazgo busca evitar. Lo pendiente sigue en F-75.
+
+**Cierre (2026-10-15, Claude):** CodeQL marcó la alerta #1 como corregida a las 20:33 UTC, al analizar `main` con `97ad6d8`. `ci.yml` ya no usa un tag mutable: el SHA de un objeto de tag también identifica un único contenido.
 
 ### F-72 · `source-map-js` 1.2.1 es vulnerable y Dependabot no lo puede actualizar
 
@@ -1512,6 +1523,19 @@ Propuesta: tratar como invisible todo carácter con la propiedad `Default_Ignora
 `p="a/"; case "$p" in */) echo barra;; esac` se rechaza con "only the user changes the agent guardrails in .claude/". El guard trata `case` como un comando y su patrón `*/` como un argumento con glob; `namesGuards` lo convierte en una expresión que coincide con `.claude/hooks/`, y como `case` no es un comando de solo lectura, lo bloquea. El comando no nombra ningún archivo. Es de la misma familia que F-28: no debilita la protección, pero obliga a reescribir comandos válidos.
 
 Propuesta: no evaluar como rutas los patrones de un `case … in`, o considerar los globs solo en los argumentos de comandos que reciben rutas. Lo aplica la persona responsable, porque el archivo está protegido.
+
+### F-75 · Dependabot no puede actualizar `pnpm/action-setup`
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `.github/workflows/ci.yml:23` y la política de Actions del repositorio
+- **Detectado:** 2026-10-15, Claude, revisando el PR #18
+- **Verificación:** reproducido: el PR #18 termina en `startup_failure`
+
+El pin de F-71, `f40ffcd`, es el SHA del objeto del tag anotado `v4`, no de un commit (ver la verificación posterior de F-71). Dependabot no lo reconoce como versión, así que propone cambiar `f40ffcd` por el commit `b906aff`, con el mismo código, en vez de ofrecer la v6.1.0. La política de Actions del repositorio (`allowed_actions: selected`) solo permite `pnpm/action-setup@f40ffcd…` y `pnpm/action-setup@v4`, así que el PR #18 no llega a ejecutar jobs. Además, el patrón `@v4` permite que un workflow vuelva a usar el tag mutable que F-71 eliminó. Mientras esto siga así, la Action de pnpm no recibe actualizaciones revisadas.
+
+Propuesta: agregar `pnpm/action-setup@b906aff…` a la política, integrar el #18 y después dejar en la política solo ese SHA, sin `@v4`. La política se cambia en la configuración del repositorio en GitHub, y lo hace la persona responsable.
 
 ### Verificaciones
 
