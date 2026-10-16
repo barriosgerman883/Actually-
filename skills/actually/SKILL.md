@@ -29,7 +29,7 @@ actually status <tool> --offline --json
 actually explain <tool> --offline --json
 ```
 
-- **`status --global`:** pnpm global packages, executables in pnpm's directory and `~/.local/bin`, and Git repositories used as tools.
+- **`status --global`:** pnpm and npm global packages, developer tools on `PATH` such as git and node, executables in pnpm's directory and `~/.local/bin`, and Git repositories used as tools. A tool it does not list may still be installed somewhere it does not look.
 - **`status --project`:** the project in the current directory and its dependencies. Run it from the project's directory.
 - **`status <tool>`:** one tool, by name or id.
 - **`explain <tool>`:** the same tool, with the evidence behind each value.

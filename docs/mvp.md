@@ -151,7 +151,7 @@ Debe poder:
 Hay dos cosas distintas con el mismo nombre:
 
 - **npm registry** (fuente de versiones): entra en el MVP. Es imprescindible porque los paquetes administrados por pnpm se publican ahí. Resuelve la versión con el dist-tag `latest`, que por convención es la última estable, y el campo `repository` de cada paquete.
-- **npm CLI** (install provider): la detección de paquetes instalados con `npm install -g` queda para la Fase 2.
+- **npm CLI** (install provider): iba a quedar para la Fase 2, y se sumó después del MVP. Los paquetes instalados con `npm install -g` se leen de los prefijos de npm que están en PATH, sin ejecutar npm y sin consultar su `latest` (docs/providers/npm.md).
 
 Las dependencias declaradas en el `package.json` de un proyecto se leen en el MVP, sin importar qué package manager las instaló.
 

@@ -1252,6 +1252,8 @@ Propuesta: sumarlo a "Known limitations" de `docs/providers/pnpm.md` y a "Requir
 
 **Corregido en `13b88a5`.** 2026-09-28, a pedido de la persona responsable. Cuando el `packageManager` del proyecto fija pnpm con otra versión mayor que la del pnpm que corre fuera de los proyectos, se emite un `warning` que nombra las dos. El límite está en el README y en pnpm.md.
 
+**Ampliado (2026-10-16, Claude):** los paquetes globales de las otras generaciones de pnpm (`PNPM_HOME/global/5` para pnpm 10 y anteriores, `global/v11` para pnpm 11 y posteriores) se leen de sus archivos y se listan, con un id por ruta. El aviso de este hallazgo dejó de ser cierto y se quitó (docs/providers/pnpm.md).
+
 ### F-58 · CLAUDE.md quedó desactualizado en tres puntos
 
 - **Estado:** abierto

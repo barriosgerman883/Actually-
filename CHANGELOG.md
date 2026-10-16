@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `status --global` lists the packages of every npm global prefix whose commands are in `PATH`, with their installed version, and warns when a command runs a file that no longer exists. Their latest version is not queried: npm records nowhere where a global package came from.
+- It also lists developer tools found on `PATH`, such as git, node, go and java, with the version read from a file that states it. Nothing found is run (ADR 0011).
+- The global packages that another pnpm generation installed, such as pnpm 10 next to pnpm 12, are listed from their files instead of a warning that they are hidden (F-57).
+
 ## 0.3.0
 
 - Add `actually mcp`, an MCP server over stdio with the tools `status` and `explain`, for agents such as Claude Code and Codex. They return the same documents as `--json`, run offline unless a call asks for the network, and escape invisible characters before the model reads them. No new dependencies. See [docs/commands/mcp.md](docs/commands/mcp.md).

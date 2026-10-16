@@ -12,6 +12,7 @@ Detect pnpm itself and the packages installed globally with pnpm, and read proje
 - The global `package.json` that declares each package gives its spec. With pnpm 10, that is the one next to the `pnpm root --global` directory. With pnpm 12, each package has its own directory directly inside `pnpm root --global`, with its own `package.json`. No other `package.json` is used, because it could belong to a project.
 - Each package's own `package.json` gives its `bin` names and `repository` field.
 - On Windows, pnpm 12.10 reports package paths with the long-path prefix (`\\?\C:\…`) and `pnpm root --global` without it. The prefix is dropped from every path pnpm reports, so they compare as the same directory (F-67).
+- The global packages of the other pnpm generations are read from their files, since pnpm never runs inside a project (architecture.md §7) and so only the pnpm outside projects is listed. Each generation keeps them in its own directory of `PNPM_HOME/global`, seen with pnpm 10.33, 11.22 and 12.10: `5` for pnpm 10 and earlier, with one `package.json` and one `node_modules`, and its commands in `PNPM_HOME`; `v11` for pnpm 11 and later, with a directory per `pnpm add -g`, each with its `package.json` and `node_modules`, and its commands in `PNPM_HOME/bin`. These packages have ids by path, since a name can be installed by two generations, and their commands are attributed to them by name.
 
 ## Evidence used
 
@@ -19,6 +20,8 @@ Detect pnpm itself and the packages installed globally with pnpm, and read proje
 |---|---|---|
 | installed version | `pnpm list` reports `name@version` | fact |
 | installed by pnpm | `pnpm list` lists it; pnpm's bin directory provides its executables | fact |
+| installed version, another generation | the package's `package.json` declares it | fact |
+| installed by pnpm, another generation | it is in that generation's directory; its bin directory provides its executables | inference |
 | source | the package's `repository` field; repository name matches package name | inference |
 | update provider | derived from installation, never more confident than it | inference |
 
@@ -36,7 +39,7 @@ On Windows, pnpm is found in `PATH` as cmd finds it, without the current directo
 
 ## Files inspected
 
-The global `package.json` files described above, installed packages' `package.json`, and in projects: `package.json`, `pnpm-lock.yaml`, `package-lock.json`, the workspace markers (`pnpm-workspace.yaml` and the `workspaces` field of each `package.json` up to home), `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, and the presence of `yarn.lock`, `bun.lock` and `bun.lockb`.
+The global `package.json` files described above, installed packages' `package.json`, the directories of the other generations under `PNPM_HOME/global` with their bin directories, and in projects: `package.json`, `pnpm-lock.yaml`, `package-lock.json`, the workspace markers (`pnpm-workspace.yaml` and the `workspaces` field of each `package.json` up to home), `node_modules/*/package.json`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, and the presence of `yarn.lock`, `bun.lock` and `bun.lockb`.
 
 ## Network requests
 
@@ -57,7 +60,7 @@ pnpm is never run inside a project, because a project's `.npmrc` or `packageMana
 ## Known limitations
 
 - How pnpm itself was installed is not determined.
-- Only the global packages of the pnpm that runs outside any project are seen: pnpm always runs from an empty directory (architecture.md §7), and each pnpm major keeps its global packages in its own place. What `pnpm add -g` installed inside a project whose `packageManager` pins another major is not listed. When that project is checked in the same run, a warning names both versions.
+- The packages of another pnpm generation are read from files only: their spec and installed version come from their `package.json` files, not from `pnpm list`. A generation whose directory has a name other than `5` or `vNN` is not read. pnpm 11 and 12 share `global/v11`.
 - On Windows, pnpm launchers from Volta, Scoop or winget were not checked. One that is an `.exe` runs; any other unrecognized one is reported, not run.
 - On Windows, some pnpm versions write `.exe` shims with a `.pnpm-shim-v1-<name>-target` file next to them. They run, but their target is not read, so a repository linked through one is listed as an unknown executable instead of a git tool.
 - Yarn and Bun lockfiles are detected but not read.
