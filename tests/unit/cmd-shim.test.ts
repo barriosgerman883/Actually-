@@ -14,6 +14,9 @@ import { parseCmdShim } from "../../src/core/cmd-shim.js";
  *   a neutral path instead of the original temporary one.
  * - npm-exe-target, npm-node-target: what npm 12.2.0 writes for
  *   @anthropic-ai/claude-code and @openai/codex.
+ * - npm-node-target-pathext-last: actually.cmd next to fnm's node.exe
+ *   (Node.js 22.23.2), written by `npm install -g @actually-cli/cli`; it
+ *   sets PATHEXT on its last line. Which npm wrote it is not recorded.
  */
 const fixture = (name: string) =>
   readFileSync(join(import.meta.dirname, "..", "fixtures", "windows", name), "utf8");
@@ -44,6 +47,10 @@ describe("parseCmdShim on real launchers", () => {
     [
       "npm-node-target.cmd",
       { kind: "node", script: "node_modules\\@openai\\codex\\bin\\codex.js" },
+    ],
+    [
+      "npm-node-target-pathext-last.cmd",
+      { kind: "node", script: "node_modules\\@actually-cli\\cli\\dist\\cli\\index.js" },
     ],
     // Runs `pnpm` by name: following it would mean resolving PATH as cmd does.
     ["pnpm-alias-pn.cmd", undefined],

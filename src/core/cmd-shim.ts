@@ -100,6 +100,20 @@ const TEMPLATES: { kind: CmdShimTarget["kind"]; re: RegExp }[] = [
       'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%" "%dp0%\\{P}" %*',
     ]),
   },
+  // The same, with PATHEXT set on the last line instead of in the ELSE
+  // branch, as found next to fnm's node.exe for packages npm installed.
+  {
+    kind: "node",
+    re: template([
+      ...NPM_PROLOGUE,
+      'IF EXIST "%dp0%\\node.exe" (',
+      'SET "_prog=%dp0%\\node.exe"',
+      ") ELSE (",
+      'SET "_prog=node"',
+      ")",
+      'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & set PATHEXT=%PATHEXT:;.JS;=;% & "%_prog%" "%dp0%\\{P}" %*',
+    ]),
+  },
 ];
 
 /** A relative path that stays a path: no empty segment, so no root or UNC prefix. */
