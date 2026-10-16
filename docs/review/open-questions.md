@@ -86,6 +86,9 @@ Decidido por la persona responsable el 2026-10-15, con la congelación de alcanc
 | `actually mcp` sobre stdio, con el protocolo implementado en `src/mcp/` y sin el SDK oficial | `2dd187c`, `7ff402e` | El SDK suma 17 dependencias directas para todos los usuarios de la CLI; el servidor solo necesita tools sobre stdio (ADR 0010) |
 | Las llamadas corren offline salvo que pidan `offline: false`; `actually mcp --offline` cierra la red para todas | `2dd187c`, `7ff402e` | Es la misma regla que la skill les da a los agentes, y el aviso de red va en stderr, que la persona no ve en un cliente MCP |
 | Toda la salida que muestra texto no confiable escapa los caracteres ignorables por defecto | `7daa400` | Los caracteres de etiqueta esconden texto que un modelo sí lee (F-73) |
+| Un error del MCP lleva solo el documento JSON, y las descripciones aclaran que si actually no encuentra una herramienta, puede estar instalada igual | `fc29738` | En la prueba real, `status` para git devolvió el consejo de usar `actually --help`, que un modelo no puede seguir, y nada decía que git estaba instalado fuera de los lugares que actually revisa |
+
+La prueba real fue el 2026-10-15, en Claude Code 2.1.280 sobre Windows, con el paquete instalado en una carpeta aislada. El cliente conectó con `initialize`, en la versión 2025-11-25. Las herramientas respondieron offline por defecto, la primera llamada online trajo el aviso de red, y solo cambió el directorio de caché y estado de actually. La generación 2026-07-28 queda cubierta por los tests y por el smoke de la CI, no por un cliente real.
 
 ## #16: nombre del paquete
 
