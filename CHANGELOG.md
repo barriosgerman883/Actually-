@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - The agent skill (`skills/actually/SKILL.md`) reads the text output and adds `--json` only when a program reads the result or needs a field the text leaves out. For the same values, the text is several times smaller, so it costs the agent fewer tokens. The MCP tools still return JSON.
 - `status --global` lists the packages of every npm global prefix whose commands are in `PATH`, with their installed version, and warns when a command runs a file that no longer exists. Their latest version is not queried: npm records nowhere where a global package came from.
 - It also lists developer tools found on `PATH`, such as git, node, go and java, with the version read from a file that states it. Nothing found is run (ADR 0011).
 - The global packages that another pnpm generation installed, such as pnpm 10 next to pnpm 12, are listed from their files instead of a warning that they are hidden (F-57).
+- The new sources can change a record's `id`: a command listed before as an unknown executable now carries the provider of the package that installed it (design.md §14).
 
 ## 0.3.0
 
