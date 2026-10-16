@@ -22,7 +22,10 @@ const HOME = "/home/me";
 const PNPM_HOME = "/home/me/.local/share/pnpm";
 const ROOT = `${PNPM_HOME}/global/5/node_modules`;
 
-function pnpmWorld(pnpmConfig = PNPM_CONFIG_PUBLIC) {
+function pnpmWorld(
+  pnpmConfig = PNPM_CONFIG_PUBLIC,
+  extra: { files?: Record<string, string>; executables?: string[] } = {},
+) {
   const runner = fakeRunner({
     "pnpm.version": ok("10.0.0\n"),
     "pnpm.root.global": ok(`${ROOT}\n`),
@@ -53,8 +56,16 @@ function pnpmWorld(pnpmConfig = PNPM_CONFIG_PUBLIC) {
         bin: "cli.js",
         repository: "github:example/gstack",
       }),
+      ...extra.files,
     },
-    { executables: [`${PNPM_HOME}/gstack`, `${PNPM_HOME}/pnpm`, `${HOME}/.local/bin/custom-tool`] },
+    {
+      executables: [
+        `${PNPM_HOME}/gstack`,
+        `${PNPM_HOME}/pnpm`,
+        `${HOME}/.local/bin/custom-tool`,
+        ...(extra.executables ?? []),
+      ],
+    },
   );
   return { runner, fs };
 }
@@ -63,8 +74,15 @@ function pnpmWorld(pnpmConfig = PNPM_CONFIG_PUBLIC) {
 // global/v11 and each package gets its own directory with its own package.json.
 const PNPM12_ROOT = `${PNPM_HOME}/global/v11`;
 
-/** `listPrefix` is what pnpm 12.10 on Windows puts before each listed path (F-67). */
-function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC, listPrefix = "") {
+/**
+ * `listPrefix` is what pnpm 12.10 on Windows puts before each listed path
+ * (F-67). `extra` adds files and executables around it.
+ */
+function pnpm12World(
+  pnpmConfig = PNPM_CONFIG_PUBLIC,
+  listPrefix = "",
+  extra: { files?: Record<string, string>; executables?: string[] } = {},
+) {
   const isNumber = `${PNPM12_ROOT}/2c-18d9606f358acbc3-0`;
   const types = `${PNPM12_ROOT}/2c-18d9606f75c4749e-2`;
   const listed = (path: string) => `${listPrefix}${p(path)}`;
@@ -100,12 +118,16 @@ function pnpm12World(pnpmConfig = PNPM_CONFIG_PUBLIC, listPrefix = "") {
       ]),
     ),
   });
-  const fs = memoryFs({
-    [`${isNumber}/package.json`]: JSON.stringify({ dependencies: { "is-number": "6.0.0" } }),
-    [`${types}/package.json`]: JSON.stringify({ dependencies: { "@types/node": "22.0.0" } }),
-    // A manifest outside the global root must never supply a spec.
-    "/home/me/elsewhere/package.json": JSON.stringify({ dependencies: { stray: "^1.0.0" } }),
-  });
+  const fs = memoryFs(
+    {
+      [`${isNumber}/package.json`]: JSON.stringify({ dependencies: { "is-number": "6.0.0" } }),
+      [`${types}/package.json`]: JSON.stringify({ dependencies: { "@types/node": "22.0.0" } }),
+      // A manifest outside the global root must never supply a spec.
+      "/home/me/elsewhere/package.json": JSON.stringify({ dependencies: { stray: "^1.0.0" } }),
+      ...extra.files,
+    },
+    { executables: extra.executables ?? [] },
+  );
   return { runner, fs };
 }
 
@@ -232,17 +254,21 @@ describe("global inventory with pnpm", () => {
     });
   });
 
-  it("warns that a project pinning another pnpm major hides its globals (F-57)", async () => {
-    const { runner, fs: base } = pnpmWorld();
-    const fs = {
-      ...base,
-      exists: async (q: string) =>
-        p(q) === p(`${HOME}/repo/package.json`) || (await base.exists(q)),
-      readText: async (q: string) =>
-        p(q) === p(`${HOME}/repo/package.json`)
-          ? JSON.stringify({ packageManager: "pnpm@9.15.0+sha512.abc" })
-          : base.readText(q),
-    };
+  it("lists the global packages of another pnpm generation from their files (F-57)", async () => {
+    // pnpm 12 runs outside projects; pnpm 10, pinned by the project, left
+    // is-odd in global/5 and its command directly in PNPM_HOME.
+    const pnpm10 = `${PNPM_HOME}/global/5`;
+    const { runner, fs } = pnpm12World(PNPM_CONFIG_PUBLIC, "", {
+      files: {
+        [`${pnpm10}/package.json`]: JSON.stringify({ dependencies: { "is-odd": "3.0.1" } }),
+        [`${pnpm10}/node_modules/is-odd/package.json`]: JSON.stringify({
+          version: "3.0.1",
+          bin: "cli.js",
+        }),
+        [`${HOME}/repo/package.json`]: JSON.stringify({ packageManager: "pnpm@10.33.0" }),
+      },
+      executables: [`${PNPM_HOME}/is-odd`],
+    });
     const inv = await buildInventory({
       fs,
       runner,
@@ -251,12 +277,48 @@ describe("global inventory with pnpm", () => {
       config: config(),
       cwd: p(`${HOME}/repo`),
     });
-    expect(inv.diagnostics).toContainEqual(
-      expect.objectContaining({
-        severity: "warning",
-        message: expect.stringContaining("pins pnpm 9.15.0, but pnpm 10.0.0 runs outside projects"),
-      }),
+    const isOdd = inv.tools.find((t) => t.name === "is-odd");
+    expect(isOdd).toMatchObject({
+      id: `global:pnpm:${p(`${pnpm10}/node_modules/is-odd`)}`,
+      versions: {
+        installed: { state: "known", value: "3.0.1", confidence: "high" },
+        latest: { state: "unknown", reason: "offline" },
+      },
+      installation: { state: "known", value: { provider: "pnpm" }, confidence: "medium" },
+    });
+    expect(JSON.stringify(isOdd?.installation)).toContain("provides is-odd");
+    // Nothing says they are hidden any more.
+    expect(inv.diagnostics.map((d) => d.message).join("\n")).not.toContain("are not listed");
+  });
+
+  it("lists what pnpm 11 and later installed when pnpm 10 runs outside projects", async () => {
+    // One directory per `pnpm add -g` in global/v11, commands in PNPM_HOME/bin;
+    // gstack is in both generations, which keep separate ids.
+    const install = `${PNPM_HOME}/global/v11/32-1a142869325-b2172003339dd3d7`;
+    const { runner, fs } = pnpmWorld(PNPM_CONFIG_PUBLIC, {
+      files: {
+        [`${install}/package.json`]: JSON.stringify({ dependencies: { gstack: "2.0.0" } }),
+        [`${install}/node_modules/gstack/package.json`]: JSON.stringify({
+          version: "2.0.0",
+          bin: "cli.js",
+        }),
+        // Not an install directory: no package.json.
+        [`${PNPM_HOME}/global/v11/a18cfa05/index.json`]: "{}",
+      },
+      executables: [`${PNPM_HOME}/bin/gstack`],
+    });
+    const inv = await buildInventory(
+      { fs, runner, env: fakeEnv(HOME), net: netContext(undefined), config: config(), cwd: "/tmp" },
+      { globalOnly: true },
     );
+    const gstacks = inv.tools.filter((t) => t.name === "gstack");
+    expect(gstacks[0]?.id).toBe("global:pnpm:gstack");
+    // pnpmWorld's pnpm prints POSIX paths, so on Windows they have no drive.
+    const location = gstacks[1]?.id.slice("global:pnpm:".length) ?? "";
+    expect(p(location)).toBe(p(`${install}/node_modules/gstack`));
+    expect(gstacks[1]?.versions.installed).toMatchObject({ value: "2.0.0", confidence: "high" });
+    expect(JSON.stringify(gstacks[1]?.installation)).toContain("pnpm 11 and later");
+    expect(inv.diagnostics.filter((d) => d.message.includes("share the id"))).toEqual([]);
   });
   it("works offline without sending anything", async () => {
     const { runner, fs } = pnpmWorld();

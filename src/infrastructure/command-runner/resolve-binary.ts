@@ -1,9 +1,7 @@
 import { win32 } from "node:path";
 import { parseCmdShim } from "../../core/cmd-shim.js";
+import { commandFileNames, pathDirs } from "../../core/command-path.js";
 import type { Filesystem } from "../../core/ports.js";
-
-/** What cmd tries when PATHEXT is not set; cmd never runs a .ps1. */
-const CMD_PATHEXT = ".COM;.EXE;.BAT;.CMD";
 
 export type ResolvedBinary =
   | { ok: true; file: string; args: string[] }
@@ -16,23 +14,11 @@ export interface ResolveOptions {
   pathext?: string;
 }
 
-/** Drive and UNC paths only: never the current directory or a path relative to it. */
-function searchDir(entry: string): string | undefined {
-  const dir = entry.trim().replace(/^"(.*)"$/, "$1");
-  return /^[a-z]:[\\/]/i.test(dir) || /^\\\\[^\\]+\\[^\\]+/.test(dir) ? dir : undefined;
-}
-
 /** The first `name` + extension in PATH, in PATHEXT order, as cmd finds it. */
 async function findInPath(name: string, options: ResolveOptions): Promise<string | undefined> {
-  const extensions = (options.pathext || CMD_PATHEXT)
-    .split(";")
-    .map((e) => e.trim())
-    .filter((e) => e.startsWith("."));
-  for (const entry of (options.path ?? "").split(";")) {
-    const dir = searchDir(entry);
-    if (!dir) continue;
-    for (const ext of extensions) {
-      const candidate = win32.join(dir, name + ext);
+  for (const dir of pathDirs(options.path, "win32")) {
+    for (const file of commandFileNames(name, "win32", options.pathext)) {
+      const candidate = win32.join(dir, file);
       if (await isFile(options.fs, candidate)) return candidate;
     }
   }

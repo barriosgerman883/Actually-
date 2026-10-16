@@ -13,7 +13,7 @@ The server is the CLI with a protocol in front: each call runs the same code as 
 | `status` | `tool` (optional), `scope`: `all`, `global` or `project` (optional), `offline` (default `true`) | `actually status [--global \| --project] [<tool>] --json` |
 | `explain` | `tool`, `offline` (default `true`) | `actually explain <tool> --json` |
 
-`tool` is a name or a full id. An ambiguous name, a name that matches nothing and an invalid argument all give a result with `isError: true` and the JSON document, whose diagnostic the model can act on, such as the ids to choose from. A name that matches nothing does not mean the tool is missing: actually looks only at pnpm global packages, pnpm's directory, `~/.local/bin`, Git repositories used as tools and the current project. The tool descriptions say so, because in a real session git was installed but outside those places.
+`tool` is a name or a full id. An ambiguous name, a name that matches nothing and an invalid argument all give a result with `isError: true` and the JSON document, whose diagnostic the model can act on, such as the ids to choose from. A name that matches nothing does not mean the tool is missing: actually looks only at pnpm and npm global packages, a closed list of developer tools on PATH (docs/providers/path.md), pnpm's directory, `~/.local/bin`, Git repositories used as tools and the current project. The tool descriptions say so, because in a real session git was installed outside the places actually looked at then.
 
 The result is the JSON document as text. Invisible characters in it, such as bidi marks or Unicode tag characters, are written as `\u` escapes: the JSON value is the same, and the model sees what a terminal would hide.
 

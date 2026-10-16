@@ -142,12 +142,14 @@ describe("agent skill (skills/actually/SKILL.md)", () => {
     expect(frontmatter).toMatch(/^description: \S/m);
   });
 
-  it("only suggests commands the CLI accepts, each printing one JSON document", async () => {
+  it("only suggests commands the CLI accepts, and its --json ones print one JSON document", async () => {
     expect(commands.length).toBeGreaterThanOrEqual(6);
     for (const argv of commands) {
       const h = harness(inventory);
       expect(await h.go(argv), argv.join(" ")).toBe(EXIT.ok);
-      expect(JSON.parse(h.out.join("")).schemaVersion).toBe(1);
+      const out = h.out.join("");
+      if (argv.includes("--json")) expect(JSON.parse(out).schemaVersion).toBe(1);
+      else expect(out, argv.join(" ")).not.toBe("");
     }
   });
 });

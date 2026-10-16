@@ -112,6 +112,7 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-73 | baja | seguridad | La salida humana no escapa los caracteres de etiqueta ni los selectores de variación | resuelto: código corregido en `7daa400` |
 | F-74 | baja | robustez | El guard de Bash toma los patrones de `case` como rutas a los frenos | abierto |
 | F-75 | baja | robustez | Dependabot no puede actualizar `pnpm/action-setup` | abierto |
+| F-76 | baja | desvío de docs | Los dos guards trazan distinto el límite de `~/.claude/` | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1252,6 +1253,8 @@ Propuesta: sumarlo a "Known limitations" de `docs/providers/pnpm.md` y a "Requir
 
 **Corregido en `13b88a5`.** 2026-09-28, a pedido de la persona responsable. Cuando el `packageManager` del proyecto fija pnpm con otra versión mayor que la del pnpm que corre fuera de los proyectos, se emite un `warning` que nombra las dos. El límite está en el README y en pnpm.md.
 
+**Ampliado (2026-10-16, Claude):** los paquetes globales de las otras generaciones de pnpm (`PNPM_HOME/global/5` para pnpm 10 y anteriores, `global/v11` para pnpm 11 y posteriores) se leen de sus archivos y se listan, con un id por ruta. El aviso de este hallazgo dejó de ser cierto y se quitó (docs/providers/pnpm.md).
+
 ### F-58 · CLAUDE.md quedó desactualizado en tres puntos
 
 - **Estado:** abierto
@@ -1536,6 +1539,19 @@ Propuesta: no evaluar como rutas los patrones de un `case … in`, o considerar 
 El pin de F-71, `f40ffcd`, es el SHA del objeto del tag anotado `v4`, no de un commit (ver la verificación posterior de F-71). Dependabot no lo reconoce como versión, así que propone cambiar `f40ffcd` por el commit `b906aff`, con el mismo código, en vez de ofrecer la v6.1.0. La política de Actions del repositorio (`allowed_actions: selected`) solo permite `pnpm/action-setup@f40ffcd…` y `pnpm/action-setup@v4`, así que el PR #18 no llega a ejecutar jobs. Además, el patrón `@v4` permite que un workflow vuelva a usar el tag mutable que F-71 eliminó. Mientras esto siga así, la Action de pnpm no recibe actualizaciones revisadas.
 
 Propuesta: agregar `pnpm/action-setup@b906aff…` a la política, integrar el #18 y después dejar en la política solo ese SHA, sin `@v4`. La política se cambia en la configuración del repositorio en GitHub, y lo hace la persona responsable.
+
+### F-76 · Los dos guards trazan distinto el límite de `~/.claude/`
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** desvío de docs
+- **Ubicación:** `.claude/hooks/guard-bash.mjs:175` (`CLAUDE_DIR`) y `.claude/hooks/guard-edit.mjs:35` (`HOME_DENY`)
+- **Detectado:** 2026-10-15, Claude, al instalar la skill actualizada
+- **Verificación:** reproducido en el guard de Bash; por lectura en el de edición
+
+`cp skills/actually/SKILL.md ~/.claude/skills/actually/SKILL.md`, el paso de instalación del README, se rechaza con "cp into .claude/ would rewrite the agent guardrails". `CLAUDE_DIR` coincide con cualquier directorio `.claude`, también el del home, así que el guard de Bash trata todo `~/.claude/` como frenos: `skills/` y, por lectura, también la memoria en `~/.claude/projects/`. El guard de edición protege en el home solo `settings*.json` y `hooks/`, como dice mvp.md §9, y por lectura deja editar `~/.claude/skills/`, `~/.claude/agents/`, `~/.claude/commands/` y `~/.claude/CLAUDE.md`. Para el guard de Bash, mvp.md §9 dice que bloquea `cp` y similares "hacia `.claude/`" sin aclarar si incluye el home. La misma escritura pasa o no según la herramienta. Si el límite correcto es el del guard de Bash, al de edición le faltan en el home las rutas que F-20 y F-21 protegieron en el proyecto porque cambian cómo se comportan los agentes.
+
+Propuesta: listar en mvp.md §9 qué partes de `~/.claude/` son frenos, por ejemplo `settings*.json`, `hooks/`, `skills/`, `agents/`, `commands/` y `CLAUDE.md`, dejar escribible la memoria de `projects/*/memory/`, y alinear los dos guards con esa lista. Lo aplica la persona responsable, porque los archivos están protegidos.
 
 ### Verificaciones
 

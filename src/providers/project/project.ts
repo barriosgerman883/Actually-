@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 import type { Diagnostic, Evidence } from "../../core/model.js";
 import type { Filesystem } from "../../core/ports.js";
 import type { RegistryFile } from "../npm-registry/registry-config.js";
+import { readJsonObject } from "../shared/read-json.js";
 import { findWorkspace, type WorkspaceCache } from "./workspace.js";
 
 export type DependencySection = "dependencies" | "devDependencies" | "optionalDependencies";
@@ -33,16 +34,6 @@ export interface ProjectScan {
 }
 
 const SECTIONS: DependencySection[] = ["dependencies", "devDependencies", "optionalDependencies"];
-
-async function readJson(
-  fs: Filesystem,
-  path: string,
-): Promise<Record<string, unknown> | undefined> {
-  const parsed: unknown = JSON.parse(await fs.readText(path));
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-    ? (parsed as Record<string, unknown>)
-    : undefined;
-}
 
 /**
  * The nearest directory that has any of `entries`, walking up from `start`
@@ -222,7 +213,7 @@ export async function scanProject(
 
   let manifest: Record<string, unknown> | undefined;
   try {
-    manifest = await readJson(fs, manifestPath);
+    manifest = await readJsonObject(fs, manifestPath);
   } catch {
     scan.diagnostics.push({
       severity: "warning",
@@ -397,7 +388,7 @@ export async function scanProject(
       const installedManifest = join(dir, "node_modules", dep.name, "package.json");
       let pkg: Record<string, unknown> | undefined;
       try {
-        pkg = await readJson(fs, installedManifest);
+        pkg = await readJsonObject(fs, installedManifest);
       } catch {
         continue; // Not installed here: Node would look in the parent directory.
       }

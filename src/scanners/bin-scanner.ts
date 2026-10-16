@@ -20,7 +20,7 @@ export interface ScanOptions {
 }
 
 /** What a .cmd or .bat launcher runs, if it is one of the known templates. */
-async function launcherTarget(fs: Filesystem, path: string): Promise<string | undefined> {
+export async function launcherTarget(fs: Filesystem, path: string): Promise<string | undefined> {
   if (!/\.(cmd|bat)$/i.test(path)) return undefined;
   let target;
   try {

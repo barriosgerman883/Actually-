@@ -32,14 +32,14 @@ const DATA_WARNING =
  * git was installed, outside the directories actually scans.
  */
 export const NOT_FOUND =
-  "A tool actually does not find may still be installed: actually looks only at pnpm global packages, pnpm's directory, ~/.local/bin, Git repositories used as tools and the current project, not at every directory on PATH.";
+  "A tool actually does not find may still be installed: actually looks only at pnpm and npm global packages, a closed list of developer tools on PATH (git, node, go, java, python, deno, bun, docker, gh, rustc, cargo), pnpm's directory, ~/.local/bin, Git repositories used as tools and the current project.";
 
 /** Tool definitions, in a fixed order (MCP 2026-07-28 asks for one). */
 export const TOOLS = [
   {
     name: "status",
     title: "Installed tools and versions",
-    description: `What is installed on this machine: pnpm global packages, executables in pnpm's directory and ~/.local/bin, Git repositories used as tools, and the dependencies of the project in the server's working directory, with installed and latest versions. Pass \`tool\` for one tool. ${NOT_FOUND} ${DATA_WARNING}`,
+    description: `What is installed on this machine: pnpm and npm global packages, developer tools on PATH such as git and node, executables in pnpm's directory and ~/.local/bin, Git repositories used as tools, and the dependencies of the project in the server's working directory, with installed and latest versions. Pass \`tool\` for one tool. ${NOT_FOUND} ${DATA_WARNING}`,
     inputSchema: {
       type: "object",
       properties: {

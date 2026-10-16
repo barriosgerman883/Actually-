@@ -138,7 +138,8 @@ Debe ser portable y altamente testeable.
 Un scanner encuentra señales; la interpretación pertenece a un provider. Están en `src/scanners/`:
 
 - `findProjects` (`project-finder.ts`) recorre `scan.paths` y devuelve cada directorio con `package.json` o `.git`, sin descender dentro de él;
-- `listExecutables` (`bin-scanner.ts`) lista los ejecutables de los directorios permitidos.
+- `listExecutables` (`bin-scanner.ts`) lista los ejecutables de los directorios permitidos;
+- `findCommands` (`path-lookup.ts`) busca por nombre, en PATH, los comandos de una lista cerrada (ADR 0011).
 
 Un repositorio encontrado por `findProjects` es un proyecto salvo evidencia positiva de que es una herramienta. La regla está en mvp.md §5.3.
 
@@ -153,13 +154,19 @@ Un ejecutable es un archivo regular con permiso de ejecución. En Windows, donde
 - El nombre del comando es el del archivo sin esa extensión, y los nombres no distinguen mayúsculas. pnpm escribe `foo.CMD` y `foo.ps1` para cada comando: los dos son `foo`, y cuenta el de la extensión que aparece primero en `PATHEXT`, como hace cmd.
 - Un `.cmd` o `.bat` no es un symlink: lo que ejecuta se obtiene leyéndolo con las mismas plantillas que pnpm en Windows (§7, ADR 0009). Así, un repositorio enlazado con `pnpm link --global` se reconoce como herramienta, y la evidencia dice que el lanzador corre un archivo de ese repositorio. Un lanzador que no coincide con una plantilla se trata como el archivo en sí.
 
-Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando llegue su provider en la Fase 2.
+Además, sin listar ningún directorio de PATH:
+
+- `findCommands` busca cada herramienta de la lista de docs/providers/path.md donde la buscaría el shell: la primera coincidencia en PATH, con las extensiones de `PATHEXT` en Windows. Solo usa entradas absolutas, nunca el directorio actual. La regla es la misma con la que se busca pnpm (§7); está en `src/core/command-path.ts`.
+- El provider de npm busca, por el nombre de cada `bin`, los comandos de los paquetes globales de npm en el directorio de bins de su prefijo (docs/providers/npm.md).
+- El provider de pnpm lista el directorio de bins de cada otra generación de pnpm solo para atribuir sus comandos a sus paquetes.
+
+Ningún archivo de esos directorios que no sea de un paquete se informa. Otros directorios de usuario, como `~/.cargo/bin` o `~/go/bin`, se suman cuando llegue su provider en la Fase 2.
 
 ---
 
 ## 3.4 Providers
 
-Los providers traducen señales externas al modelo de dominio. Están en `src/providers/`: `pnpm/` (`scanPnpmGlobal`), `project/` (`scanProject`, workspaces y lockfiles), `git/` (`readRepository`, `installedFromTags`), `npm-registry/` y `github/` (resolvers de `latest`), y `shared/` (el GET con caché). `src/application/inventory.ts` los combina en un `Inventory`.
+Los providers traducen señales externas al modelo de dominio. Están en `src/providers/`: `pnpm/` (`scanPnpmGlobal` y `scanOtherPnpmGenerations`), `npm/` (`findNpmPrefixes`, los paquetes globales de npm), `path/` (las herramientas de PATH y sus fuentes de versión), `project/` (`scanProject`, workspaces y lockfiles), `git/` (`readRepository`, `installedFromTags`), `npm-registry/` y `github/` (resolvers de `latest`), y `shared/` (el GET con caché). `src/application/inventory.ts` los combina en un `Inventory`.
 
 Por lo que determinan, cumplen uno de estos papeles:
 
@@ -312,8 +319,11 @@ export interface ToolRecord {
    * (design.md §14).
    * Formato actual:
    *   global:<provider>:<nombre>   (provider "unknown" si no se conoce)
-   *   global:<provider>:<ruta>     (repositorio de Git usado como herramienta:
-   *                                 dos pueden tener el mismo nombre)
+   *   global:<provider>:<ruta>     (dos herramientas que pueden tener el mismo
+   *                                 nombre: un repositorio de Git usado como
+   *                                 herramienta, un paquete de un prefijo de
+   *                                 npm que no es el primero en PATH, un
+   *                                 paquete de otra generación de pnpm)
    *   project:<raíz absoluta>:<nombre>
    * Dos herramientas nunca comparten un id. Un ejecutable `pnpm` fuera del
    * directorio de binarios de pnpm es evidencia del registro de pnpm, no
@@ -635,6 +645,8 @@ El spec de cada paquete global de pnpm se lee del `package.json` que lo declara.
 
 Además, en el MVP, `[network] exclude` lista nombres que nunca se consultan, por ejemplo `"@mi-empresa/*"` (design.md §13).
 
+Un paquete global de npm nunca se consulta: npm no registra el spec ni el tarball de un paquete global, así que la primera condición no se puede determinar. Un paquete instalado desde un repositorio o un tarball privado filtraría su nombre (docs/providers/npm.md). Las herramientas de PATH tampoco se consultan (ADR 0011).
+
 Cómo trabajar sin red:
 
 - `--offline` evita toda consulta en esa ejecución. `[network] enabled = false` la evita siempre.
@@ -689,12 +701,14 @@ src/
 ├─ mcp/                  servidor MCP sobre stdio: protocolo, herramientas, transporte
 ├─ composition.ts        único lugar que conecta infraestructura y aplicación
 ├─ application/          inventory, lookup, claims
-├─ core/                 modelo, confianza, versiones, puertos, errores, config
-├─ scanners/             project-finder, bin-scanner
+├─ core/                 modelo, confianza, versiones, puertos, errores, config, PATH
+├─ scanners/             project-finder, bin-scanner, path-lookup
 ├─ providers/
 │  ├─ pnpm/
 │  ├─ project/           package.json, lockfiles, node_modules
+│  ├─ npm/               paquetes globales de npm, por la forma de los prefijos de PATH
 │  ├─ npm-registry/      regla de origen, config de registry, resolver
+│  ├─ path/              herramientas de PATH y de dónde sale su versión
 │  ├─ git/
 │  ├─ github/
 │  └─ shared/            GET con caché
@@ -904,6 +918,7 @@ Estas reglas deben ejecutarse en CI.
 0008-scoped-package-name.md
 0009-pnpm-on-windows-without-a-shell.md
 0010-mcp-server-over-stdio.md
+0011-look-up-developer-tools-on-path.md
 ```
 
 ---

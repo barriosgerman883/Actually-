@@ -90,6 +90,20 @@ Decidido por la persona responsable el 2026-10-15, con la congelación de alcanc
 
 La prueba real fue el 2026-10-15, en Claude Code 2.1.280 sobre Windows, con el paquete instalado en una carpeta aislada. El cliente conectó con `initialize`, en la versión 2025-11-25. Las herramientas respondieron offline por defecto, la primera llamada online trajo el aviso de red, y solo cambió el directorio de caché y estado de actually. La generación 2026-07-28 queda cubierta por los tests y por el smoke de la CI, no por un cliente real.
 
+## Vista global completa
+
+Decidido por la persona responsable el 2026-10-15, con la congelación de alcance recordada: `status --global` también lista los paquetes de `npm -g`, las herramientas de PATH y los globales de otras generaciones de pnpm, sin comandos nuevos y sin ejecutar nada de lo que encuentra. Sus proyectos se ven con `scan.paths`, sin código.
+
+| Ajuste | Commit | Motivo |
+|---|---|---|
+| Los paquetes globales de npm se leen de los prefijos de PATH, por su forma y por un comando que corre algo dentro de un paquete | `6ad34a9` | npm no deja leer su prefijo sin ejecutarlo. Solo la forma no alcanzaba: `C:\Windows\System32` tenía un `node_modules` con paquetes que dejó otro programa |
+| Su `latest` nunca se consulta | `6ad34a9`, `2c223c2` | El plan suponía leer el origen de `node_modules/.package-lock.json`, pero no existe en un prefijo global, ni en Linux ni en Windows, y el `package.json` instalado no tiene `_resolved`. Sin origen, la regla de §8 no consulta: un global de un repositorio privado filtraría su nombre. La persona responsable eligió respetar la regla |
+| Las herramientas de PATH son una lista cerrada, buscada por nombre, con la versión leída de un archivo y sin `latest` | `6ad34a9`, `2c223c2` | Revisa la decisión #14 sin listar PATH (ADR 0011) |
+| Los globales de otras generaciones de pnpm se leen de `PNPM_HOME/global/5` y `global/v11`, y se quita el aviso de F-57 | `6ad34a9` | Formas verificadas con pnpm 10.33, 11.22 y 12.10 reales: pnpm 11 y 12 comparten `v11` |
+| Los paquetes de un segundo prefijo de npm o de otra generación tienen id por ruta | `6ad34a9` | `@anthropic-ai/claude-code` estaba en dos prefijos de la misma máquina |
+| Las herramientas de PATH usan el id `global:unknown:<nombre>`, el mismo de los ejecutables desconocidos, en vez del `global:path:<nombre>` del plan | `6ad34a9` | El id toma el provider de la instalación, que es desconocida; la herramienta de PATH reemplaza al ejecutable desconocido de su nombre, así que no hay choque |
+| Plantilla nueva de lanzador de npm, con `PATHEXT` en la última línea | `a5e5239` | Así están los de fnm en Windows; ninguna plantilla los reconocía |
+
 ## #16: nombre del paquete
 
 Se eligió la alternativa B con un scope propio, porque `@actually` pertenece a otra cuenta: primero `@getactually` y, desde el 2026-10-09, `@actually-cli`. Las alternativas quedan como registro de la decisión.

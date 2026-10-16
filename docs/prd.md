@@ -335,7 +335,7 @@ contratos de providers, ADRs y requisitos de contribución.
 
 Posibles providers:
 
-- npm CLI (paquetes globales);
+- npm CLI (paquetes globales): disponible, sin `latest` (docs/providers/npm.md);
 - mise;
 - pipx;
 - uv;

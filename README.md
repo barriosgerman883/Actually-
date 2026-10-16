@@ -43,7 +43,9 @@ A name that matches several tools, such as the same dependency in two projects, 
 
 ## What it detects
 
-- **pnpm global packages:** installed version, whether pnpm manages them, latest version on npm.
+- **pnpm global packages:** installed version, whether pnpm manages them, latest version on npm. Also the ones another pnpm generation installed, such as pnpm 10 next to pnpm 12.
+- **npm global packages:** the packages of every npm global prefix whose commands are in your `PATH`, with their installed version, and a warning when a command runs a file that no longer exists. Their latest version is not queried: npm records nowhere where a global package came from ([docs/providers/npm.md](docs/providers/npm.md)).
+- **Developer tools on `PATH`**, such as git, node, go and java, where your shell finds them. Their version comes from a file that states it, or stays unknown; `actually` never runs them ([docs/providers/path.md](docs/providers/path.md)).
 - **Executables** in pnpm's global bin directory, `~/.local/bin` and directories you configure. Executables no supported provider manages are reported as unknown, never guessed.
 - **Projects:** declared (`package.json`), resolved (`pnpm-lock.yaml`, `package-lock.json`) and installed (`node_modules`) versions of each dependency.
 - **Git repositories:** a repository is a project unless you declare it as a tool, or an executable in a scanned directory resolves inside it. A tool's version is the semver tag on `HEAD`. Its latest version is the latest GitHub release, or else the highest semver tag.
@@ -69,7 +71,7 @@ Use `--offline` to send nothing, or set `[network] enabled = false`.
 
 ## Configuration
 
-Optional. Without it, `actually` checks global tools and the project in the current directory.
+Optional. Without it, `actually` checks global tools and the project in the current directory. To see every project you have, list their folders in `scan.paths` and run `actually status` without flags.
 
 The file is `~/.config/actually/config.toml`. `$XDG_CONFIG_HOME` is honored, Windows uses `%APPDATA%\actually\config.toml`, and `ACTUALLY_CONFIG` overrides the path.
 
@@ -133,7 +135,8 @@ Calls run offline unless the model asks for the network, which it is told to do 
 - Linux and Windows. macOS support is deferred until it has been validated.
 - On Windows, pnpm is found through its `.cmd` launcher, which actually reads instead of running. The launchers of pnpm's installer, Corepack and `npm install -g pnpm` are recognized; any other is reported, not run.
 - Yarn and Bun lockfiles are detected but not read yet.
-- Global packages are those of the pnpm that runs outside any project. A project whose `packageManager` pins another pnpm major keeps its own global packages elsewhere, and those are not listed; a warning says so when that project is checked.
+- The global packages of another pnpm generation are read from their files, not from `pnpm list`.
+- Only the developer tools on a closed list are looked up on `PATH`, and for most of them the version stays unknown.
 
 ## Found something wrong?
 
