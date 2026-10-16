@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `actually?` is a local-first, read-only CLI that inventories developer tools, repositories and dependencies. It compares installed and latest versions and explains every conclusion with evidence. The npm package is `@actually-cli/cli` and the command is `actually`.
 
-The MVP scope in `docs/prd.md` §13–14 is implemented, and open findings are listed in `docs/review/findings.md`: pnpm global packages, executables in allowed directories, Git repositories used as tools, projects (package.json, pnpm and npm lockfiles, node_modules), npm registry and GitHub resolvers, response cache, `status`, `status <tool>`, `explain`, `--json`.
+The MVP scope in `docs/prd.md` §13–14 is implemented, and open findings are listed in `docs/review/findings.md`: pnpm global packages, executables in allowed directories, Git repositories used as tools, projects (package.json, pnpm and npm lockfiles, node_modules), npm registry and GitHub resolvers, response cache, `status`, `status <tool>`, `explain`, `--json`, and `actually mcp`, an MCP server over stdio (ADR 0010).
 
 ## Commands
 
@@ -23,7 +23,7 @@ To try it against real global packages without touching the system, point `PNPM_
 
 ## Code layout
 
-`src/core` holds the domain model, confidence rules, status derivation and ports (interfaces). `src/infrastructure` holds the only code with I/O. `src/composition.ts` is the only module that wires infrastructure into the application, and `src/cli` imports that, never infrastructure directly. `src/application/inventory.ts` orchestrates providers (`src/providers/*`) and scanners into an `Inventory`. `tests/helpers/fakes.ts` provides in-memory implementations of every port.
+`src/core` holds the domain model, confidence rules, status derivation and ports (interfaces). `src/infrastructure` holds the only code with I/O. `src/composition.ts` is the only module that wires infrastructure into the application, and `src/cli` imports that, never infrastructure directly. `src/application/inventory.ts` orchestrates providers (`src/providers/*`) and scanners into an `Inventory`. `tests/helpers/fakes.ts` provides in-memory implementations of every port. `src/mcp` serves the same commands over MCP: it runs `src/cli/run.ts` with `--json` and never touches `process` (architecture.md §3.1).
 
 ## Where decisions live
 
