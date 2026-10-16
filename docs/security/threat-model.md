@@ -16,13 +16,19 @@
 | Shell injection | No shell; no argument comes from user or repository data |
 | Private names leak to public services | Origin rule: query only registry specs on a public default registry, with no private scope mapping; `exclude`; `--offline` |
 | Tokens leak | Only registry keys are read from `pnpm config list`; the GitHub token is off by default and sent only to api.github.com |
-| Escape sequences in names, tags or messages rewrite the terminal output, or bidi and zero-width characters make a line read differently | Human output shows control characters from data as `\xNN`, and bidi, zero-width and line-separator characters as `\u{NNNN}`; JSON escapes control characters |
+| Escape sequences in names, tags or messages rewrite the terminal output, or invisible characters make a line read differently or hide text in it | Human output shows control characters from data as `\xNN`, and every default-ignorable character (bidi, zero-width, tag characters, variation selectors) and the line separators as `\u{NNNN}`; JSON escapes control characters |
 | Network data misleads the user | Every value carries its evidence; prereleases and stale cache lower confidence; unknown instead of guesses |
 | Scan walks the whole disk | Explicit scan paths, bounded depth, hidden directories, `node_modules` and symlinks skipped |
+| Through MCP, a model reads instructions planted in a name, a tag or a message (prompt injection) | Results are the JSON document, with every invisible character escaped; the tool descriptions and the server's instructions say values are data; the tools are read-only and take no path. This reduces the risk; it does not remove it |
+| Through MCP, a model asks for more than the user wanted: flags, paths or network queries | Closed argument schemas; the target goes after `--`; no path argument; calls run offline unless they pass `offline: false`, and `actually mcp --offline` or `[network] enabled = false` keep every call offline; the first online result carries the network notice |
 
 ## What public services learn
 
 registry.npmjs.org and api.github.com learn which package and repository names are checked, from which IP, and that actually is in use. They never receive paths, file contents, project names or installed versions.
+
+## What an MCP client learns
+
+Everything a call returns: paths, project names and roots, installed and latest versions, and, for `explain`, the evidence. It goes into the model's context, and from there to whoever runs the model. Connecting the server is the user's decision (docs/commands/mcp.md).
 
 ## Out of scope
 

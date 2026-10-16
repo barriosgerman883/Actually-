@@ -104,6 +104,9 @@ Qué pasa. Escenario de falla concreto. Qué dicen los docs. Propuesta de correc
 | F-65 | baja | robustez | En Windows, leer una named pipe bloquea la ejecución: `stat` la ve como archivo regular | resuelto: código corregido en `67c00bf` |
 | F-66 | media | robustez | Un pnpm que no se puede lanzar aborta toda la ejecución | resuelto: código corregido en `f3a80b6` |
 | F-67 | media | corrección | Con pnpm 12.10 en Windows, ningún paquete global recibe su `latest` | resuelto: código corregido en `2a2e276` |
+| F-72 | baja | seguridad | `source-map-js` 1.2.1 es vulnerable y Dependabot no lo puede actualizar | abierto |
+| F-73 | baja | seguridad | La salida humana no escapa los caracteres de etiqueta ni los selectores de variación | resuelto: código corregido en `7daa400` |
+| F-74 | baja | robustez | El guard de Bash toma los patrones de `case` como rutas a los frenos | abierto |
 | D-01 | — | desvío de docs | La v0.1 quedó absorbida por el MVP | resuelto: docs actualizados en `5513334` |
 | D-02 | — | desvío de docs | `status --json` incluye `projects` | resuelto: docs actualizados en `5513334` |
 | D-03 | — | desvío de docs | Estructura de `src/` | resuelto: docs actualizados en `5513334` |
@@ -1464,6 +1467,51 @@ CodeQL reporta `js/file-system-race`: el archivo puede cambiar después de compr
 CodeQL reporta `actions/unpinned-tag` por `pnpm/action-setup@v4`. Alerta: https://github.com/barriosgerman883/Actually-/security/code-scanning/1. Si el tag se mueve, la CI puede ejecutar otro contenido sin modificar el workflow. Propuesta: fijar las Actions a SHAs completos verificados y mantener un mecanismo de actualización revisada. No se modificó el workflow ni se activó una política de SHA obligatoria que bloquearía la configuración actual.
 
 **Corrección implementada (2026-10-15), pendiente de integrar y verificar en CodeQL:** las tres Actions del workflow se fijaron a los SHAs de sus tags `v4`, consultados directamente en los repositorios oficiales mediante `git ls-remote`. La configuración de Dependabot incluye actualizaciones semanales de GitHub Actions para proponer futuros cambios mediante PR.
+
+**Verificación posterior (2026-10-15, Claude):** el SHA fijado para `pnpm/action-setup`, `f40ffcd`, no es de un commit sino del objeto del tag anotado `v4`: la API de GitHub devuelve `type: tag` para `refs/tags/v4`, y ese objeto apunta al commit `b906aff`. `git ls-remote` sin `^{}` devuelve el objeto del tag. `actions/checkout` y `actions/setup-node` no se vieron afectadas porque sus `v4` eran tags livianos; desde los PR #19 y #20 están en v7.0.1 y v7.1.0. GitHub resuelve el objeto y la CI pasa, pero Dependabot no lo reconoce como versión: el PR #18 propone pasar de `f40ffcd` a `b906aff`, con el mismo código, en vez de ofrecer la v6.1.0. Además, la política de Actions del repositorio solo permite `pnpm/action-setup@f40ffcd…` y `pnpm/action-setup@v4`, así que el #18 termina en `startup_failure` sin ejecutar jobs. El patrón `@v4` vuelve a habilitar el tag mutable que este hallazgo busca evitar. Propuesta: agregar `b906aff` a la política, integrar el #18 y después dejar en la política solo ese SHA, sin `@v4`.
+
+### F-72 · `source-map-js` 1.2.1 es vulnerable y Dependabot no lo puede actualizar
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** seguridad
+- **Ubicación:** `pnpm-lock.yaml:702`
+- **Detectado:** 2026-10-15, Claude, revisando los PRs de Dependabot
+- **Verificación:** por lectura
+
+La alerta de Dependabot #1 (https://github.com/barriosgerman883/Actually-/security/dependabot/1) informa una denegación de servicio de severidad alta en `source-map-js` < 1.2.2: un source map con offsets de secciones indexadas manipulados bloquea el event loop. El lockfile fija 1.2.1, que llega por `vitest → vite → postcss@8.5.28` (`pnpm-lock.yaml:1397`). Es una dependencia de desarrollo: no está en el árbol de `dependencies` del paquete publicado, así que no afecta a quien instala `@actually-cli/cli`. El riesgo se limita a procesar un source map hostil durante tests o build. La severidad baja refleja eso, no la del aviso.
+
+La actualización de seguridad de Dependabot falló en `main` el 2026-10-15 (run 38802809613) con `latest-resolvable-version: 1.2.1`, aunque `postcss@8.5.28` declara `^1.2.1` y la 1.2.2 está publicada desde el 2026-09-30. La causa no se verificó.
+
+Propuesta: llevar el lockfile a `source-map-js@1.2.2` sin tocar `package.json`, validar con `pnpm check` en Docker y comprobar que la alerta se cierre. Si pnpm no lo resuelve sin forzarlo, usar un override en `package.json`, que después hay que acordarse de quitar.
+
+### F-73 · La salida humana no escapa los caracteres de etiqueta ni los selectores de variación
+
+- **Estado:** resuelto: código corregido en `7daa400`
+- **Severidad:** baja
+- **Tipo:** seguridad
+- **Ubicación:** `src/cli/output/sanitize.ts:11`
+- **Detectado:** 2026-10-15, Claude, diseñando el servidor MCP
+- **Verificación:** reproducido
+
+`isInvisibleFormat` cubre los controles bidi, los caracteres de ancho cero, los separadores de línea y el BOM (F-45), pero no el resto de los caracteres que Unicode define como ignorables por defecto: los caracteres de etiqueta (U+E0000–E007F), los selectores de variación (U+FE00–FE0F y U+E0100–E01EF), el guion suave (U+00AD), los formatos obsoletos U+206A–206F y los rellenos Hangul, entre otros. Ninguno se ve en la terminal, así que un nombre, un tag o un mensaje puede llevar texto escondido. Con los caracteres de etiqueta se puede escribir texto ASCII completo que la terminal no muestra y que un modelo de lenguaje sí lee. threat-model.md promete mostrar como `\u{NNNN}` los caracteres que esconden texto.
+
+Reproducción: `sanitize("pnpm\u{e0049}\u{e0047}\u{e004e}x\u{fe0f}y\u{ad}z")` devuelve el texto sin cambios, con los invisibles adentro.
+
+Propuesta: tratar como invisible todo carácter con la propiedad `Default_Ignorable_Code_Point`, más U+2028 y U+2029, que no la tienen. Exportar ese predicado para que la salida humana y el futuro servidor MCP usen la misma definición.
+
+### F-74 · El guard de Bash toma los patrones de `case` como rutas a los frenos
+
+- **Estado:** abierto
+- **Severidad:** baja
+- **Tipo:** robustez
+- **Ubicación:** `.claude/hooks/guard-bash.mjs:220` (`namesGuards`) y `:722`
+- **Detectado:** 2026-10-15, Claude, leyendo ejemplos de la spec de MCP
+- **Verificación:** reproducido
+
+`p="a/"; case "$p" in */) echo barra;; esac` se rechaza con "only the user changes the agent guardrails in .claude/". El guard trata `case` como un comando y su patrón `*/` como un argumento con glob; `namesGuards` lo convierte en una expresión que coincide con `.claude/hooks/`, y como `case` no es un comando de solo lectura, lo bloquea. El comando no nombra ningún archivo. Es de la misma familia que F-28: no debilita la protección, pero obliga a reescribir comandos válidos.
+
+Propuesta: no evaluar como rutas los patrones de un `case … in`, o considerar los globs solo en los argumentos de comandos que reciben rutas. Lo aplica la persona responsable, porque el archivo está protegido.
 
 ### Verificaciones
 

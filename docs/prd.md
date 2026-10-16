@@ -352,7 +352,8 @@ Posibles consumidores:
 - JetBrains;
 - Zed;
 - Neovim;
-- Raycast.
+- Raycast;
+- agentes de código, por MCP. Es la primera disponible: `actually mcp` (docs/decisions/0010-mcp-server-over-stdio.md).
 
 Estas integraciones deben consumir el core o salida estructurada, no duplicar lógica.
 

@@ -115,20 +115,21 @@ describe("architecture rules", () => {
     ).toEqual([]);
   });
 
-  it("RA-005/RA-006: providers do not print; the CLI does not detect", () => {
+  it("RA-005/RA-006: providers do not print; the CLI and the MCP server do not detect", () => {
+    // The MCP server writes only through the streams it is given.
     expect(
       violations((s) =>
-        ["providers", "scanners", "application", "core"].includes(layer(s.path)) &&
-        /\b(console\.|process\.(stdout|stderr))/.test(s.text)
+        ["providers", "scanners", "application", "core", "mcp"].includes(layer(s.path)) &&
+        /\b(console\.|process\.(stdout|stderr|stdin))/.test(s.text)
           ? "prints output"
           : undefined,
       ),
     ).toEqual([]);
     expect(
       violations((s) =>
-        layer(s.path) === "cli" &&
+        ["cli", "mcp"].includes(layer(s.path)) &&
         s.imports.some((i) => /\/(providers|scanners|infrastructure)\//.test(i))
-          ? "cli reaches below application"
+          ? `${layer(s.path)} reaches below application`
           : undefined,
       ),
     ).toEqual([]);
@@ -137,7 +138,7 @@ describe("architecture rules", () => {
   it("only the CLI, infrastructure and the composition root read process state", () => {
     expect(
       violations((s) =>
-        ["providers", "scanners", "application", "core"].includes(layer(s.path)) &&
+        ["providers", "scanners", "application", "core", "mcp"].includes(layer(s.path)) &&
         /\bprocess\.(env|cwd|argv|exit)/.test(s.text)
           ? "reads process state"
           : undefined,

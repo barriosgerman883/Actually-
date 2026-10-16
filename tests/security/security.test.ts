@@ -598,13 +598,24 @@ describe("untrusted text never reaches the terminal as control sequences (F-05)"
     expect(sanitize("café ñandú 日本")).toBe("café ñandú 日本");
   });
 
+  it("escapes tag characters, variation selectors and other invisible characters (F-73)", () => {
+    // Tag characters spell "IGN" without showing anything; a variation
+    // selector, a soft hyphen, a supplementary variation selector and a
+    // Hangul filler are just as invisible.
+    const hidden = "pnpm\u{e0049}\u{e0047}\u{e004e}x\u{fe0f}y\u{ad}z\u{e0100}w\u{3164}v";
+    expect(sanitize(hidden)).toBe(
+      "pnpm\\u{e0049}\\u{e0047}\\u{e004e}x\\u{fe0f}y\\u{00ad}z\\u{e0100}w\\u{3164}v",
+    );
+  });
+
   it.each([
     [0x00, 0x1f],
     [0x7f, 0x9f],
     [0x200b, 0x200f],
     [0x2028, 0x202e],
     [0x2060, 0x2064],
-    [0x2066, 0x2069],
+    // U+206A-206F are deprecated format characters, just as invisible (F-73).
+    [0x2066, 0x206f],
   ])("escapes both ends of the range %s-%s and nothing just outside it", (from, to) => {
     for (const code of [from, to]) {
       expect(sanitize(String.fromCodePoint(code))).not.toBe(String.fromCodePoint(code));

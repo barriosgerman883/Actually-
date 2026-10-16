@@ -116,6 +116,16 @@ cp -r skills/actually ~/.claude/skills/
 
 The skill needs the `actually` command on your `PATH`.
 
+## MCP server
+
+`actually mcp` serves `status` and `explain` to any MCP client over stdio, including clients without a shell. With Claude Code:
+
+```bash
+claude mcp add actually -- actually mcp
+```
+
+Calls run offline unless the model asks for the network, which it is told to do only when you ask about updates. `actually mcp --offline` keeps every call offline. What a call returns, including paths and project names, goes to the client's model. See [docs/commands/mcp.md](docs/commands/mcp.md).
+
 ## Requirements and limits
 
 - Node.js 22.19 or later, pnpm, and Git 2.32 or later for repository tools.

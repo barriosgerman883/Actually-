@@ -55,6 +55,30 @@ jobs:
           set +e
           node dist/cli/index.js --no-such-flag
           test $? -eq 2
+      # The MCP server over real stdio, offline: the handshake, the tool
+      # list, a tool call and a stateless discover (ADR 0010). jq -s also
+      # fails if stdout carries anything that is not a JSON message.
+      - name: Smoke test of the MCP server
+        run: |
+          tmp() { local d; d="$(mktemp -d)"; if command -v cygpath >/dev/null; then cygpath -w "$d"; else echo "$d"; fi; }
+          export HOME="$(tmp)" USERPROFILE="$(tmp)" LOCALAPPDATA="$(tmp)" APPDATA="$(tmp)"
+          export XDG_STATE_HOME="$(tmp)" XDG_CACHE_HOME="$(tmp)" XDG_CONFIG_HOME="$(tmp)"
+          modern='"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}'
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"status","arguments":{"offline":false}}}' \
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"server/discover\",\"params\":{$modern}}" \
+            | node dist/cli/index.js mcp --offline > "$RUNNER_TEMP/mcp.jsonl"
+          jq -s -e '
+            (map({key: (.id | tostring), value: .}) | from_entries) as $r
+            | length == 4
+            and $r["1"].result.protocolVersion == "2025-11-25"
+            and ([$r["2"].result.tools[].name] == ["status", "explain"])
+            and ($r["3"].result.content[0].text | fromjson | .schemaVersion == 1 and (.diagnostics | type == "array"))
+            and ($r["4"].result.supportedVersions | index("2026-07-28") != null)
+          ' "$RUNNER_TEMP/mcp.jsonl"
       # On Windows, pnpm is a .cmd launcher that actually reads instead of
       # running (ADR 0009). A real global package must show up.
       - name: Global packages with a real pnpm on Windows
