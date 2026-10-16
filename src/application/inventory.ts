@@ -1,5 +1,4 @@
 import { join, sep } from "node:path";
-import semver from "semver";
 import { claimFrom } from "../core/confidence.js";
 import type { Config } from "../core/config.js";
 import { UsageError } from "../core/errors.js";
@@ -32,11 +31,19 @@ import {
   type RegistryConfig,
 } from "../providers/npm-registry/registry-config.js";
 import { resolveNpmLatest } from "../providers/npm-registry/resolver.js";
-import { scanPnpmGlobal, type PnpmGlobalScan } from "../providers/pnpm/global.js";
+import { findNpmPrefixes, type NpmGlobalPackage, type NpmPrefix } from "../providers/npm/global.js";
+import { PATH_TOOLS, pathToolVersion, type PathToolVersion } from "../providers/path/tools.js";
+import {
+  scanOtherPnpmGenerations,
+  scanPnpmGlobal,
+  type PnpmGlobalPackage,
+  type PnpmGlobalScan,
+} from "../providers/pnpm/global.js";
 import { findProjectRoot, findUpDir, scanProject } from "../providers/project/project.js";
 import type { WorkspaceCache } from "../providers/project/workspace.js";
 import type { NetContext } from "../providers/shared/cached-get.js";
 import { listExecutables, type Executable } from "../scanners/bin-scanner.js";
+import { findCommands } from "../scanners/path-lookup.js";
 import { findProjects } from "../scanners/project-finder.js";
 import { sourceFromRepository, updateFrom } from "./claims.js";
 
@@ -118,11 +125,10 @@ export async function buildInventory(
   }
 
   // The pnpm that runs outside projects, whose global packages are listed.
-  let neutralPnpm: string | undefined;
   if (!options.projectOnly) {
     const pnpm = await scanPnpmGlobal(runner, fs);
-    neutralPnpm = pnpm.version;
     diagnostics.push(...pnpm.diagnostics);
+    const scanOptions = { platform: env.platform, pathext: env.get("PATHEXT") };
 
     // Executables in the allowed directories (architecture.md §3.3).
     const binDirs = [
@@ -130,10 +136,7 @@ export async function buildInventory(
       join(home, ".local", "bin"),
       ...config.scan.binPaths,
     ];
-    const executables = await listExecutables(fs, binDirs, {
-      platform: env.platform,
-      pathext: env.get("PATHEXT"),
-    });
+    const executables = await listExecutables(fs, binDirs, scanOptions);
     const binsInPnpmDir = new Set(
       executables.filter((e) => e.dir === pnpm.binDir).map((e) => e.name),
     );
@@ -144,6 +147,52 @@ export async function buildInventory(
       ? executables.filter((e) => e.name === "pnpm" && e.dir !== pnpm.binDir)
       : [];
     tools.push(...(await pnpmRecords(pnpm, userRegistry, deps, binsInPnpmDir, pnpmElsewhere)));
+
+    // Executables that a package of npm or of another pnpm generation
+    // provides: npm commands are looked up by name, and a generation's bin
+    // directory is listed only to attribute its commands. No other file in
+    // those directories is reported.
+    const attributed = new Set<string>();
+    const attribute = (exe: Executable) => attributed.add(exe.path);
+    const packageDirs = pnpm.packages.flatMap((p) => (p.dir ? [p.dir] : []));
+
+    // Global packages of the other pnpm generations (F-57).
+    const generations = pnpm.rootDir ? await scanOtherPnpmGenerations(fs, pnpm.rootDir) : [];
+    for (const generation of generations) {
+      const exes = await listExecutables(fs, [generation.binDir], scanOptions);
+      for (const pkg of generation.packages) {
+        const dir = pkg.dir as string;
+        packageDirs.push(dir);
+        const provided = exes.filter((e) => pkg.bins.includes(e.name) || isInside(e.realPath, dir));
+        for (const exe of provided) attribute(exe);
+        const evidence = [...pkg.evidence];
+        if (provided.length > 0) {
+          evidence.push({
+            kind: "inference",
+            source: generation.binDir,
+            description: `${generation.binDir}, the bin directory of ${generation.label}, provides ${provided.map((e) => e.name).join(", ")}`,
+          });
+        }
+        tools.push(
+          await pnpmPackageRecord(pkg, userRegistry, deps, evidence, {
+            location: dir,
+            unknownVersion: "its package.json has no valid version",
+          }),
+        );
+      }
+    }
+
+    // npm global packages (docs/providers/npm.md).
+    for (const [i, prefix] of (await findNpmPrefixes(fs, env)).entries()) {
+      for (const pkg of prefix.packages) {
+        packageDirs.push(pkg.dir, ...(pkg.linkedTo ? [pkg.linkedTo] : []));
+        for (const exe of pkg.commands) attribute(exe);
+        // The first prefix in PATH is the one npm installs into; packages of
+        // the others are told apart by their path (architecture.md §5).
+        tools.push(await npmRecord(pkg, prefix, i === 0, deps, diagnostics));
+      }
+    }
+
     const owned = new Set(pnpm.packages.flatMap((p) => p.bins));
     const unknownExecutables: Executable[] = [];
     // Executables resolve to real paths, so the roots are compared resolved too.
@@ -158,8 +207,13 @@ export async function buildInventory(
         pnpm.binDir &&
         exe.dir === pnpm.binDir &&
         (owned.has(exe.name) || PNPM_OWN_BINS.has(exe.name))
-      )
+      ) {
+        // On Linux and macOS, pnpm's commands are scripts, not links into
+        // the package: only their place says whose they are.
+        attribute(exe);
         continue;
+      }
+      if (attributed.has(exe.path)) continue;
       const repo = repoCandidates.find((c) => isInside(exe.realPath, c.real))?.root;
       if (repo && (await fs.exists(join(repo, ".git")).catch(() => false))) {
         const list = repoToolEvidence.get(repo) ?? [];
@@ -175,6 +229,24 @@ export async function buildInventory(
       }
       if (pnpmElsewhere.includes(exe)) continue;
       unknownExecutables.push(exe);
+    }
+
+    // Developer tools on PATH, looked up by name (ADR 0011). One that a
+    // package or a repository accounts for is not a second tool, and the
+    // one on PATH stands for an unknown executable with its name.
+    const sameName = (a: string, b: string) =>
+      env.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+    const onPath = await findCommands(fs, PATH_TOOLS, { path: env.get("PATH"), ...scanOptions });
+    for (const exe of onPath) {
+      if (
+        attributed.has(exe.path) ||
+        packageDirs.some((d) => isInside(exe.realPath, d)) ||
+        repoCandidates.some((c) => isInside(exe.realPath, c.real))
+      )
+        continue;
+      const others = unknownExecutables.filter((u) => sameName(u.name, exe.name));
+      for (const other of others) unknownExecutables.splice(unknownExecutables.indexOf(other), 1);
+      tools.push(pathToolRecord(exe, await pathToolVersion(fs, exe), others));
     }
     for (const exe of unknownExecutables) tools.push(unknownExecutableRecord(exe));
 
@@ -200,7 +272,6 @@ export async function buildInventory(
         deps,
         diagnostics,
         workspaces,
-        neutralPnpm,
       );
       projects.push(summary);
       tools.push(...records);
@@ -275,59 +346,182 @@ async function pnpmRecords(
   }
 
   for (const pkg of pnpm.packages) {
+    const installEvidence: Evidence[] = [...pkg.evidence];
+    const shims = pkg.bins.filter((b) => binsInPnpmDir.has(b));
+    if (shims.length > 0 && pnpm.binDir) {
+      installEvidence.push({
+        kind: "fact",
+        source: pnpm.binDir,
+        description: `pnpm's global bin directory provides ${shims.join(", ")}`,
+      });
+    }
     records.push(
-      (async () => {
-        const origin = decideOrigin({
-          name: pkg.name,
-          spec: pkg.spec,
-          specSource: pkg.specSource,
-          registry,
-          exclude: config.network.exclude,
-          tarball: pkg.resolved
-            ? { url: pkg.resolved, source: "pnpm list --global --json" }
-            : undefined,
-        });
-        const latest = await resolveNpmLatest(pkg.name, origin, net);
-        const installEvidence: Evidence[] = [...pkg.evidence];
-        const shims = pkg.bins.filter((b) => binsInPnpmDir.has(b));
-        if (shims.length > 0 && pnpm.binDir) {
-          installEvidence.push({
-            kind: "fact",
-            source: pnpm.binDir,
-            description: `pnpm's global bin directory provides ${shims.join(", ")}`,
-          });
-        }
-        const installation = claimFrom<Installation>(
-          { provider: "pnpm", ...(pkg.dir ? { path: pkg.dir } : {}) },
-          installEvidence,
-        );
-        return buildRecord({
-          name: pkg.name,
-          scope: "global",
-          versions: {
-            requested: notApplicable,
-            resolved: notApplicable,
-            installed: pkg.installedVersion
-              ? claimFrom(pkg.installedVersion, pkg.evidence)
-              : {
-                  state: "unknown",
-                  reason: `pnpm reports a non-registry version (${pkg.spec ? redactSpec(pkg.spec) : "unknown"})`,
-                  evidence: pkg.evidence,
-                },
-            latest: latest.latest,
-          },
-          installation,
-          source: sourceFromRepository(
-            pkg.name,
-            pkg.repository ?? latest.repository,
-            pkg.repository && pkg.dir ? join(pkg.dir, "package.json") : "npm registry manifest",
-          ),
-          update: updateFrom(installation),
-        });
-      })(),
+      pnpmPackageRecord(pkg, registry, deps, installEvidence, {
+        unknownVersion: `pnpm reports a non-registry version (${pkg.spec ? redactSpec(pkg.spec) : "unknown"})`,
+      }),
     );
   }
   return Promise.all(records);
+}
+
+/**
+ * A package pnpm installed globally. `location` gives it an id by path, for
+ * the packages of another pnpm generation, which can share a name with the
+ * ones the running pnpm lists.
+ */
+async function pnpmPackageRecord(
+  pkg: PnpmGlobalPackage,
+  registry: RegistryConfig,
+  deps: InventoryDeps,
+  installEvidence: Evidence[],
+  options: { location?: string; unknownVersion: string },
+): Promise<ToolRecord> {
+  const origin = decideOrigin({
+    name: pkg.name,
+    spec: pkg.spec,
+    specSource: pkg.specSource,
+    registry,
+    exclude: deps.config.network.exclude,
+    tarball: pkg.resolved ? { url: pkg.resolved, source: "pnpm list --global --json" } : undefined,
+  });
+  const latest = await resolveNpmLatest(pkg.name, origin, deps.net);
+  const installation = claimFrom<Installation>(
+    { provider: "pnpm", ...(pkg.dir ? { path: pkg.dir } : {}) },
+    installEvidence,
+  );
+  const versionEvidence = pkg.versionEvidence ? [pkg.versionEvidence] : pkg.evidence;
+  return buildRecord({
+    name: pkg.name,
+    scope: "global",
+    ...(options.location ? { location: options.location } : {}),
+    versions: {
+      requested: notApplicable,
+      resolved: notApplicable,
+      installed: pkg.installedVersion
+        ? claimFrom(pkg.installedVersion, versionEvidence)
+        : { state: "unknown", reason: options.unknownVersion, evidence: versionEvidence },
+      latest: latest.latest,
+    },
+    installation,
+    source: sourceFromRepository(
+      pkg.name,
+      pkg.repository ?? latest.repository,
+      pkg.repository && pkg.dir ? join(pkg.dir, "package.json") : "npm registry manifest",
+    ),
+    update: updateFrom(installation),
+  });
+}
+
+/**
+ * A package in an npm global prefix. npm records no spec or tarball for a
+ * global package, so where it came from is never known and it is never
+ * queried (architecture.md §8): latest stays unknown.
+ */
+async function npmRecord(
+  pkg: NpmGlobalPackage,
+  prefix: NpmPrefix,
+  primary: boolean,
+  deps: InventoryDeps,
+  diagnostics: Diagnostic[],
+): Promise<ToolRecord> {
+  const installEvidence: Evidence[] = [prefix.evidence];
+  if (pkg.linkedTo) {
+    installEvidence.push({
+      kind: "inference",
+      source: pkg.dir,
+      description: `a link to ${pkg.linkedTo}, as npm link makes them`,
+    });
+  }
+  const broken: Executable[] = [];
+  for (const exe of pkg.commands) {
+    if (!(await deps.fs.exists(exe.realPath).catch(() => false))) broken.push(exe);
+    installEvidence.push({
+      kind: "inference",
+      source: exe.path,
+      description: exe.viaLauncher
+        ? `its launcher in ${prefix.binDir} runs ${exe.realPath}, inside this package, as npm writes them`
+        : `${exe.path} resolves to ${exe.realPath}, inside this package, as npm links them`,
+    });
+  }
+  const installation = claimFrom<Installation>({ provider: "npm", path: pkg.dir }, installEvidence);
+  const record = buildRecord({
+    name: pkg.name,
+    scope: "global",
+    ...(primary ? {} : { location: pkg.dir }),
+    versions: {
+      requested: notApplicable,
+      resolved: notApplicable,
+      installed:
+        pkg.version && pkg.versionEvidence
+          ? claimFrom(pkg.version, [pkg.versionEvidence])
+          : { state: "unknown", reason: "its package.json has no valid version", evidence: [] },
+      latest: {
+        state: "unknown",
+        reason: pkg.linkedTo
+          ? `a link to ${pkg.linkedTo}, not a package from a registry`
+          : "npm keeps no record of where a global package came from, so it is not queried",
+        evidence: [],
+      },
+    },
+    installation,
+    source: sourceFromRepository(pkg.name, pkg.repository, join(pkg.dir, "package.json")),
+    update: updateFrom(installation),
+  });
+  // A command whose launcher runs a missing file cannot start: say so.
+  for (const exe of broken) {
+    diagnostics.push({
+      severity: "warning",
+      source: "npm",
+      message: `${exe.path} runs ${exe.realPath}, which does not exist: ${exe.name} cannot start`,
+      toolId: record.id,
+    });
+  }
+  return record;
+}
+
+/** A tool found on PATH by name (docs/providers/path.md). */
+function pathToolRecord(
+  exe: Executable,
+  version: PathToolVersion,
+  others: Executable[],
+): ToolRecord {
+  const found: Evidence = {
+    kind: "fact",
+    source: exe.path,
+    description:
+      exe.realPath === exe.path
+        ? `the first ${exe.name} in PATH`
+        : `the first ${exe.name} in PATH, which runs ${exe.realPath}`,
+  };
+  const elsewhere = others.map((o): Evidence => ({
+    kind: "fact",
+    source: o.path,
+    description: `another ${o.name}, in ${o.dir}`,
+  }));
+  return buildRecord({
+    name: exe.name,
+    scope: "global",
+    versions: {
+      requested: notApplicable,
+      resolved: notApplicable,
+      installed:
+        version.version !== undefined
+          ? claimFrom(version.version, [version.evidence])
+          : { state: "unknown", reason: version.reason, evidence: version.evidence },
+      latest: {
+        state: "unknown",
+        reason: "no source declares a latest version for it",
+        evidence: [],
+      },
+    },
+    installation: {
+      state: "unknown",
+      reason: "installed outside any supported package manager",
+      evidence: [found, ...elsewhere],
+    },
+    source: { state: "unknown", reason: "no evidence about its origin", evidence: [] },
+    update: { state: "unknown", reason: "installation method is unknown", evidence: [] },
+  });
 }
 
 function unknownExecutableRecord(exe: Executable): ToolRecord {
@@ -443,22 +637,10 @@ async function projectRecords(
   deps: InventoryDeps,
   diagnostics: Diagnostic[],
   workspaces: WorkspaceCache,
-  neutralPnpm?: string,
 ): Promise<{ summary: ProjectSummary; records: ToolRecord[] }> {
   const { fs, config, net } = deps;
   const scan = await scanProject(fs, root, deps.env.homeDir, workspaces);
   diagnostics.push(...scan.diagnostics);
-  // Each pnpm major keeps global packages in its own place, and pnpm only
-  // ever runs outside projects (§7): what the project's pnpm installed
-  // globally is not listed. Say so instead of looking silently empty (F-57).
-  const pinned = scan.packageManager?.value === "pnpm" ? scan.packageManager.version : undefined;
-  if (pinned && neutralPnpm && semver.major(pinned) !== semver.major(neutralPnpm)) {
-    diagnostics.push({
-      severity: "warning",
-      source: "pnpm",
-      message: `${root} pins pnpm ${pinned}, but pnpm ${neutralPnpm} runs outside projects: global packages installed with pnpm ${pinned} are not listed`,
-    });
-  }
   let registry: RegistryConfig = scan.registryUnknown
     ? { state: "unknown", reason: scan.registryUnknown }
     : applyYarnEnvironment(userRegistry, deps.env.get("YARN_NPM_REGISTRY_SERVER"));
